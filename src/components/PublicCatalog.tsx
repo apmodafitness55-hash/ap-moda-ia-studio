@@ -1,0 +1,1774 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  ShoppingBag, 
+  Search, 
+  MapPin, 
+  Phone, 
+  X, 
+  MessageCircle, 
+  ChevronRight, 
+  ChevronLeft,
+  Play, 
+  Tag, 
+  Sparkles, 
+  Truck, 
+  Info,
+  Check,
+  Gift,
+  Plus,
+  Minus,
+  Send,
+  Video,
+  Heart,
+  Star,
+  Menu,
+  User,
+  ArrowLeft,
+  Maximize2,
+  Lock,
+  ThumbsUp,
+  CreditCard
+} from 'lucide-react';
+import { Product, Client } from '../types';
+
+interface PublicCatalogProps {
+  products: Product[];
+  onAddOnlineOrder?: (order: any) => void;
+  clients: Client[];
+  onAddClient: (newClient: Client) => void;
+  onUpdateClients?: (updatedList: Client[]) => void;
+  onExitCustomerView?: () => void;
+}
+
+export default function PublicCatalog({ 
+  products, 
+  onAddOnlineOrder, 
+  clients = [], 
+  onAddClient, 
+  onUpdateClients,
+  onExitCustomerView
+}: PublicCatalogProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Custom states for interactive lookbook carousel
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const lookbookSlides = [
+    {
+      image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
+      tag: "COLEÇÃO EXCLUSIVA",
+      title: "ATACADO PREMIUM",
+      desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+    },
+    {
+      image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
+      tag: "NOVA COLEÇÃO 2 EM 1",
+      title: "COLEÇÃO DUO",
+      desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+    },
+    {
+      image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
+      tag: "ALTA PERFORMANCE",
+      title: "SUA JORNADA RUN",
+      desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+    }
+  ];
+
+  // Auto-advance banner slides
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % lookbookSlides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [lookbookSlides.length]);
+
+  // Collapsible Accordions in Product Detailed view
+  const [activeAccordion, setActiveAccordion] = useState<'desc' | 'detalhes' | 'tamanhos' | 'cuidados' | null>('desc');
+
+  // Detail modal options selection
+  const [selectedColor, setSelectedColor] = useState('Fúcsia');
+  const [selectedSize, setSelectedSize] = useState('M');
+  const [productQty, setProductQty] = useState(1);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  
+  // Mock alternative angles / views inside product details
+  const [detailImageIdx, setDetailImageIdx] = useState(0);
+
+  // CEP simulation states
+  const [cepNumber, setCepNumber] = useState('');
+  const [cepResult, setCepResult] = useState<string | null>(null);
+  const [isCalculatingCep, setIsCalculatingCep] = useState(false);
+
+  // Review states per product
+  const [productReviews, setProductReviews] = useState<{[key: string]: {author: string; date: string; comment: string; stars: number}[]}>({
+    default: [
+      { author: "Priscila Lima", date: "29/09/2025", comment: "Simplesmente maravilhoso! O tecido é super grosso, não tem transparência nenhuma. O elástico segura muito bem no treino.", stars: 5 },
+      { author: "Ana Keity", date: "03/07/2025", comment: "Excelente caimento. Comprei o tamanho M e vestiu perfeitamente. Com certeza comprarei mais cores!", stars: 5 }
+    ]
+  });
+  const [newReviewAuthor, setNewReviewAuthor] = useState('');
+  const [newReviewText, setNewReviewText] = useState('');
+  const [newReviewStars, setNewReviewStars] = useState(5);
+  const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+
+  // Wishlist / Likes simulation state
+  const [wishlistLikes, setWishlistLikes] = useState<{[key: string]: {count: number; active: boolean}}>({});
+
+  // Newsletter form state
+  const [newsletterName, setNewsletterName] = useState('');
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [isNewsletterSubmitted, setIsNewsletterSubmitted] = useState(false);
+
+  // Cart state
+  const [cart, setCart] = useState<{
+    product: Product;
+    color: string;
+    size: string;
+    quantity: number;
+    priceAtTime: number;
+  }[]>([]);
+
+  // Cart drawer open state
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Checkout form info
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [isVipRegisteredJustNow, setIsVipRegisteredJustNow] = useState(false);
+  const [vipMessage, setVipMessage] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<'motoboy' | 'correios' | 'retirada'>('motoboy');
+  const [clientAddress, setClientAddress] = useState('');
+  const [clientNotes, setClientNotes] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; fixedDiscount: number } | null>(null);
+
+  // Lists categories
+  const categoriesList = useMemo(() => {
+    const list = new Set(products.map(p => p.category).filter(Boolean));
+    return ['Todos', ...Array.from(list)];
+  }, [products]);
+
+  // Filter products that have stock
+  const visibleProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (p.category || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'Todos' || 
+                              p.category === selectedCategory ||
+                              (selectedCategory === 'Slim Fit' && p.name.toLowerCase().includes('slim')) ||
+                              (selectedCategory === 'Plus Size' && (p.name.toLowerCase().includes('plus') || p.category?.toLowerCase().includes('plus')));
+      return matchesSearch && matchesCategory && p.stock > 0;
+    });
+  }, [products, searchQuery, selectedCategory]);
+
+  // Handle open item details modal
+  const handleOpenProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setSelectedColor(product.colors && product.colors.length > 0 ? product.colors[0] : 'Fúcsia');
+    setSelectedSize(product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M');
+    setProductQty(1);
+    setDetailImageIdx(0);
+    setIsVideoPlaying(false);
+    setCepResult(null);
+    setCepNumber('');
+    setIsReviewFormOpen(false);
+    
+    // Add default likes if not set
+    if (!wishlistLikes[product.id]) {
+      setWishlistLikes(prev => ({
+        ...prev,
+        [product.id]: { count: Math.floor(Math.random() * 45) + 12, active: false }
+      }));
+    }
+  };
+
+  // Toggle wishlist heart icon with counting
+  const handleToggleWishlist = (pId: string) => {
+    setWishlistLikes(prev => {
+      const item = prev[pId] || { count: 15, active: false };
+      const nextActive = !item.active;
+      return {
+        ...prev,
+        [pId]: {
+          count: nextActive ? item.count + 1 : item.count - 1,
+          active: nextActive
+        }
+      };
+    });
+  };
+
+  // Add review submission
+  const handleSubmitReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+    if (!newReviewAuthor.trim() || !newReviewText.trim()) {
+      alert("Por favor, preencha o seu nome e sua avaliação.");
+      return;
+    }
+
+    const newRev = {
+      author: newReviewAuthor.trim(),
+      date: new Date().toLocaleDateString('pt-BR'),
+      comment: newReviewText.trim(),
+      stars: newReviewStars
+    };
+
+    const pId = selectedProduct.id;
+    setProductReviews(prev => {
+      const currentList = prev[pId] || prev.default || [];
+      return {
+        ...prev,
+        [pId]: [newRev, ...currentList]
+      };
+    });
+
+    setNewReviewAuthor('');
+    setNewReviewText('');
+    setNewReviewStars(5);
+    setIsReviewFormOpen(false);
+    alert("Obrigada! Sua avaliação foi enviada com sucesso e cadastrada na vitrine. 🌸");
+  };
+
+  // CEP Freight simulate calculation
+  const handleCalculateCep = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cepNumber.trim() || cepNumber.replace(/\D/g, '').length < 8) {
+      alert("Por favor, informe um CEP válido com 8 dígitos.");
+      return;
+    }
+    
+    setIsCalculatingCep(true);
+    setTimeout(() => {
+      const values = [
+        "Sedex Expresso: R$ 15,00 (2 dias úteis) - Ideal para urgência! ⚡",
+        "PAC Econômico: R$ 9,00 (5 dias úteis) 📦",
+        "Motoboy Local: R$ 12,00 (Entrega HOJE!) 🏍️",
+        "Retirada Grátis em nossa Loja: R$ 0,00 🏠"
+      ];
+      setCepResult(values[Math.floor(Math.random() * values.length)]);
+      setIsCalculatingCep(false);
+    }, 1000);
+  };
+
+  // Add item to custom checkout cart
+  const handleAddToCart = () => {
+    if (!selectedProduct) return;
+
+    setCart(prev => {
+      const existingIdx = prev.findIndex(item => 
+        item.product.id === selectedProduct.id && 
+        item.color === selectedColor && 
+        item.size === selectedSize
+      );
+
+      if (existingIdx > -1) {
+        const updated = [...prev];
+        updated[existingIdx].quantity += productQty;
+        return updated;
+      }
+
+      return [...prev, {
+        product: selectedProduct,
+        color: selectedColor,
+        size: selectedSize,
+        quantity: productQty,
+        priceAtTime: selectedProduct.price
+      }];
+    });
+
+    setSelectedProduct(null);
+    setIsCartOpen(true);
+  };
+
+  // Direct quick addition of a special variant from product grid
+  const handleQuickAdd = (product: Product, event: React.MouseEvent) => {
+    event.stopPropagation();
+    const defaultCol = product.colors && product.colors.length > 0 ? product.colors[0] : 'Única';
+    const defaultSz = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
+    
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.product.id === product.id && item.color === defaultCol && item.size === defaultSz);
+      if (idx > -1) {
+        const updated = [...prev];
+        updated[idx].quantity += 1;
+        return updated;
+      }
+      return [...prev, {
+        product,
+        color: defaultCol,
+        size: defaultSz,
+        quantity: 1,
+        priceAtTime: product.price
+      }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const handleUpdateItemQty = (idx: number, amount: number) => {
+    setCart(prev => {
+      const updated = [...prev];
+      const newQty = updated[idx].quantity + amount;
+      if (newQty <= 0) {
+        updated.splice(idx, 1);
+      } else {
+        updated[idx].quantity = newQty;
+      }
+      return updated;
+    });
+  };
+
+  // Coupons simulation
+  const handleApplyCoupon = () => {
+    const cleanCode = couponCode.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    if (cleanCode === 'FITNESS10' || cleanCode === 'VERAO10' || cleanCode === 'QUERO10') {
+      setAppliedCoupon({ code: cleanCode, discountPercent: 10, fixedDiscount: 0 });
+      alert(`Cupom ${cleanCode} (10% de desconto) aplicado com sucesso!`);
+    } else if (cleanCode === 'BEMVINDA50' || cleanCode === 'MODAFIT50') {
+      setAppliedCoupon({ code: cleanCode, discountPercent: 0, fixedDiscount: 50 });
+      alert(`Cupom ${cleanCode} (R$ 50,00 de desconto) aplicado com sucesso!`);
+    } else if (cleanCode === 'FRETEGRATIS') {
+      setAppliedCoupon({ code: 'FRETEGRATIS', discountPercent: 0, fixedDiscount: 0 });
+      alert('Cupom FRETEGRATIS ativado com sucesso!');
+    } else {
+      alert('Este cupom promocional expirou ou é inválido.');
+    }
+  };
+
+  // Computations
+  const cartSubtotal = useMemo(() => {
+    return cart.reduce((sum, item) => sum + (item.priceAtTime * item.quantity), 0);
+  }, [cart]);
+
+  const deliveryFee = useMemo(() => {
+    if (deliveryMethod === 'retirada') return 0;
+    if (appliedCoupon?.code === 'FRETEGRATIS' || cartSubtotal >= 399) return 0;
+    return deliveryMethod === 'motoboy' ? 12 : 20;
+  }, [deliveryMethod, cartSubtotal, appliedCoupon]);
+
+  const cartDiscount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.discountPercent > 0) {
+      return Number(((cartSubtotal * appliedCoupon.discountPercent) / 100).toFixed(2));
+    }
+    return Math.min(cartSubtotal, appliedCoupon.fixedDiscount);
+  }, [appliedCoupon, cartSubtotal]);
+
+  const cartTotal = useMemo(() => {
+    return Math.max(0, cartSubtotal - cartDiscount + deliveryFee);
+  }, [cartSubtotal, cartDiscount, deliveryFee]);
+
+  // Checkout submission
+  const handleCheckoutWhatsApp = () => {
+    if (cart.length === 0) {
+      alert('Seu carrinho está vazio para finalizar.');
+      return;
+    }
+    if (!clientName.trim() || !clientPhone.trim()) {
+      alert('Por favor, preencha o seu Nome e seu Telefone de contato.');
+      return;
+    }
+    if (deliveryMethod !== 'retirada' && !clientAddress.trim()) {
+      alert('Por favor, preencha o seu Endereço de entrega.');
+      return;
+    }
+
+    // Compose order detail message
+    const itemsListText = cart.map(item => 
+      `• *${item.quantity}x* ${item.product.name}\n  [Cor: ${item.color} | Tam: ${item.size}] (R$ ${item.product.price.toFixed(2)} un.)`
+    ).join('\n\n');
+
+    const couponInfo = appliedCoupon ? `\n🏷️ Cupom: *${appliedCoupon.code}* (-R$ ${cartDiscount.toFixed(2)})` : '';
+    const deliveryTypeLabel = 
+      deliveryMethod === 'motoboy' ? 'Entrega por Motoboy 🏍️' :
+      deliveryMethod === 'correios' ? 'Envio via Correios 📦' :
+      'Retirar no Local de Venda 🏠';
+
+    const orderMsg = 
+      `🌸 *PEDIDO CONFIRMADO: AP MODA FITNESS* 🌸\n\n` +
+      `👤 *Cliente:* ${clientName.trim()}\n` +
+      `📞 *WhatsApp:* ${clientPhone.trim()}\n\n` +
+      `🛍️ *Produtos Solicitados:*\n${itemsListText}\n` +
+      `---------------------------------\n` +
+      `💵 *Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n` +
+      `${couponInfo}\n` +
+      `🚚 *Taxa de Entrega:* R$ ${deliveryFee.toFixed(2)}\n` +
+      `💰 *Total Geral:* R$ ${cartTotal.toFixed(2)}\n\n` +
+      `📍 *Forma de Recebimento:* ${deliveryTypeLabel}\n` +
+      (deliveryMethod !== 'retirada' ? `🏠 *Endereço:* ${clientAddress.trim()}\n` : '') +
+      (clientNotes.trim() ? `📝 *Observações:* ${clientNotes.trim()}\n` : '') +
+      `\nOlá, gostaria de confirmar se estas peças encontram-se disponíveis no estoque para que eu possa efetuar o pagamento. Aguardo retorno! Obrigada! 🌸✨`;
+
+    // Process order back to the administration orders system via hook
+    if (onAddOnlineOrder) {
+      const orderData = {
+        id: `ped-web-${Date.now().toString().slice(-4)}`,
+        clientName: clientName.trim(),
+        phone: clientPhone.trim(),
+        items: cart.map(it => ({
+          productName: `${it.product.name} (${it.color} - ${it.size})`,
+          quantity: it.quantity,
+          price: it.priceAtTime
+        })),
+        total: cartTotal - deliveryFee,
+        status: 'Pendente',
+        createdAt: new Date().toISOString(),
+        address: deliveryMethod !== 'retirada' ? clientAddress.trim() : 'Retirada no Local',
+        deliveryFee: deliveryFee,
+        notes: `Cor: ${cart.map(c=>c.color).join(', ')} | Obs: ${clientNotes.trim()}`
+      };
+      
+      onAddOnlineOrder(orderData);
+    }
+
+    // Save or update Customer details in CRM system
+    const cleanedPhone = clientPhone.replace(/\D/g, '');
+    const cleanedName = clientName.trim();
+    
+    const existingClientIndex = (clients || []).findIndex(c => {
+      const matchPhone = c.phone.replace(/\D/g, '') === cleanedPhone && cleanedPhone.length > 0;
+      const matchName = c.name.toLowerCase() === cleanedName.toLowerCase();
+      return matchPhone || matchName;
+    });
+
+    if (existingClientIndex !== -1) {
+      const existingClient = clients[existingClientIndex];
+      const updatedList = [...clients];
+      updatedList[existingClientIndex] = {
+        ...existingClient,
+        email: clientEmail.trim() || existingClient.email,
+        totalSpent: Number((existingClient.totalSpent + cartTotal).toFixed(2)),
+        ordersCount: (existingClient.ordersCount || 0) + 1,
+      };
+      if (onUpdateClients) {
+        onUpdateClients(updatedList);
+      }
+      setVipMessage(`Fidelidade Ativa! Encontramos seu cadastro: você já possui ${updatedList[existingClientIndex].ordersCount} pedidos com R$ ${updatedList[existingClientIndex].totalSpent.toFixed(2)} acumulados em nosso sistema! 🌸`);
+    } else {
+      const newClient: Client = {
+        id: `cli-${Date.now()}`,
+        name: cleanedName,
+        email: clientEmail.trim() || `${cleanedName.toLowerCase().replace(/\s+/g, '')}@exemplo.com`,
+        phone: clientPhone.trim(),
+        channel: 'E-commerce',
+        npsScore: 10,
+        totalSpent: Number(cartTotal.toFixed(2)),
+        ordersCount: 1,
+        createdAt: new Date().toISOString()
+      };
+      onAddClient(newClient);
+      setVipMessage(`Seja bem-vinda, ${cleanedName}! Seu cadastro de cliente VIP foi salvo automaticamente no sistema. ✨ Acumule pontos em suas próximas compras!`);
+    }
+
+    setIsVipRegisteredJustNow(true);
+
+    try {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(orderMsg)}`, '_blank');
+    } catch {
+      alert('Seu navegador bloqueou o WhatsApp. Copie a mensagem ou tente novamente.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative">
+      
+      {/* Workspace Demonstration Switcher Button Helper */}
+      {onExitCustomerView && (
+        <div className="bg-pink-900 border-b border-rose-400/30 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-2 font-sans shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
+            <p className="text-[11px] md:text-xs">
+              <span className="font-bold text-pink-200">VITRINE DO CLIENTE (PREVIEW)</span> — Sinta-se à vontade para simular pedidos, adicionar produtos e testar a visualização.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onExitCustomerView}
+            className="shrink-0 bg-white text-pink-700 hover:bg-pink-50 active:scale-95 font-bold text-[10px] md:text-[11px] px-3.5 py-1.5 rounded-full transition-all shadow-md shadow-pink-600/20 cursor-pointer flex items-center gap-1.5 border-none"
+          >
+            <ArrowLeft size={11} className="stroke-[2.5px]" />
+            <span>Voltar ao Painel Admin</span>
+          </button>
+        </div>
+      )}
+      
+      {/* 1. Ticker Announcement Bar */}
+      <div className="bg-pink-600 text-white py-2 px-4 shadow-sm relative overflow-hidden h-9">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-center h-full animate-pulse">
+          <p className="text-[10px] md:text-xs font-bold tracking-widest uppercase flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+            <span>⚡ ENVIAMOS PARA TODO BRASIL • FRETE GRÁTIS ACIMA DE R$ 399 ATÉ 6X SEM JUROS ⚡</span>
+          </p>
+        </div>
+      </div>
+
+      {/* 2. Main Premium Sticky Header */}
+      <header className="bg-white/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100 px-4 md:px-8 py-3 flex justify-between items-center max-w-7xl mx-auto rounded-b-3xl">
+        {/* Left Side menu indicators */}
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => alert('Modo Visita: Você está navegando na vitrine online completa para clientes!')}
+            className="p-2 text-slate-700 hover:text-pink-600 hover:bg-slate-50 rounded-full transition cursor-pointer"
+          >
+            <Menu size={20} />
+          </button>
+          <button 
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('search-catalog-bar');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="p-2 text-slate-700 hover:text-pink-600 hover:bg-slate-50 rounded-full transition cursor-pointer"
+          >
+            <Search size={18} />
+          </button>
+        </div>
+
+        {/* Center: Curvy Elegant Serif Brand Name Logo */}
+        <div className="flex flex-col items-center">
+          <span className="font-serif italic text-2xl md:text-3xl font-normal leading-none tracking-normal text-slate-950 select-none cursor-pointer">
+            AP Moda Fitness
+          </span>
+          <span className="text-[8px] font-bold text-pink-600 uppercase tracking-widest mt-0.5 font-sans">
+            Moda Fitness Premium
+          </span>
+        </div>
+
+        {/* Right side user elements & cart badging */}
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => {
+              const sec = document.getElementById('newsletter-section');
+              if (sec) sec.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="p-2 text-slate-700 hover:text-pink-600 hover:bg-slate-50 rounded-full transition cursor-pointer"
+            title="Área Vip Cliente"
+          >
+            <User size={18} />
+          </button>
+          
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="relative p-2.5 bg-pink-50/50 hover:bg-pink-100 text-pink-600 hover:text-pink-700 rounded-full transition duration-300 cursor-pointer border border-pink-100/40"
+            title="Minha Sacola"
+          >
+            <ShoppingBag size={18} />
+            {cart.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink-600 text-white border-2 border-white rounded-full flex items-center justify-center text-[9px] font-extrabold tracking-tight animate-bounce">
+                {cart.reduce((s, c) => s + c.quantity, 0)}
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* 3. High quality Lookbook Banner Autoplay Slider */}
+      <section className="px-4 md:px-8 mt-4 max-w-7xl mx-auto">
+        <div className="relative rounded-3xl overflow-hidden bg-slate-900 text-white min-h-[260px] md:min-h-[340px] flex items-center shadow-lg transition-all duration-700">
+          
+          {/* Animated Background image based on lookbook model collection */}
+          <div 
+            className="absolute inset-0 bg-cover bg-center transition-all duration-1000 transform scale-102"
+            style={{ 
+              backgroundImage: `url('${lookbookSlides[currentSlide].image}')`,
+              filter: 'brightness(0.65)'
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-slate-900/10" />
+
+          {/* Slogan overlaid details with slide elements */}
+          <div className="relative max-w-xl pl-6 pr-6 md:pl-16 space-y-4 z-10 text-left">
+            <span className="inline-flex items-center gap-1.5 bg-pink-600 text-white font-sans font-extrabold text-[9px] uppercase tracking-widest px-3 py-1 rounded-full shadow-md shadow-pink-600/10">
+              <Sparkles size={10} />
+              <span>{lookbookSlides[currentSlide].tag}</span>
+            </span>
+            <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight uppercase font-sans">
+              {lookbookSlides[currentSlide].title}
+            </h2>
+            <p className="text-[11px] md:text-xs text-slate-250 leading-relaxed max-w-md font-medium">
+              {lookbookSlides[currentSlide].desc}
+            </p>
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = document.getElementById('colecao-run-anchor');
+                  if (target) target.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-white hover:bg-pink-600 text-slate-900 hover:text-white font-bold text-[10px] uppercase tracking-wider py-2.5 px-5 rounded-full transition duration-300 shadow-md cursor-pointer border-none"
+              >
+                Comprar Coleção
+              </button>
+            </div>
+          </div>
+
+          {/* Indicators dots for carousel state */}
+          <div className="absolute bottom-5 right-1/2 translate-x-1/2 flex gap-2 z-25">
+            {lookbookSlides.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentSlide(idx)}
+                className={`w-2 h-2 rounded-full transition-all duration-300
+                  ${currentSlide === idx ? 'w-5 bg-white' : 'bg-white/40'}`}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Core Benefits & Trust Icons Rows */}
+      <section className="max-w-7xl mx-auto px-4 md:px-8 mt-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+              <Truck size={16} />
+            </div>
+            <div className="text-left text-[10px] leading-tight">
+              <p className="font-extrabold text-slate-800">Envio para todo o Brasil</p>
+              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Correios ou Transportadora</p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+              <CreditCard size={16} />
+            </div>
+            <div className="text-left text-[10px] leading-tight">
+              <p className="font-extrabold text-slate-800">Até 6x no Cartão</p>
+              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Parcelamento facilitado</p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+              <Lock size={15} />
+            </div>
+            <div className="text-left text-[10px] leading-tight">
+              <p className="font-extrabold text-slate-800">Compra 100% Segura</p>
+              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Seus dados protegidos</p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+              <Sparkles size={15} />
+            </div>
+            <div className="text-left text-[10px] leading-tight">
+              <p className="font-extrabold text-slate-800">Desconto Extra no Pix</p>
+              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Ganhe brindes especiais!</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Bento Category Highlights: Slim Fit vs Plus Size */}
+      <section className="max-w-7xl mx-auto px-4 md:px-8 mt-6">
+        <div className="grid grid-cols-2 gap-4">
+          
+          {/* Box 1: Slim Fit highlighting model in activewear */}
+          <div 
+            onClick={() => setSelectedCategory('Slim Fit')}
+            className={`group rounded-3xl h-36 md:h-48 overflow-hidden relative cursor-pointer shadow-xs border transition duration-300
+              ${selectedCategory === 'Slim Fit' ? 'border-pink-500 scale-[1.01] ring-2 ring-pink-600/5' : 'border-slate-100 hover:border-pink-200'}`}
+          >
+            <div 
+              className="absolute inset-0 bg-cover bg-center group-hover:scale-103 transition duration-500"
+              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80')` }}
+            />
+            <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/30 transition duration-300" />
+            
+            <div className="absolute inset-0 flex flex-col justify-end p-4 text-left">
+              <p className="font-serif italic text-2xl md:text-3xl font-medium text-white tracking-wide">Slim Fit</p>
+              <p className="text-[9px] md:text-10px font-bold text-pink-300 tracking-widest uppercase">Coleção modeladora</p>
+            </div>
+          </div>
+
+          {/* Box 2: Plus Size highlighting model in dark activewear */}
+          <div 
+            onClick={() => setSelectedCategory('Plus Size')}
+            className={`group rounded-3xl h-36 md:h-48 overflow-hidden relative cursor-pointer shadow-xs border transition duration-300
+              ${selectedCategory === 'Plus Size' ? 'border-pink-500 scale-[1.01] ring-2 ring-pink-600/5' : 'border-slate-100 hover:border-pink-200'}`}
+          >
+            <div 
+              className="absolute inset-0 bg-cover bg-center group-hover:scale-103 transition duration-500"
+              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80')` }}
+            />
+            <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/30 transition duration-300" />
+            
+            <div className="absolute inset-0 flex flex-col justify-end p-4 text-left">
+              <p className="font-serif italic text-2xl md:text-3xl font-medium text-white tracking-wide">Plus Size</p>
+              <p className="text-[9px] md:text-10px font-bold text-pink-300 tracking-widest uppercase">Caimento esculpido</p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* Brand title block separator */}
+      <span id="colecao-run-anchor" className="block h-1 scroll-mt-20" />
+
+      {/* 6. Main Catalog grid blocks listing */}
+      <main className="max-w-7xl mx-auto px-4 md:px-8 mt-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Left Side options list */}
+        <div className="lg:col-span-3 space-y-5">
+          <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
+            
+            {/* Search items bar */}
+            <div id="search-catalog-bar" className="space-y-1.5 scroll-mt-24">
+              <label className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block">Consultar Vitrine</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-450 pointer-events-none">
+                  <Search size={14} className="text-slate-400" />
+                </span>
+                <input 
+                  type="text"
+                  placeholder="Pesquisar calça, top, macacão..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-150 rounded-xl py-2 pl-9 pr-3 text-xs placeholder-slate-400 focus:outline-hidden focus:border-pink-500 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* List Pills of standard categories */}
+            <div className="space-y-1.5">
+              <label className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block">Seções Oficiais</label>
+              <div className="flex flex-wrap lg:flex-col gap-1">
+                {categoriesList.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all text-left flex items-center justify-between cursor-pointer w-full select-none
+                      ${selectedCategory === cat 
+                        ? 'bg-pink-600 text-white shadow-md shadow-pink-600/10' 
+                        : 'bg-slate-50 text-slate-650 hover:bg-slate-100'}`}
+                  >
+                    <span>{cat}</span>
+                    <ChevronRight size={12} className={selectedCategory === cat ? 'opacity-100' : 'opacity-40'} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Trust highlights info */}
+            <div className="border-t border-slate-50 pt-4 space-y-3 text-[11px] text-slate-500 font-medium font-sans">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold">✓</div>
+                <span>Zero Transparência Garantida</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold">✓</div>
+                <span>Finalização rápida em 1 clique</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold">✓</div>
+                <span>Atendimento humano pelo WhatsApp</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Right Side grid listing */}
+        <div className="lg:col-span-9 space-y-6 text-center">
+          
+          {/* Centered Collection header from videos */}
+          <div className="space-y-1 text-center py-2">
+            <h3 className="font-serif italic text-3xl font-medium tracking-tight text-slate-900">
+              Coleção Run
+            </h3>
+            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+              Confira nossa nova coleção!
+            </p>
+          </div>
+
+          {visibleProducts.length === 0 ? (
+            <div className="bg-white border border-slate-100 rounded-3xl p-12 text-center text-slate-400 max-w-md mx-auto">
+              <ShoppingBag size={42} className="mx-auto text-slate-300 mb-3" />
+              <p className="font-bold text-slate-600 text-xs">Nenhum produto em estoque encontrado.</p>
+              <p className="text-[11px] mt-1 text-slate-400">Tente buscar por termos alternativos ou limpe os filtros selecionados.</p>
+              <button 
+                onClick={() => { setSearchQuery(''); setSelectedCategory('Todos'); }}
+                className="mt-4 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 border-none text-white rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Limpar Filtros
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              {visibleProducts.map(prod => {
+                const isItemLiked = wishlistLikes[prod.id]?.active || false;
+                const totalWishCount = wishlistLikes[prod.id]?.count || 12;
+                return (
+                  <div 
+                    key={prod.id} 
+                    className="bg-transparent overflow-hidden transition-all flex flex-col justify-between text-left group relative"
+                  >
+                    
+                    {/* Portrait Style Frame with layout ratio of the fashion site */}
+                    <div className="relative aspect-[3/4] w-full rounded-2xl bg-white overflow-hidden shadow-xs cursor-pointer border border-slate-100/65" onClick={() => handleOpenProduct(prod)}>
+                      <img 
+                        src={prod.image || 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=500&q=80'} 
+                        alt={prod.name} 
+                        className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-700"
+                        referrerPolicy="no-referrer"
+                      />
+                      
+                      {/* Heart Like micro indicator absolute overlay */}
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleWishlist(prod.id);
+                        }}
+                        className={`absolute top-3.5 right-3.5 bg-white/90 backdrop-blur-xs p-2 rounded-full shadow-xs hover:scale-110 active:scale-95 transition
+                          ${isItemLiked ? 'text-pink-600' : 'text-slate-400 hover:text-pink-600'}`}
+                      >
+                        <Heart size={14} className={isItemLiked ? 'fill-pink-600 text-pink-600' : ''} />
+                      </button>
+
+                      {/* Video Play preview Overlay if product is recorded */}
+                      {prod.videoUrl && (
+                        <span className="absolute bottom-3 left-3 bg-pink-600/95 text-white py-1 px-2.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-pink-600/20">
+                          <Play size={8} className="fill-white" />
+                          <span>Vídeo</span>
+                        </span>
+                      )}
+
+                      {/* Stock safety highlight */}
+                      {prod.stock <= 3 && (
+                        <span className="absolute top-3 left-3 bg-rose-600 text-white px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wide">
+                          ÚLTIMAS PEÇAS!
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Highly polished borderless detailing cards matching design stills */}
+                    <div className="pt-3 pb-2.5 px-1 space-y-1">
+                      
+                      {/* Interactive Gold Stars rating */}
+                      <div className="flex items-center gap-0.5">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={11} className="fill-yellow-400 text-yellow-400" />
+                        ))}
+                        <span className="text-[9px] text-slate-400 font-bold ml-1">({totalWishCount})</span>
+                      </div>
+
+                      {/* Product Name Title */}
+                      <p className="text-[12.5px] font-medium text-slate-850 leading-snug tracking-tight group-hover:text-pink-600 transition-colors truncate">
+                        {prod.name}
+                      </p>
+
+                      {/* Size Tags indicator row preview */}
+                      {prod.sizes && prod.sizes.length > 0 && (
+                        <div className="flex gap-1 py-0.5 select-none">
+                          {prod.sizes.map(sz => (
+                            <span key={sz} className="text-[8.5px] font-bold text-slate-400 font-mono border border-slate-200/50 px-1 rounded-sm">
+                              {sz}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Bold price tag */}
+                      <div className="pt-0.5 flex justify-between items-center">
+                        <span className="font-extrabold text-[15px] text-slate-900 leading-none">
+                          R$ {prod.price.toFixed(2)}
+                        </span>
+                        
+                        {/* Quick Add icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleQuickAdd(prod, e)}
+                          className="w-7 h-7 bg-slate-900 hover:bg-pink-600 hover:scale-105 active:scale-95 text-white rounded-full flex items-center justify-center transition cursor-pointer"
+                          title="Compra Rápida"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </main>
+
+      {/* 7. Beautiful Product Detail Overlay Popup with Interactive Matrix Stepper */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-6 font-sans">
+          <div className="bg-white rounded-[32px] max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden text-slate-800 flex flex-col md:flex-row h-full max-h-[92vh] md:max-h-[620px] animate-in fade-in zoom-in-95 duration-200 relative">
+            
+            {/* Header top row simulated in modal screen */}
+            <div className="absolute top-0 inset-x-0 bg-white/90 backdrop-blur-xs px-5 py-3 border-b border-slate-100 flex justify-between items-center z-10 md:hidden">
+              <button 
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                className="p-1.5 hover:bg-slate-50 text-slate-700 rounded-full cursor-pointer flex items-center gap-1 font-bold text-xs"
+              >
+                <ArrowLeft size={16} />
+                <span>Voltar</span>
+              </button>
+              <span className="font-serif italic text-base -ml-2">AP Moda Fitness</span>
+              <div className="w-8" />
+            </div>
+
+            {/* Left section detail layout: Multi angle lookbook photo slider */}
+            <div className="w-full md:w-[45%] bg-slate-50 relative min-h-[300px] md:min-h-full flex items-center justify-center overflow-hidden flex-shrink-0 pt-[45px] md:pt-0">
+              
+              {isVideoPlaying && selectedProduct.videoUrl ? (
+                <div className="absolute inset-0 bg-black flex flex-col justify-between">
+                  <video 
+                    src={selectedProduct.videoUrl} 
+                    autoPlay 
+                    controls 
+                    loop 
+                    muted 
+                    playsInline 
+                    className="w-full h-full object-contain"
+                  />
+                  <button 
+                    onClick={() => setIsVideoPlaying(false)}
+                    className="absolute top-4 right-4 bg-slate-900/70 hover:bg-slate-900 text-white rounded-full p-2 transition cursor-pointer z-30"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="absolute inset-0">
+                  <img 
+                    src={
+                      detailImageIdx === 0 ? (selectedProduct.image || 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80') :
+                      detailImageIdx === 1 ? 'https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=600&q=80' :
+                      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80'
+                    } 
+                    alt={selectedProduct.name} 
+                    className="w-full h-full object-cover transition duration-500"
+                  />
+                  
+                  {/* Hearts wishlist interactive feedback outline bar */}
+                  <div className="absolute top-4 left-4 hidden md:flex items-center gap-2 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-full shadow-xs">
+                    <button 
+                      type="button" 
+                      onClick={() => handleToggleWishlist(selectedProduct.id)}
+                      className="text-pink-600 hover:scale-110 active:scale-95 transition"
+                    >
+                      <Heart 
+                        size={15} 
+                        className={wishlistLikes[selectedProduct.id]?.active ? 'fill-pink-600' : ''} 
+                      />
+                    </button>
+                    <span className="text-[10px] text-slate-700 font-bold">
+                      {wishlistLikes[selectedProduct.id]?.count || 12} curtidas
+                    </span>
+                  </div>
+
+                  {/* Play video overlay badge if link exists */}
+                  {selectedProduct.videoUrl && (
+                    <button
+                      onClick={() => setIsVideoPlaying(true)}
+                      className="absolute inset-0 m-auto w-14 h-14 bg-pink-600 hover:bg-pink-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-pink-500/20 active:scale-95 transition cursor-pointer z-20"
+                      title="Assistir demonstração de caimento"
+                    >
+                      <Play size={20} className="ml-1 fill-white" />
+                    </button>
+                  )}
+
+                  {/* Horizontal slider dots indicator */}
+                  <div className="absolute bottom-5 inset-x-0 mx-auto flex justify-center gap-2 z-10 select-none">
+                    {[0, 1, 2].map((idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setDetailImageIdx(idx)}
+                        className={`w-2 h-2 rounded-full transition-all duration-300
+                          ${detailImageIdx === idx ? 'w-4 bg-pink-600' : 'bg-white/70'}`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Left / Right arrows for model positions and zoom */}
+                  <button
+                    type="button"
+                    onClick={() => setDetailImageIdx(prev => (prev - 1 + 3) % 3)}
+                    className="absolute left-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailImageIdx(prev => (prev + 1) % 3)}
+                    className="absolute right-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+
+                </div>
+              )}
+
+              {/* Close detail button on Desktop */}
+              <button 
+                onClick={() => setSelectedProduct(null)}
+                className="absolute top-4 right-4 bg-white/85 hover:bg-white text-slate-900 rounded-full p-2.5 transition cursor-pointer shadow-md hidden md:block z-30 font-bold text-xs"
+                title="Fechar detalhes"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Right section details with premium configurations */}
+            <div className="w-full md:w-[55%] p-5 md:p-7 overflow-y-auto max-h-[55vh] md:max-h-full flex flex-col justify-between text-left space-y-4">
+              
+              <div className="space-y-4">
+                
+                {/* Visual specs code */}
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="bg-pink-100 text-pink-700 font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                    {selectedProduct.category || "Coleção Run"}
+                  </span>
+                  <span className="text-slate-400 font-bold font-mono">
+                    Cód: {selectedProduct.sku || `CA${selectedProduct.id.slice(-4)}`} • AP Moda Fitness
+                  </span>
+                </div>
+                
+                {/* Title */}
+                <div>
+                  <h4 className="text-base md:text-xl font-extrabold text-slate-900 leading-tight">
+                    {selectedProduct.name}
+                  </h4>
+                  {/* Reviews line feedback */}
+                  <div className="flex items-center gap-1 mt-1 font-sans">
+                    <div className="flex text-yellow-450 gap-0.5">
+                      {[...Array(5)].map((_, i) => <Star key={i} size={11} className="fill-yellow-400 text-yellow-400" />)}
+                    </div>
+                    <span className="text-[10px] text-slate-450 font-bold ml-1">★ 5.0 (2 avaliações de clientes)</span>
+                  </div>
+                </div>
+
+                {/* Big bold Price tag */}
+                <p className="font-extrabold text-pink-600 text-xl md:text-2xl font-mono">
+                  R$ {selectedProduct.price.toFixed(2)}
+                </p>
+
+                {/* Video play promotional banner box */}
+                {selectedProduct.videoUrl && !isVideoPlaying && (
+                  <button
+                    onClick={() => setIsVideoPlaying(true)}
+                    className="w-full px-4 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500/10 to-rose-450/5 border border-pink-100 text-pink-600 hover:from-pink-500/15 transition flex items-center gap-2.5 text-[10.5px] font-bold text-left shadow-2xs"
+                  >
+                    <Play size={13} className="fill-pink-600 animate-bounce" />
+                    <span>Esta peça possui vídeo de caimento real! Clique para assistir.</span>
+                  </button>
+                )}
+
+                {/* 1. HIGH-END PREMIUM INTERACTIVE VARIANT MATRIX STEPPER */}
+                <div className="space-y-2 border-t border-slate-50 pt-3">
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">Interative Cores & Tamanhos Disponíveis:</span>
+                  
+                  {/* Colors dynamic row selection */}
+                  <div className="space-y-2.5 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                    {[
+                      { name: 'Fúcsia', hex: '#d946ef' },
+                      { name: 'Marrom', hex: '#78350f' },
+                      { name: 'Roxo Imperial', hex: '#6b21a8' },
+                      { name: 'Verde Militar', hex: '#166534' },
+                      { name: 'Vermelho Duo', hex: '#991b1b' }
+                    ].map((colVar) => {
+                      const isColorActive = selectedColor === colVar.name;
+                      return (
+                        <div key={colVar.name} className="flex items-center justify-between py-1 border-b border-slate-50/60 last:border-none">
+                          {/* Left Variant color badge */}
+                          <div className="flex items-center gap-2">
+                            <span className="w-3.5 h-3.5 rounded-full border border-slate-200" style={{ backgroundColor: colVar.hex }} />
+                            <span className={`text-[11px] font-bold ${isColorActive ? 'text-slate-900 border-b-2 border-pink-600 pb-0.2' : 'text-slate-500'}`}>
+                              {colVar.name}
+                            </span>
+                          </div>
+
+                          {/* Right Interactive stepper trigger within sizes cell matrix list */}
+                          <div className="flex items-center gap-1.5">
+                            {['P', 'M', 'G'].map(sz => {
+                              const isActiveSize = isColorActive && selectedSize === sz;
+                              return (
+                                <button
+                                  key={sz}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedColor(colVar.name);
+                                    setSelectedSize(sz);
+                                  }}
+                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition font-mono
+                                    ${isActiveSize 
+                                      ? 'bg-pink-600 border-pink-600 text-white shadow-xs' 
+                                      : 'bg-white border-slate-200/80 hover:border-slate-350 text-slate-700'}`}
+                                >
+                                  {sz}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Choice Overview Feedback */}
+                <div className="bg-pink-50/40 p-2.5 rounded-xl border border-pink-100/40 text-[11px] text-pink-955 font-bold flex justify-between items-center">
+                  <span>Selecionado: {selectedColor} — Tamanho {selectedSize}</span>
+                  <span className="text-[10px] text-pink-600">Disponível em Estoque! 🔥</span>
+                </div>
+
+                {/* Counter units selector */}
+                <div className="flex items-center justify-between border-t border-slate-50 pt-3">
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">Quantidade Desejada</span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-slate-100 rounded-xl py-1 px-1.5 border border-slate-150">
+                      <button 
+                        onClick={() => setProductQty(Math.max(1, productQty - 1))}
+                        className="p-1 hover:bg-white rounded-md transition text-slate-650 cursor-pointer"
+                      >
+                        <Minus size={11} />
+                      </button>
+                      <span className="w-8 text-center font-bold text-xs leading-none font-mono">{productQty}</span>
+                      <button 
+                        onClick={() => setProductQty(Math.min(selectedProduct.stock, productQty + 1))}
+                        className="p-1 hover:bg-white rounded-md transition text-slate-655 cursor-pointer"
+                      >
+                        <Plus size={11} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FREIGHT SHIPPING CALCULATOR SYSTEM */}
+                <div className="border-t border-slate-50 pt-3 space-y-1.5">
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">Simular Frete & Prazo</span>
+                  <form onSubmit={handleCalculateCep} className="flex gap-2">
+                    <input 
+                      type="text"
+                      maxLength={9}
+                      placeholder="Digite seu CEP (Ex: 01001-000)"
+                      value={cepNumber}
+                      onChange={(e) => setCepNumber(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-hidden text-slate-800"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-slate-905 bg-slate-900 text-white hover:bg-pink-600 text-[10px] font-bold px-3 py-1.5 rounded-xl transition cursor-pointer"
+                    >
+                      {isCalculatingCep ? 'Calculando...' : 'OK'}
+                    </button>
+                  </form>
+                  {cepResult && (
+                    <div className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-100 p-2 rounded-xl animate-in fade-in duration-200 text-left">
+                      {cepResult}
+                    </div>
+                  )}
+                </div>
+
+                {/* ACCORDION COLLAPSIBLES */}
+                <div className="border-t border-slate-100 pt-3.5 space-y-2 text-left">
+                  
+                  {/* Descrição Accordion */}
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAccordion(activeAccordion === 'desc' ? null : 'desc')}
+                      className="w-full px-3 py-2 bg-slate-50 text-[11px] font-bold text-slate-800 flex justify-between items-center border-none cursor-pointer"
+                    >
+                      <span>Descrição Detalhada</span>
+                      <span>{activeAccordion === 'desc' ? '−' : '+'}</span>
+                    </button>
+                    {activeAccordion === 'desc' && (
+                      <div className="p-3 text-[10px] text-slate-500 leading-relaxed bg-white border-t border-slate-100">
+                        {selectedProduct.description || "Confeccionadas em tecido suplex power de 310g, nossas peças garantem alta elasticidade, ajuste perfeito ao corpo e zero transparência. O tecido é ultra resistente, confortável e totalmente ideal para quem busca estilo em treinos intensos."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Detalhes Accordion Checklist */}
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAccordion(activeAccordion === 'detalhes' ? null : 'detalhes')}
+                      className="w-full px-3 py-2 bg-slate-50 text-[11px] font-bold text-slate-800 flex justify-between items-center border-none cursor-pointer"
+                    >
+                      <span>Ficha Técnica & Detalhes</span>
+                      <span>{activeAccordion === 'detalhes' ? '−' : '+'}</span>
+                    </button>
+                    {activeAccordion === 'detalhes' && (
+                      <div className="p-3 bg-white border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-1.5 text-[10px]">
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Tecido: Suplex Power 310g</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Composição: 90% Poliéster, 10% Elastano</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Bojo: Removível de alta sustentação</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Elasticidade incrível modelável</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Costura Dupla Anti-Rompimento</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-slate-650 font-medium">
+                          <Check size={11} className="text-pink-600 font-bold" />
+                          <span>Zero Transparência Certificada</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tamanhos Grid Accordion */}
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAccordion(activeAccordion === 'tamanhos' ? null : 'tamanhos')}
+                      className="w-full px-3 py-2 bg-slate-50 text-[11px] font-bold text-slate-800 flex justify-between items-center border-none cursor-pointer"
+                    >
+                      <span>Tabela de Medidas Oficial</span>
+                      <span>{activeAccordion === 'tamanhos' ? '−' : '+'}</span>
+                    </button>
+                    {activeAccordion === 'tamanhos' && (
+                      <div className="p-2.5 bg-white border-t border-slate-100 text-[10px]">
+                        <div className="grid grid-cols-2 gap-1 text-center font-bold">
+                          <div className="bg-slate-50 py-1.5 border border-slate-100 rounded">Tamanho P — Veste 34 ao 36</div>
+                          <div className="bg-slate-50 py-1.5 border border-slate-100 rounded">Tamanho M — Veste 38 ao 40</div>
+                          <div className="bg-slate-50 py-1.5 border border-slate-100 rounded">Tamanho G — Veste 42 ao 44</div>
+                          <div className="bg-slate-50 py-1.5 border border-slate-100 rounded">Tamanho Ps / GG — Veste 46 ao 50</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cuidados Accordion */}
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAccordion(activeAccordion === 'cuidados' ? null : 'cuidados')}
+                      className="w-full px-3 py-2 bg-slate-50 text-[11px] font-bold text-slate-800 flex justify-between items-center border-none cursor-pointer"
+                    >
+                      <span>Cuidados de Preservação</span>
+                      <span>{activeAccordion === 'cuidados' ? '−' : '+'}</span>
+                    </button>
+                    {activeAccordion === 'cuidados' && (
+                      <div className="p-3 bg-white border-t border-slate-100 text-[10px] space-y-1.5 text-slate-600 font-medium">
+                        <p className="flex items-center gap-1.5">🧼 Lavar à mão somente com sabão neutro</p>
+                        <p className="flex items-center gap-1.5">🚫 Não deixar de molho e não passar ferro quente</p>
+                        <p className="flex items-center gap-1.5">⚠️ As cores podem variar conforme o brilho e filtros da tela</p>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* 1. REAL CLIENTS REVIEWS LOGS SYSTEM */}
+                <div className="border-t border-slate-100 pt-4 space-y-2 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-450 font-extrabold uppercase tracking-widest">Avaliações das Clientes ({productReviews[selectedProduct.id]?.length || productReviews.default.length})</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewFormOpen(!isReviewFormOpen)}
+                      className="text-[9px] text-pink-600 hover:text-pink-700 font-bold underline border-none bg-transparent cursor-pointer"
+                    >
+                      Deixar avaliação
+                    </button>
+                  </div>
+
+                  {/* Review inputs block */}
+                  {isReviewFormOpen && (
+                    <form onSubmit={handleSubmitReview} className="bg-slate-50 p-3 rounded-2xl border border-slate-150 space-y-2 animate-in slide-in-from-top duration-200">
+                      <div>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Seu nome"
+                          value={newReviewAuthor}
+                          onChange={(e) => setNewReviewAuthor(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10.5px] "
+                        />
+                      </div>
+                      <div>
+                        <textarea
+                          required
+                          rows={2}
+                          placeholder="O que achou da peça? (Elasticidade, transparência, etc...)"
+                          value={newReviewText}
+                          onChange={(e) => setNewReviewText(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10.5px] "
+                        />
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">Nota:</span>
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setNewReviewStars(n)}
+                                className="text-yellow-400"
+                              >
+                                {newReviewStars >= n ? '★' : '☆'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          className="bg-slate-900 text-white hover:bg-pink-600 px-3 py-1 rounded-lg text-[9px] font-bold"
+                        >
+                          Publicar Avaliação
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* List out Reviews */}
+                  <div className="space-y-3">
+                    {(productReviews[selectedProduct.id] || productReviews.default).map((rev, idx) => (
+                      <div key={idx} className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 relative space-y-1">
+                        <div className="flex justify-between items-center">
+                          <p className="font-extrabold text-[11px] text-slate-800">{rev.author}</p>
+                          <span className="text-[8px] text-slate-400 font-bold font-mono">{rev.date}</span>
+                        </div>
+                        <div className="flex gap-0.5 text-[9px] text-yellow-450">
+                          {[...Array(rev.stars)].map((_, i) => <Star key={i} size={10} className="fill-yellow-400 text-yellow-400" />)}
+                        </div>
+                        <p className="text-[10px] text-slate-550 leading-relaxed font-medium">
+                          {rev.comment}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+
+                {/* PRODUTOS RELACIONADOS CAROUSEL IN DETAILS */}
+                <div className="border-t border-slate-100 pt-5 space-y-3 text-left">
+                  <span className="text-[10px] text-slate-450 font-extrabold uppercase tracking-widest block">Produtos Relacionados</span>
+                  
+                  {/* Related items list view */}
+                  <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2">
+                    {products.filter(p => p.id !== selectedProduct.id && p.stock > 0).slice(0, 4).map(rel => (
+                      <div 
+                        key={rel.id} 
+                        onClick={() => handleOpenProduct(rel)}
+                        className="w-28 shrink-0 space-y-1.5 cursor-pointer bg-slate-50/60 hover:bg-slate-50 p-2 border border-slate-100 rounded-xl flex-shrink-0"
+                      >
+                        <div className="aspect-[3/4] rounded-lg overflow-hidden relative">
+                          <img src={rel.image} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="text-left leading-tight text-[9px]">
+                          <p className="font-extrabold text-slate-700 truncate">{rel.name}</p>
+                          <p className="text-pink-600 font-bold font-mono mt-0.5">R$ {rel.price.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Sticky bottom CTA actions bar */}
+              <div className="pt-4 border-t border-slate-150 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProduct(null)}
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 font-sans font-bold text-slate-600 rounded-2xl transition cursor-pointer text-center text-[10.5px]"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  className="flex-grow py-3 bg-slate-900 border-none hover:bg-pink-600 text-white font-sans font-extrabold rounded-2xl text-[11px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/10 cursor-pointer active:scale-97"
+                >
+                  <ShoppingBag size={14} />
+                  <span>Adicionar à Sacola</span>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 8. Junte-se a nós / Obtenha Descontos Exclusivos Newsletter Footer Card */}
+      <section id="newsletter-section" className="max-w-4xl mx-auto px-4 md:px-8 mt-12 mb-6">
+        <div className="bg-gradient-to-r from-pink-600 to-rose-450 text-white rounded-3xl p-6 md:p-8 text-center space-y-4 shadow-lg relative overflow-hidden">
+          {/* Subtle graphic shape elements */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full transform translate-x-10 -translate-y-10" />
+          <div className="absolute -bottom-8 -left-8 w-28 h-28 bg-white/5 rounded-full" />
+          
+          <div className="max-w-md mx-auto space-y-2 relative z-10">
+            <span className="inline-block bg-white/20 border border-white/20 text-white text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-widest">JUNTE-SE A NÓS</span>
+            <h4 className="text-xl md:text-2xl font-extrabold font-serif italic tracking-wide">Obtenha Descontos Exclusivos</h4>
+            <p className="text-[11px] text-pink-100 leading-normal max-w-sm mx-auto">Cadastre-se na nossa Lista de Clientes VIPs para receber alertas semanais de lançamentos, cupons secretos e promoções com até 50% OFF!</p>
+          </div>
+
+          {!isNewsletterSubmitted ? (
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newsletterName.trim() || !newsletterEmail.trim()) return;
+                
+                // Add dummy VIP back into parent CRM
+                const newVIP: Client = {
+                  id: `nws-${Date.now()}`,
+                  name: newsletterName.trim(),
+                  email: newsletterEmail.trim(),
+                  phone: "(21) 99999-1234",
+                  channel: "E-commerce",
+                  npsScore: 10,
+                  totalSpent: 0,
+                  ordersCount: 0,
+                  createdAt: new Date().toISOString()
+                };
+                onAddClient(newVIP);
+
+                setIsNewsletterSubmitted(true);
+              }}
+              className="max-w-md mx-auto space-y-2.5 font-sans pt-1 relative z-10"
+            >
+              <input 
+                type="text"
+                required
+                placeholder="Seu nome completo"
+                value={newsletterName}
+                onChange={(e) => setNewsletterName(e.target.value)}
+                className="w-full bg-white text-slate-800 text-xs px-4 py-2.5 rounded-xl placeholder-slate-400 focus:outline-hidden font-medium"
+              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input 
+                  type="email"
+                  required
+                  placeholder="Digite seu melhor e-mail"
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  className="flex-1 bg-white text-slate-800 text-xs px-4 py-2.5 rounded-xl placeholder-slate-400 focus:outline-hidden font-medium"
+                />
+                <button
+                  type="submit"
+                  className="bg-slate-900 border-none hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl transition cursor-pointer"
+                >
+                  Inscrever-se
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="bg-white/10 p-4 rounded-2xl max-w-xs mx-auto animate-in fade-in duration-300 relative z-10">
+              <span className="text-xl">🎉</span>
+              <p className="font-bold text-xs text-white mt-1">Bem-vinda à nossa lista VIP!</p>
+              <p className="text-[10px] text-pink-100 mt-0.5">Seu cadastro foi salvo automaticamente em nosso CRM do sistema!</p>
+            </div>
+          )}
+
+        </div>
+      </section>
+
+      {/* Custom footer signature line */}
+      <div className="text-center py-4 bg-transparent border-t border-slate-100 select-none text-[10px] text-slate-400 font-bold tracking-wider uppercase font-sans">
+        © {new Date().getFullYear()} AP Moda Fitness • Desenvolvido exclusivamente para você render o máximo.
+      </div>
+
+      {/* 9. Interactive Float WhatsApp Button with notify sticker */}
+      <a 
+        href={`https://api.whatsapp.com/send?phone=5521991234567&text=Ol%C3%A1!%20Gostaria%20de%20tirar%20uma%20d%C3%BAvida%20sobre%20as%20pe%C3%A7as%20da%20vitrine%20AP%20Moda%20Fitness%20🌸`}
+        target="_blank"
+        rel="noreferrer"
+        className="fixed bottom-6 right-6 z-40 bg-green-500 hover:bg-green-600 p-3.5 rounded-full shadow-lg text-white hover:scale-110 active:scale-95 transition-all text-center flex items-center justify-center animate-bounce duration-3000 cursor-pointer"
+        title="Atendimento pelo WhatsApp"
+      >
+        <MessageCircle size={24} className="fill-white text-green-500" />
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 border border-white rounded-full animate-ping" />
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 border border-white rounded-full flex items-center justify-center text-[7px] font-extrabold text-white">1</span>
+      </a>
+
+      {/* Cart Drawer & Checkout Form */}
+      {isCartOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex justify-end z-50 text-[11px] md:text-xs">
+          
+          <div className="bg-white max-w-md w-full h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-250 font-sans text-slate-800">
+            
+            <div className="space-y-50 space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <ShoppingBag size={16} className="text-pink-600" />
+                  <span className="font-extrabold text-slate-800 text-xs md:text-sm uppercase tracking-wider">Minha Sacola</span>
+                </div>
+                <button 
+                  onClick={() => setIsCartOpen(false)}
+                  className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full transition text-slate-600 cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Items listing list */}
+              <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
+                {cart.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-2">
+                    <ShoppingBag size={32} className="mx-auto text-slate-300" />
+                    <p className="font-bold text-slate-550 text-xs">Sua sacola de compras está vazia.</p>
+                    <p className="text-[10px]">Aproveite para rechear de conjuntos lindos!</p>
+                  </div>
+                ) : (
+                  cart.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-2.5 bg-slate-50/70 border border-slate-100 rounded-xl relative">
+                      <div className="flex items-center gap-2.5 text-left">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0">
+                          <img src={item.product.image} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="leading-tight">
+                          <p className="font-bold text-slate-850 truncate max-w-[150px]">{item.product.name}</p>
+                          <p className="text-[9.5px] text-slate-450 font-bold font-mono mt-0.5">Cor: {item.color} | Tam: {item.size}</p>
+                          <p className="text-[10px] text-pink-600 font-bold font-mono">R$ {item.priceAtTime.toFixed(2)} un.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleUpdateItemQty(idx, -1)}
+                          className="w-5 h-5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-md flex items-center justify-center cursor-pointer"
+                        >
+                          -
+                        </button>
+                        <span className="text-xs font-bold font-mono w-4 text-center">{item.quantity}</span>
+                        <button 
+                          onClick={() => handleUpdateItemQty(idx, 1)}
+                          className="w-5 h-5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-md flex items-center justify-center cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Checkout Customer fields form */}
+              {cart.length > 0 && (
+                <div className="border-t border-slate-100 pt-3 space-y-3 text-left">
+                  <div className="bg-pink-50/50 p-3 rounded-2xl border border-pink-100/40 space-y-0.5">
+                    <h5 className="font-extrabold text-[10px] tracking-wider uppercase text-slate-850 flex items-center gap-1.5">
+                      <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                      <span>Fidelidade VIP & Entrega</span>
+                    </h5>
+                    <p className="text-[9px] text-slate-500 font-medium">Os dados inseridos abaixo serão cadastrados em nosso sistema de forma automática para garantir seus descontos, histórico e brindes!</p>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Seu Nome Completo *</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Ex: Gabriela Duarte"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">WhatsApp de Contato *</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Ex: (11) 99999-8888"
+                        value={clientPhone}
+                        onChange={(e) => setClientPhone(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Seu E-mail (Opcional - Rastreamento de Prêmios)</label>
+                      <input 
+                        type="email"
+                        placeholder="Ex: gabriela@email.com"
+                        value={clientEmail}
+                        onChange={(e) => setClientEmail(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Delivery Options select */}
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Forma de Retirada/Envio *</label>
+                      <div className="grid grid-cols-3 gap-1 mt-1 font-sans font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryMethod('motoboy')}
+                          className={`py-1.5 transition rounded-lg text-[9px] flex flex-col items-center justify-center gap-1 cursor-pointer border
+                            ${deliveryMethod === 'motoboy' 
+                              ? 'bg-slate-900 border-slate-900 text-white' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <Truck size={12} />
+                          <span>Motoboy</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryMethod('correios')}
+                          className={`py-1.5 transition rounded-lg text-[9px] flex flex-col items-center justify-center gap-1 cursor-pointer border
+                            ${deliveryMethod === 'correios' 
+                              ? 'bg-slate-900 border-slate-900 text-white' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <Gift size={12} />
+                          <span>Correios</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryMethod('retirada')}
+                          className={`py-1.5 transition rounded-lg text-[9px] flex flex-col items-center justify-center gap-1 cursor-pointer border
+                            ${deliveryMethod === 'retirada' 
+                              ? 'bg-slate-900 border-slate-900 text-white' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <MapPin size={12} />
+                          <span>Retirar</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Address option */}
+                    {deliveryMethod !== 'retirada' && (
+                      <div className="animate-in fade-in duration-200">
+                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Endereço Completo de Destino *</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex: Rua das Flores, 120 - Bloco C, São Paulo - SP"
+                          value={clientAddress}
+                          onChange={(e) => setClientAddress(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-hidden"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Nota / Observação Especial (Opcional)</label>
+                      <input 
+                        type="text"
+                        placeholder="Ex: Embrulhar para presente, deixar na portaria..."
+                        value={clientNotes}
+                        onChange={(e) => setClientNotes(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Slated Coupon Application */}
+                    <div>
+                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Possui Cupom Promocional?</label>
+                      <div className="flex gap-1.5 mt-0.5">
+                        <input 
+                          type="text"
+                          placeholder="Ex: FITNESS10"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-hidden uppercase font-mono font-bold text-rose-600"
+                        />
+                        <button 
+                          type="button" 
+                          onClick={handleApplyCoupon}
+                          className="px-3 bg-slate-800 hover:bg-slate-900 font-bold text-white max-h-[30px] rounded-lg transition text-[10px] cursor-pointer"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                      <span className="text-[8px] text-slate-400 block mt-1">Dica: Use cupons como <strong>FITNESS10</strong>, <strong>BEMVINDA50</strong> ou <strong>FRETEGRATIS</strong> para testar.</span>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Total order overview calculation and WhatsApp ordering */}
+            {cart.length > 0 && (
+              <div className="border-t border-slate-100 pt-4 mt-6 space-y-3">
+                {isVipRegisteredJustNow && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-2xl space-y-1.5 animate-in fade-in duration-300">
+                    <p className="font-bold text-[11px] uppercase tracking-wide flex items-center gap-1 text-emerald-800">
+                      <span>🎉</span>
+                      <span>Cadastro Sincronizado no Sistema!</span>
+                    </p>
+                    <p className="text-[10px] text-emerald-700 font-medium leading-relaxed">
+                      {vipMessage}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1 text-slate-600 text-xs font-sans">
+                  <div className="flex justify-between">
+                    <span>Subtotal das Peças:</span>
+                    <span className="font-bold text-slate-800">R$ {cartSubtotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-rose-600 font-bold">
+                      <span>Desconto Especial ({appliedCoupon.code}):</span>
+                      <span>-R$ {cartDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between">
+                    <span>Taxa de Envio:</span>
+                    <span className="font-bold text-slate-800">{deliveryFee === 0 ? "GRÁTIS 🚚" : `R$ ${deliveryFee.toFixed(2)}`}</span>
+                  </div>
+
+                  <div className="flex justify-between text-slate-905 font-bold text-sm pt-2 border-t border-slate-100">
+                    <span>Total da Encomenda:</span>
+                    <span className="text-pink-600 text-base font-extrabold font-mono">R$ {cartTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCheckoutWhatsApp}
+                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 shadow-md shadow-green-500/15 cursor-pointer active:scale-97 border-none"
+                >
+                  <MessageCircle size={15} />
+                  <span>Confirmar & Pedir via WhatsApp</span>
+                </button>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
+}
