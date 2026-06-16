@@ -21,7 +21,7 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
   const [loginInput, setLoginInput] = useState('');
   
   const [selectedUser, setSelectedUser] = useState<string>('');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -30,50 +30,20 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
     return teamMembers.filter(m => m.role === role);
   }, [role, teamMembers]);
 
-  // Dynamically load system partners (legacy fallback, but teamMembers is preferred)
-  const initialPartners = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('ap_moda_partners');
-      if (saved) return JSON.parse(saved);
-    } catch(e) {}
-    return [
-      { id: 'part-1', name: 'Marina Fitness Coach', instagram: '@marina_fit', couponCode: 'MARINAFIT10', commissionRate: 10, salesCount: 15, totalGenerated: 4250.00 },
-      { id: 'part-2', name: 'Julia Rezende', instagram: '@jurezendedm', couponCode: 'JU10', commissionRate: 8, salesCount: 8, totalGenerated: 1890.00 },
-      { id: 'part-3', name: 'Amanda Runner', instagram: '@amandarun', couponCode: 'AMANDAPRO', commissionRate: 12, salesCount: 22, totalGenerated: 6200.00 }
-    ];
-  }, []);
-
-  // Auto select first user from dynamic list if role changes
-  useMemo(() => {
+  // Synchronize dynamic lists and states when role changes (no password auto-filling)
+  React.useEffect(() => {
     setErrorMsg('');
-    const sameRoleMembers = teamMembers.filter(m => m.role === role);
+    setPassword(''); // Force empty password when switching roles/tabs
     
+    const sameRoleMembers = teamMembers.filter(m => m.role === role);
     if (sameRoleMembers.length > 0) {
       setSelectedUser(sameRoleMembers[0].name);
       setLoginInput(sameRoleMembers[0].login);
-      // Auto set password to make review testing easier
-      setPassword(sameRoleMembers[0].password || '123456');
     } else {
-      // Fallback
-      if (role === 'Vendedor') {
-        setSelectedUser(sellers[0] || 'Vendedor Padrão');
-        setLoginInput('vendedor');
-      } else if (role === 'Entregador') {
-        setSelectedUser(motoboys[0] || 'Entregador Padrão');
-        setLoginInput('motoboy');
-      } else if (role === 'Admin') {
-        setSelectedUser('Administrador');
-        setLoginInput('admin');
-      } else if (role === 'Gerente') {
-        setSelectedUser('Gerente de Vendas');
-        setLoginInput('gerente');
-      } else if (role === 'Parceiro') {
-        setSelectedUser(initialPartners[0]?.name || 'Marina Fitness Coach');
-        setLoginInput('parceiro');
-      }
-      setPassword('123456');
+      setSelectedUser('');
+      setLoginInput('');
     }
-  }, [role, sellers, motoboys, initialPartners, teamMembers]);
+  }, [role, teamMembers]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +51,7 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
 
     const targetPassword = password.trim();
     if (!targetPassword) {
-      setErrorMsg('Por favor, digite a senha.');
+      setErrorMsg('Por favor, digite a sua senha de acesso.');
       return;
     }
 
@@ -90,22 +60,21 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
     if (isManualLogin) {
       const inputVal = loginInput.trim().toLowerCase();
       if (!inputVal) {
-        setErrorMsg('Por favor, introduza o login de usuário de sua conta.');
+        setErrorMsg('Por favor, digite o login de usuário da sua conta.');
         return;
       }
 
-      // Check user with this login & role
+      // Find user matching exact login username and selected role
       authenticatedUser = teamMembers.find(m => 
         m.login.toLowerCase() === inputVal && 
         m.role === role
       );
-
-      // Admin backdoor override if no users exist
-      if (!authenticatedUser && role === 'Admin' && inputVal === 'admin' && targetPassword === 'admin123') {
-        onLogin({ name: 'Ana Paula Admin', role: 'Admin' });
+    } else {
+      if (!selectedUser) {
+        setErrorMsg('Por favor, selecione ou cadastre uma conta para efetuar o login.');
         return;
       }
-    } else {
+
       // Dropdown selection - search user by name and role
       authenticatedUser = teamMembers.find(m => 
         m.name === selectedUser && 
@@ -114,20 +83,12 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
     }
 
     if (!authenticatedUser) {
-      // Check legacy credentials fallback to prevent lockout
-      if (targetPassword === '123456' || targetPassword === 'admin123') {
-        onLogin({
-          name: isManualLogin ? loginInput : selectedUser,
-          role: role
-        });
-        return;
-      }
-      setErrorMsg('Login inválido! O usuário/login digitado não pertence à função selecionada.');
+      setErrorMsg('Acesso recusado! O usuário/login informado não foi encontrado ou não pertence a esta função.');
       return;
     }
 
     if (authenticatedUser.password !== targetPassword) {
-      setErrorMsg(`Senha incorreta para o cadastro de "${authenticatedUser.name}". Tente novamente.`);
+      setErrorMsg(`Senha incorreta para a conta de "${authenticatedUser.name}". Tente novamente.`);
       return;
     }
 
@@ -223,12 +184,7 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
                 type="text"
                 required
                 value={loginInput}
-                onChange={(e) => {
-                  setLoginInput(e.target.value);
-                  // Auto sync password if typing matches a registered user unique login
-                  const matched = teamMembers.find(m => m.login.toLowerCase() === e.target.value.toLowerCase().trim() && m.role === role);
-                  if (matched) setPassword(matched.password);
-                }}
+                onChange={(e) => setLoginInput(e.target.value)}
                 placeholder="Exemplo: ana, juliana, bruno..."
                 className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-medium focus:outline-none focus:border-pink-500 transition-all font-mono placeholder:text-slate-700"
               />
@@ -240,8 +196,7 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
                     value={selectedUser}
                     onChange={(e) => {
                       setSelectedUser(e.target.value);
-                      const matched = membersOfSelectedRole.find(m => m.name === e.target.value);
-                      if (matched) setPassword(matched.password);
+                      setPassword(''); // Clear password field on selecting a different user
                     }}
                     className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-bold focus:outline-none focus:border-pink-500 transition-all cursor-pointer"
                   >
@@ -252,28 +207,9 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
                     ))}
                   </select>
                 ) : (
-                  /* Fallback to simple select if list empty */
-                  <select
-                    value={selectedUser}
-                    onChange={(e) => setSelectedUser(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-bold focus:outline-none focus:border-pink-500 transition-all cursor-pointer"
-                  >
-                    {role === 'Vendedor' ? (
-                      sellers.map((val) => (
-                        <option key={val} value={val}>{val} (login padrão)</option>
-                      ))
-                    ) : role === 'Entregador' ? (
-                      motoboys.map((val) => (
-                        <option key={val} value={val}>{val} (login padrão)</option>
-                      ))
-                    ) : role === 'Parceiro' ? (
-                      initialPartners.map((val: any) => (
-                        <option key={val.id} value={val.name}>{val.name} (Instagram: {val.instagram})</option>
-                      ))
-                    ) : (
-                      <option value={selectedUser}>{selectedUser}</option>
-                    )}
-                  </select>
+                  <div className="p-3 bg-rose-950/20 border border-rose-900/30 rounded-xl text-[10.5px] text-center text-rose-400">
+                    Nenhum profissional cadastrado com o perfil de <strong>{roleLabels[role]}</strong> neste sistema.
+                  </div>
                 )}
               </div>
             )}
@@ -283,11 +219,6 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
           <div className="space-y-1.5 text-xs">
             <div className="flex items-center justify-between">
               <label className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">Senha de Acesso</label>
-              {!isManualLogin && (
-                <span className="text-[8px] text-pink-400/80 font-mono">
-                  Senha preenchida automaticamente para testes
-                </span>
-              )}
             </div>
             <div className="relative">
               <input
@@ -317,7 +248,11 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
           {/* Submit */}
           <button
             type="submit"
-            className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-extrabold rounded-xl transition-all shadow-lg shadow-pink-600/10 cursor-pointer text-xs uppercase tracking-wider"
+            disabled={!isManualLogin && membersOfSelectedRole.length === 0}
+            className={`w-full py-3 text-white font-extrabold rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider cursor-pointer
+              ${(!isManualLogin && membersOfSelectedRole.length === 0)
+                ? 'bg-slate-850 text-slate-500 shadow-none cursor-not-allowed'
+                : 'bg-pink-600 hover:bg-pink-700 shadow-pink-600/10'}`}
           >
             Entrar no Painel
           </button>

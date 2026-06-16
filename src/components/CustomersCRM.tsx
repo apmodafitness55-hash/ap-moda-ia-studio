@@ -80,6 +80,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newCpf, setNewCpf] = useState('');
+  const [newBirthDate, setNewBirthDate] = useState('');
   const [newChannel, setNewChannel] = useState<SalesChannel>('Instagram');
   const [newNps, setNewNps] = useState<number>(10);
 
@@ -148,7 +150,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
     return clients.filter(c => 
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.phone.includes(searchQuery)
+      c.phone.includes(searchQuery) ||
+      (c.cpf && c.cpf.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   }, [clients, searchQuery]);
 
@@ -169,6 +172,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
       editingClient.name = newName.trim();
       editingClient.email = newEmail.trim() || 'cliente@exemplo.com';
       editingClient.phone = newPhone.trim();
+      editingClient.cpf = newCpf.trim() || undefined;
+      editingClient.birthDate = newBirthDate.trim() || undefined;
       editingClient.channel = newChannel;
       editingClient.npsScore = newNps;
       alert('Dados da cliente atualizados com sucesso no CRM!');
@@ -179,6 +184,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
         name: newName.trim(),
         email: newEmail.trim() || 'cliente@exemplo.com',
         phone: newPhone.trim(),
+        cpf: newCpf.trim() || undefined,
+        birthDate: newBirthDate.trim() || undefined,
         channel: newChannel,
         npsScore: newNps,
         totalSpent: 0,
@@ -198,6 +205,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
     setNewName(client.name);
     setNewEmail(client.email);
     setNewPhone(client.phone);
+    setNewCpf(client.cpf || '');
+    setNewBirthDate(client.birthDate || '');
     setNewChannel(client.channel);
     setNewNps(client.npsScore || 10);
     setIsAddModalOpen(true);
@@ -208,6 +217,8 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
     setNewName('');
     setNewEmail('');
     setNewPhone('');
+    setNewCpf('');
+    setNewBirthDate('');
     setNewChannel('Instagram');
     setNewNps(10);
   };
@@ -444,7 +455,19 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
                           </div>
                           <div>
                             <span className="font-semibold text-slate-800 text-xs block leading-tight">{c.name}</span>
-                            <span className="text-[10px] text-slate-400 font-normal mt-0.5 block font-mono">ID: {c.id.substring(0,8).toUpperCase()}</span>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-[9px] text-slate-400 font-normal font-mono">ID: {c.id.substring(0,8).toUpperCase()}</span>
+                              {c.cpf && (
+                                <span className="bg-slate-100 text-slate-650 border border-slate-200 px-1 py-0.2 rounded text-[9px] font-mono font-bold leading-none shrink-0" title={`CPF: ${c.cpf}`}>
+                                  {c.cpf}
+                                </span>
+                              )}
+                              {c.birthDate && (
+                                <span className="bg-pink-50 text-pink-600 border border-pink-100 px-1 py-0.2 rounded text-[9px] font-mono font-bold leading-none shrink-0" title={`Aniversário: ${c.birthDate}`}>
+                                  🎂 {c.birthDate}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -986,8 +1009,32 @@ export default function CustomersCRM({ clients, sales, onAddClient, currentUser 
                   placeholder="Ex: amanda@exemplo.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 transition-all"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:border-pink-500 transition-all"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-xs font-sans font-medium">
+                <div className="space-y-1">
+                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide">CPF do Cliente</label>
+                  <input 
+                    type="text"
+                    placeholder="000.000.000-00"
+                    value={newCpf}
+                    onChange={(e) => setNewCpf(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:border-pink-500 transition-all font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1 font-sans">
+                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide">Data Nascimento</label>
+                  <input 
+                    type="text"
+                    placeholder="Ex: 12/04/1995"
+                    value={newBirthDate}
+                    onChange={(e) => setNewBirthDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:border-pink-500 transition-all font-mono"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-xs font-sans font-medium">

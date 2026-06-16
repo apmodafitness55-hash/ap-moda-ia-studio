@@ -58,6 +58,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [quickPhone, setQuickPhone] = useState<string>('');
   const [quickEmail, setQuickEmail] = useState<string>('');
+  const [quickCpf, setQuickCpf] = useState<string>('');
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
 
   // Discount states
@@ -194,9 +195,12 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       alert("Por favor, digite o nome completo da cliente antes de salvar.");
       return;
     }
-    const exists = clients.find(c => c.name.toLowerCase() === selectedClientName.trim().toLowerCase());
+    const exists = clients.find(c => 
+      c.name.toLowerCase() === selectedClientName.trim().toLowerCase() ||
+      (quickCpf.trim() && c.cpf && c.cpf.replace(/\D/g, '') === quickCpf.trim().replace(/\D/g, ''))
+    );
     if (exists) {
-      alert(`A cliente "${selectedClientName}" já consta no sistema.`);
+      alert(`A cliente "${selectedClientName}" ou o CPF informado já consta no sistema.`);
       setIsQuickAddOpen(false);
       return;
     }
@@ -205,6 +209,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       name: selectedClientName.trim(),
       email: quickEmail.trim() || `${selectedClientName.toLowerCase().replace(/\s+/g, '')}@exemplo.com`,
       phone: quickPhone.trim() || '(11) 99999-0000',
+      cpf: quickCpf.trim() || undefined,
       channel: selectedChannel,
       npsScore: npsScore,
       totalSpent: 0,
@@ -215,6 +220,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
     setIsQuickAddOpen(false);
     setQuickPhone('');
     setQuickEmail('');
+    setQuickCpf('');
     alert(`⚡ Cliente "${selectedClientName.trim()}" cadastrada no sistema!`);
   };
 
@@ -306,17 +312,27 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       cost: item.product.cost
     }));
 
-    // Find custom or existing client
+    // Find custom or existing client (by name or CPF)
     let finalClientName = selectedClientName.trim() || 'Cliente Avulso';
-    let clientExists = clients.find(c => c.name.toLowerCase() === finalClientName.toLowerCase());
+    let clientExists = clients.find(c => 
+      c.name.toLowerCase() === finalClientName.toLowerCase() ||
+      (c.cpf && c.cpf.replace(/\D/g, '') === finalClientName.replace(/\D/g, ''))
+    );
 
-    if (!clientExists) {
+    if (clientExists) {
+      finalClientName = clientExists.name;
+      // update stats
+      clientExists.totalSpent = (clientExists.totalSpent || 0) + finalCartTotal;
+      clientExists.ordersCount = (clientExists.ordersCount || 0) + 1;
+    } else {
       // Create client inline!
+      const isCpfText = /^\d[\d.\-/]+$/.test(finalClientName);
       const newClient: Client = {
         id: `cli-${Date.now()}`,
-        name: finalClientName,
-        email: `${finalClientName.toLowerCase().replace(/\s+/g, '')}@exemplo.com`,
+        name: isCpfText ? `Cliente CPF ${finalClientName}` : finalClientName,
+        email: `${(isCpfText ? `cpf-${finalClientName}` : finalClientName).toLowerCase().replace(/[^a-z0-9]/g, '')}@exemplo.com`,
         phone: '(11) 99999-0000',
+        cpf: isCpfText ? finalClientName : undefined,
         channel: selectedChannel,
         npsScore: npsScore,
         totalSpent: finalCartTotal,
@@ -324,10 +340,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
         createdAt: new Date().toISOString()
       };
       onAddClient(newClient);
-    } else {
-      // update stats
-      clientExists.totalSpent = (clientExists.totalSpent || 0) + finalCartTotal;
-      clientExists.ordersCount = (clientExists.ordersCount || 0) + 1;
+      finalClientName = newClient.name;
     }
 
     const newSale: Sale = {
@@ -552,23 +565,53 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
                   required
                   value={selectedClientName}
                   onChange={(e) => {
-                    setSelectedClientName(e.target.value);
+                    const typed = e.target.value;
+                    setSelectedClientName(typed);
                     if (isHistoryPanelOpen) setIsHistoryPanelOpen(false);
+                    
+                    // Match auto-resolve from CPF or Name
+                    const cleanTyped = typed.replace(/\D/g, '');
+                    const foundByCpfOrName = clients.find(c => 
+                      (cleanTyped && c.cpf && c.cpf.replace(/\D/g, '') === cleanTyped) ||
+                      (c.name.toLowerCase() === typed.trim().toLowerCase())
+                    );
+                    if (foundByCpfOrName) {
+                      setSelectedClientName(foundByCpfOrName.name);
+                    }
                   }}
-                  placeholder="Selecione ou digite para cadastrar..."
-                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 transition-all font-medium"
+                  placeholder="Busque por CPF ou Nome da cliente..."
+                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 placeholder-slate-400 focus:outline-none focus:border-pink-500 transition-all font-medium"
                 />
               </div>
 
               <datalist id="pdv-clients-list">
-                {clients.map(c => <option key={c.id} value={c.name} />)}
+                {clients.map(c => (
+                  <option key={c.id} value={c.name}>
+                    {c.cpf ? `CPF: ${c.cpf}` : 'Sem CPF'}
+                  </option>
+                ))}
+                {clients.filter(c => c.cpf).map(c => (
+                  <option key={`cpf-opt-${c.id}`} value={c.cpf}>
+                    {c.name}
+                  </option>
+                ))}
               </datalist>
 
               {/* QUICK ADD COLLAPSIBLE FORM CARD */}
               {isQuickAddOpen && (
                 <div className="p-3 bg-pink-50/50 border border-pink-100 rounded-xl space-y-2 mt-1 animate-fadeIn font-sans">
                   <span className="text-[10px] font-extrabold text-pink-600 uppercase block tracking-wider">⚡ Cadastro Rápido de Cliente</span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="space-y-1 font-sans">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block">CPF do Cliente</label>
+                      <input 
+                        type="text"
+                        placeholder="000.000.000-00"
+                        value={quickCpf}
+                        onChange={(e) => setQuickCpf(e.target.value)}
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-none focus:border-pink-500 font-mono text-slate-700"
+                      />
+                    </div>
                     <div className="space-y-1 font-sans">
                       <label className="text-[9px] font-bold text-slate-500 uppercase block">Telefone / WhatsApp</label>
                       <input 
@@ -576,7 +619,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
                         placeholder="(11) 99999-0000"
                         value={quickPhone}
                         onChange={(e) => setQuickPhone(e.target.value)}
-                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-hidden focus:border-pink-500 font-mono text-slate-700"
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-none focus:border-pink-500 font-mono text-slate-700"
                       />
                     </div>
                     <div className="space-y-1 font-sans">
@@ -586,14 +629,14 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
                         placeholder="cliente@exemplo.com"
                         value={quickEmail}
                         onChange={(e) => setQuickEmail(e.target.value)}
-                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-hidden focus:border-pink-500 font-mono text-slate-700"
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-none focus:border-pink-500 font-mono text-slate-700"
                       />
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleQuickAddClient}
-                    className="w-full py-1 bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-[10px] uppercase rounded transition tracking-wider shadow-sm cursor-pointer border-none font-sans"
+                    className="w-full py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-[10px] uppercase rounded transition tracking-wider shadow-sm cursor-pointer border-none font-sans"
                   >
                     Salvar Novo Cadastro
                   </button>

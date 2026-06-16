@@ -66,6 +66,16 @@ export interface Client {
   name: string;
   email: string;
   phone: string;
+  cpf?: string;
+  birthDate?: string;
+  whatsapp?: string;
+  addressStreet?: string;
+  addressNum?: string;
+  addressComp?: string;
+  addressBairro?: string;
+  addressCidade?: string;
+  addressEstado?: string;
+  addressCep?: string;
   channel: SalesChannel;
   npsScore?: number;
   totalSpent: number;

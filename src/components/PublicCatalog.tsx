@@ -239,6 +239,18 @@ export default function PublicCatalog({
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
+  const [clientCpf, setClientCpf] = useState('');
+  const [clientBirthDate, setClientBirthDate] = useState('');
+  
+  // Structured address components
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressNum, setAddressNum] = useState('');
+  const [addressComp, setAddressComp] = useState('');
+  const [addressBairro, setAddressBairro] = useState('');
+  const [addressCidade, setAddressCidade] = useState('');
+  const [addressEstado, setAddressEstado] = useState('');
+  const [addressCep, setAddressCep] = useState('');
+
   const [isVipRegisteredJustNow, setIsVipRegisteredJustNow] = useState(false);
   const [vipMessage, setVipMessage] = useState('');
   const [deliveryMethod, setDeliveryMethod] = useState<'motoboy' | 'correios' | 'retirada'>('motoboy');
@@ -471,13 +483,37 @@ export default function PublicCatalog({
       alert('Seu carrinho está vazio para finalizar.');
       return;
     }
-    if (!clientName.trim() || !clientPhone.trim()) {
-      alert('Por favor, preencha o seu Nome e seu Telefone de contato.');
+    if (!clientName.trim()) {
+      alert('Por favor, preencha o seu Nome Completo.');
       return;
     }
-    if (deliveryMethod !== 'retirada' && !clientAddress.trim()) {
-      alert('Por favor, preencha o seu Endereço de entrega.');
+    if (!clientCpf.trim()) {
+      alert('Por favor, preencha o seu CPF.');
       return;
+    }
+    if (!clientPhone.trim()) {
+      alert('Por favor, preencha o seu número de Celular / WhatsApp.');
+      return;
+    }
+    if (!clientBirthDate.trim()) {
+      alert('Por favor, preencha sua Data de Nascimento.');
+      return;
+    }
+    if (!clientEmail.trim()) {
+      alert('Por favor, preencha o seu E-mail de contato.');
+      return;
+    }
+    
+    if (deliveryMethod !== 'retirada') {
+      if (!addressStreet.trim() || !addressNum.trim() || !addressBairro.trim() || !addressCidade.trim() || !addressEstado.trim() || !addressCep.trim()) {
+        alert('Por favor, preencha todos os campos obrigatórios do endereço de entrega (Rua, Número, Bairro, Cidade, Estado e CEP).');
+        return;
+      }
+    }
+
+    let finalAddress = 'Retirada no Local';
+    if (deliveryMethod !== 'retirada') {
+      finalAddress = `${addressStreet.trim()}, ${addressNum.trim()}${addressComp.trim() ? ` (${addressComp.trim()})` : ''} - Bairro: ${addressBairro.trim()} - ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}`;
     }
 
     // Compose order detail message
@@ -494,6 +530,9 @@ export default function PublicCatalog({
     const orderMsg = 
       `🌸 *PEDIDO CONFIRMADO: AP MODA FITNESS* 🌸\n\n` +
       `👤 *Cliente:* ${clientName.trim()}\n` +
+      `🆔 *CPF:* ${clientCpf.trim()}\n` +
+      `🎂 *Nascimento:* ${clientBirthDate.trim()}\n` +
+      `📧 *E-mail:* ${clientEmail.trim()}\n` +
       `📞 *WhatsApp:* ${clientPhone.trim()}\n\n` +
       `🛍️ *Produtos Solicitados:*\n${itemsListText}\n` +
       `---------------------------------\n` +
@@ -502,7 +541,7 @@ export default function PublicCatalog({
       `🚚 *Taxa de Entrega:* R$ ${deliveryFee.toFixed(2)}\n` +
       `💰 *Total Geral:* R$ ${cartTotal.toFixed(2)}\n\n` +
       `📍 *Forma de Recebimento:* ${deliveryTypeLabel}\n` +
-      (deliveryMethod !== 'retirada' ? `🏠 *Endereço:* ${clientAddress.trim()}\n` : '') +
+      (deliveryMethod !== 'retirada' ? `🏠 *Endereço Completo:*\n  Rua: ${addressStreet.trim()}, Nº ${addressNum.trim()}\n  Bairro: ${addressBairro.trim()}\n  Cidade: ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}${addressComp.trim() ? `\n  Compl.: ${addressComp.trim()}` : ''}\n` : '') +
       (clientNotes.trim() ? `📝 *Observações:* ${clientNotes.trim()}\n` : '') +
       `\nOlá, gostaria de confirmar se estas peças encontram-se disponíveis no estoque para que eu possa efetuar o pagamento. Aguardo retorno! Obrigada! 🌸✨`;
 
@@ -520,9 +559,9 @@ export default function PublicCatalog({
         total: cartTotal - deliveryFee,
         status: 'Pendente',
         createdAt: new Date().toISOString(),
-        address: deliveryMethod !== 'retirada' ? clientAddress.trim() : 'Retirada no Local',
+        address: finalAddress,
         deliveryFee: deliveryFee,
-        notes: `Cor: ${cart.map(c=>c.color).join(', ')} | Obs: ${clientNotes.trim()}`
+        notes: `Cor: ${cart.map(c=>c.color).join(', ')} | CPF: ${clientCpf.trim()} | Obs: ${clientNotes.trim()}`
       };
       
       onAddOnlineOrder(orderData);
@@ -531,11 +570,13 @@ export default function PublicCatalog({
     // Save or update Customer details in CRM system
     const cleanedPhone = clientPhone.replace(/\D/g, '');
     const cleanedName = clientName.trim();
+    const cleanedCpf = clientCpf.replace(/\D/g, '');
     
     const existingClientIndex = (clients || []).findIndex(c => {
       const matchPhone = c.phone.replace(/\D/g, '') === cleanedPhone && cleanedPhone.length > 0;
+      const matchCpf = c.cpf && c.cpf.replace(/\D/g, '') === cleanedCpf && cleanedCpf.length > 0;
       const matchName = c.name.toLowerCase() === cleanedName.toLowerCase();
-      return matchPhone || matchName;
+      return matchPhone || matchCpf || matchName;
     });
 
     if (existingClientIndex !== -1) {
@@ -544,6 +585,16 @@ export default function PublicCatalog({
       updatedList[existingClientIndex] = {
         ...existingClient,
         email: clientEmail.trim() || existingClient.email,
+        cpf: clientCpf.trim() || existingClient.cpf,
+        birthDate: clientBirthDate.trim() || existingClient.birthDate,
+        whatsapp: clientPhone.trim() || existingClient.whatsapp,
+        addressStreet: addressStreet.trim() || existingClient.addressStreet,
+        addressNum: addressNum.trim() || existingClient.addressNum,
+        addressComp: addressComp.trim() || existingClient.addressComp,
+        addressBairro: addressBairro.trim() || existingClient.addressBairro,
+        addressCidade: addressCidade.trim() || existingClient.addressCidade,
+        addressEstado: addressEstado.trim() || existingClient.addressEstado,
+        addressCep: addressCep.trim() || existingClient.addressCep,
         totalSpent: Number((existingClient.totalSpent + cartTotal).toFixed(2)),
         ordersCount: (existingClient.ordersCount || 0) + 1,
       };
@@ -557,6 +608,16 @@ export default function PublicCatalog({
         name: cleanedName,
         email: clientEmail.trim() || `${cleanedName.toLowerCase().replace(/\s+/g, '')}@exemplo.com`,
         phone: clientPhone.trim(),
+        cpf: clientCpf.trim() || undefined,
+        birthDate: clientBirthDate.trim() || undefined,
+        whatsapp: clientPhone.trim(),
+        addressStreet: addressStreet.trim() || undefined,
+        addressNum: addressNum.trim() || undefined,
+        addressComp: addressComp.trim() || undefined,
+        addressBairro: addressBairro.trim() || undefined,
+        addressCidade: addressCidade.trim() || undefined,
+        addressEstado: addressEstado.trim() || undefined,
+        addressCep: addressCep.trim() || undefined,
         channel: 'E-commerce',
         npsScore: 10,
         totalSpent: Number(cartTotal.toFixed(2)),
@@ -2171,7 +2232,7 @@ export default function PublicCatalog({
                     <p className="text-[9px] text-slate-500 font-medium">Os dados inseridos abaixo serão cadastrados em nosso sistema de forma automática para garantir seus descontos, histórico e brindes!</p>
                   </div>
 
-                  <div className="space-y-2 text-xs">
+                  <div className="space-y-4 text-xs">
                     <div>
                       <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Seu Nome Completo *</label>
                       <input 
@@ -2184,27 +2245,53 @@ export default function PublicCatalog({
                       />
                     </div>
 
-                    <div>
-                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">WhatsApp de Contato *</label>
-                      <input 
-                        type="text"
-                        required
-                        placeholder="Ex: (11) 99999-8888"
-                        value={clientPhone}
-                        onChange={(e) => setClientPhone(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden font-mono"
-                      />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">CPF *</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex: 123.456.789-00"
+                          value={clientCpf}
+                          onChange={(e) => setClientCpf(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Data de Nascimento *</label>
+                        <input 
+                          type="date"
+                          required
+                          value={clientBirthDate}
+                          onChange={(e) => setClientBirthDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden font-mono"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Seu E-mail (Opcional - Rastreamento de Prêmios)</label>
-                      <input 
-                        type="email"
-                        placeholder="Ex: gabriela@email.com"
-                        value={clientEmail}
-                        onChange={(e) => setClientEmail(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden"
-                      />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Celular / WhatsApp *</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex: (11) 99999-8888"
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">E-mail *</label>
+                        <input 
+                          type="email"
+                          required
+                          placeholder="Ex: gabriela@email.com"
+                          value={clientEmail}
+                          onChange={(e) => setClientEmail(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-xs focus:outline-hidden"
+                        />
+                      </div>
                     </div>
 
                     {/* Delivery Options select */}
@@ -2249,16 +2336,93 @@ export default function PublicCatalog({
 
                     {/* Dynamic Address option */}
                     {deliveryMethod !== 'retirada' && (
-                      <div className="animate-in fade-in duration-200">
-                        <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Endereço Completo de Destino *</label>
-                        <input 
-                          type="text"
-                          required
-                          placeholder="Ex: Rua das Flores, 120 - Bloco C, São Paulo - SP"
-                          value={clientAddress}
-                          onChange={(e) => setClientAddress(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-hidden"
-                        />
+                      <div className="animate-in fade-in duration-205 space-y-2 border-t border-slate-100/60 pt-2">
+                        <p className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500">Endereço Completo de Destino</p>
+                        
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-1">
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">CEP *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: 01311-200"
+                              value={addressCep}
+                              onChange={(e) => setAddressCep(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden font-mono"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Rua / Logradouro *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: Avenida Paulista"
+                              value={addressStreet}
+                              onChange={(e) => setAddressStreet(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Número *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: 1000"
+                              value={addressNum}
+                              onChange={(e) => setAddressNum(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Complemento</label>
+                            <input 
+                              type="text"
+                              placeholder="Ex: Apto 12"
+                              value={addressComp}
+                              onChange={(e) => setAddressComp(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 font-sans">
+                          <div>
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Bairro *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: Bela Vista"
+                              value={addressBairro}
+                              onChange={(e) => setAddressBairro(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Cidade *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: São Paulo"
+                              value={addressCidade}
+                              onChange={(e) => setAddressCidade(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-slate-450 font-bold text-[8px] uppercase tracking-wider block">Estado *</label>
+                            <input 
+                              type="text"
+                              required
+                              placeholder="Ex: SP"
+                              value={addressEstado}
+                              onChange={(e) => setAddressEstado(e.target.value)}
+                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium focus:outline-hidden font-mono uppercase"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
 
