@@ -34,7 +34,8 @@ import {
   Coins,
   FileText,
   MessageCircle,
-  Sun
+  Sun,
+  LogOut
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -49,6 +50,8 @@ interface SidebarProps {
   setThemeAccent: (accent: 'neon' | 'verde' | 'roxo' | 'rosa') => void;
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
+  currentUser?: any;
+  onLogout?: () => void;
 }
 
 export default function Sidebar({ 
@@ -61,7 +64,9 @@ export default function Sidebar({
   themeAccent,
   setThemeAccent,
   darkMode,
-  setDarkMode
+  setDarkMode,
+  currentUser,
+  onLogout
 }: SidebarProps) {
   const [logoUrl, setLogoUrl] = useState(() => {
     return localStorage.getItem('ap_store_logo') || '';
@@ -121,7 +126,21 @@ export default function Sidebar({
   ];
 
   const filteredMenuItems = menuItems.map(group => {
-    const items = group.items.filter(item => {
+    let items = group.items;
+    
+    // Limit views for salespeople
+    if (currentUser?.role === 'Vendedor') {
+      const allowedSellersTabs = [ActiveTab.PDV, ActiveTab.CLIENTES];
+      items = items.filter(it => allowedSellersTabs.includes(it.id));
+    }
+
+    // Limit views for managers (Gerente) - Oculta as abas críticas de infra e TI
+    if (currentUser?.role === 'Gerente') {
+      const hiddenGerenteTabs = [ActiveTab.CONFIGURACOES, ActiveTab.GOOGLE_WORKSPACE, ActiveTab.AGENTES_IA];
+      items = items.filter(it => !hiddenGerenteTabs.includes(it.id));
+    }
+
+    items = items.filter(item => {
       const term = searchTerm.toLowerCase();
       const matchLabel = item.label.toLowerCase().includes(term);
       const matchGroup = group.group.toLowerCase().includes(term);
@@ -346,14 +365,31 @@ export default function Sidebar({
 
         {/* User Footer / Pro Brand */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/30">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-pink-400 font-bold text-xs ring-2 ring-slate-800">
-              SUP
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-pink-600/30 border border-pink-500/40 flex items-center justify-center text-pink-400 font-bold text-xs shrink-0 select-none uppercase">
+                {currentUser?.name ? currentUser.name.slice(0, 2) : 'AP'}
+              </div>
+              <div className="flex-grow min-w-0">
+                <p className="text-white text-[11px] font-bold truncate leading-tight">
+                  {currentUser?.name || "Administrador"}
+                </p>
+                <p className="text-slate-500 text-[9px] truncate leading-tight font-mono uppercase font-semibold">
+                  {currentUser?.role || "ADMIN LEVEL"}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-semibold truncate leading-tight">Painel Corporativo</p>
-              <p className="text-slate-500 text-[10px] truncate leading-tight font-mono">Suplementação Inteligente</p>
-            </div>
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Efetuar Logout / Trocar de Usuário"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-pink-500 transition-all cursor-pointer border-none bg-transparent shrink-0 outline-none"
+              >
+                <LogOut size={14} />
+              </button>
+            )}
           </div>
         </div>
       </aside>

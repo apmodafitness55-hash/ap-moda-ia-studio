@@ -32,7 +32,14 @@ import {
   Maximize2,
   Lock,
   ThumbsUp,
-  CreditCard
+  CreditCard,
+  Eye,
+  Edit,
+  Trash2,
+  Palette,
+  Layout,
+  Megaphone,
+  Save
 } from 'lucide-react';
 import { Product, Client } from '../types';
 
@@ -59,26 +66,117 @@ export default function PublicCatalog({
   
   // Custom states for interactive lookbook carousel
   const [currentSlide, setCurrentSlide] = useState(0);
-  const lookbookSlides = [
-    {
-      image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
-      tag: "COLEÇÃO EXCLUSIVA",
-      title: "ATACADO PREMIUM",
-      desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
-    },
-    {
-      image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
-      tag: "NOVA COLEÇÃO 2 EM 1",
-      title: "COLEÇÃO DUO",
-      desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
-    },
-    {
-      image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
-      tag: "ALTA PERFORMANCE",
-      title: "SUA JORNADA RUN",
-      desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
-    }
-  ];
+  const [viewMode, setViewMode] = useState<'cliente' | 'editor'>('cliente');
+  const [editorTab, setEditorTab] = useState<'geral' | 'ticker' | 'carrossel' | 'campanha'>('geral');
+  const [editingSlideIndex, setEditingSlideIndex] = useState(0);
+
+  const [storeName, setStoreName] = useState(() => {
+    return localStorage.getItem('ap_vitrine_store_name') || "AP Moda Fitness";
+  });
+  const [storeSub, setStoreSub] = useState(() => {
+    return localStorage.getItem('ap_vitrine_store_sub') || "Moda Fitness Premium";
+  });
+  const [themeColor, setThemeColor] = useState(() => {
+    return localStorage.getItem('ap_vitrine_theme_color') || "#db2777";
+  });
+
+  const [lookbookSlides, setLookbookSlides] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_slides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
+        tag: "COLEÇÃO EXCLUSIVA",
+        title: "ATACADO PREMIUM",
+        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+      },
+      {
+        image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
+        tag: "NOVA COLEÇÃO 2 EM 1",
+        title: "COLEÇÃO DUO",
+        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+      },
+      {
+        image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
+        tag: "ALTA PERFORMANCE",
+        title: "SUA JORNADA RUN",
+        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+      }
+    ];
+  });
+
+  // Dynamic Announcement Ticker
+  const [tickerConfig, setTickerConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_announcement');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      show: true,
+      text: "⚡ ENVIAMOS PARA TODO BRASIL • FRETE GRÁTIS ACIMA DE R$ 399 ATÉ 6X SEM JUROS ⚡",
+      bgColor: "#db2777", // pink-600
+      textColor: "#ffffff"
+    };
+  });
+
+  // Category highlight box banners
+  const [categoryBanners, setCategoryBanners] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_category_banners');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      slimFit: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80",
+      plusSize: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80"
+    };
+  });
+
+  // Floating campaign promotion banner configuration
+  const [floatingBanner, setFloatingBanner] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_floating_banner');
+      if (saved) return JSON.parse(saved);
+    } catch(e){}
+    return {
+      show: true,
+      title: "✨ CUPOM DA SEMANA",
+      subtitle: "Insira APMODAFIT no carrinho para ganhar 5% OFF e frete grátis!",
+      ctaText: "Aproveitar Desconto",
+      ctaLink: "https://wa.me/5511999990000?text=Quero%20aproveitar%20o%20cupom%20de%20desconto",
+      bgColor: "#ec4899", // pink-500
+      textColor: "#ffffff"
+    };
+  });
+
+  const [isFloatingDismissed, setIsFloatingDismissed] = useState(false);
+
+  // Sync edits to localStorage
+  useEffect(() => {
+    localStorage.setItem('ap_vitrine_store_name', storeName);
+    localStorage.setItem('ap_vitrine_store_sub', storeSub);
+    localStorage.setItem('ap_vitrine_theme_color', themeColor);
+  }, [storeName, storeSub, themeColor]);
+
+  useEffect(() => {
+    localStorage.setItem('ap_vitrine_slides', JSON.stringify(lookbookSlides));
+  }, [lookbookSlides]);
+
+  useEffect(() => {
+    localStorage.setItem('ap_vitrine_announcement', JSON.stringify(tickerConfig));
+  }, [tickerConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+  }, [categoryBanners]);
+
+  useEffect(() => {
+    localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+  }, [floatingBanner]);
 
   // Auto-advance banner slides
   useEffect(() => {
@@ -479,37 +577,491 @@ export default function PublicCatalog({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative">
+    <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative ${viewMode === 'editor' ? 'flex flex-col lg:flex-row pb-0 lg:overflow-hidden' : ''}`}>
       
       {/* Workspace Demonstration Switcher Button Helper */}
       {onExitCustomerView && (
-        <div className="bg-pink-900 border-b border-rose-400/30 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-2 font-sans shadow-md">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
-            <p className="text-[11px] md:text-xs">
-              <span className="font-bold text-pink-200">VITRINE DO CLIENTE (PREVIEW)</span> — Sinta-se à vontade para simular pedidos, adicionar produtos e testar a visualização.
-            </p>
+        <div className="bg-slate-900 border-b border-slate-800 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-3 font-sans shadow-md shrink-0 w-full absolute top-0 left-0">
+          <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse shrink-0" />
+              <p className="text-[11px] md:text-xs">
+                <span className="font-extrabold text-pink-400 uppercase">Acesso Administrador</span>
+              </p>
+            </div>
+            
+            {/* Visual selector toggle */}
+            <div className="flex bg-slate-950 border border-slate-850 p-0.5 rounded-lg text-[10.5px]">
+              <button
+                type="button"
+                onClick={() => setViewMode('cliente')}
+                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'cliente' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Eye size={12} />
+                <span>Ver como Cliente</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('editor')}
+                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'editor' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Edit size={12} />
+                <span>Acessar como Editor</span>
+              </button>
+            </div>
           </div>
+          
           <button
             type="button"
             onClick={onExitCustomerView}
-            className="shrink-0 bg-white text-pink-700 hover:bg-pink-50 active:scale-95 font-bold text-[10px] md:text-[11px] px-3.5 py-1.5 rounded-full transition-all shadow-md shadow-pink-600/20 cursor-pointer flex items-center gap-1.5 border-none"
+            className="shrink-0 bg-white hover:bg-slate-100 text-slate-900 active:scale-95 font-bold text-[10px] md:text-[11px] px-3.5 py-1.5 rounded-full transition-all shadow-md cursor-pointer flex items-center gap-1.5 border-none"
           >
             <ArrowLeft size={11} className="stroke-[2.5px]" />
             <span>Voltar ao Painel Admin</span>
           </button>
         </div>
       )}
-      
-      {/* 1. Ticker Announcement Bar */}
-      <div className="bg-pink-600 text-white py-2 px-4 shadow-sm relative overflow-hidden h-9">
-        <div className="absolute inset-x-0 top-0 flex items-center justify-center h-full animate-pulse">
-          <p className="text-[10px] md:text-xs font-bold tracking-widest uppercase flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-            <span>⚡ ENVIAMOS PARA TODO BRASIL • FRETE GRÁTIS ACIMA DE R$ 399 ATÉ 6X SEM JUROS ⚡</span>
-          </p>
+
+      {/* 1A. Left Side Custom Editor Workspace Control Desk (Only visible in editor mode) */}
+      {viewMode === 'editor' && (
+        <div className="w-full lg:w-[420px] shrink-0 bg-slate-905 border-r border-slate-800 text-slate-100 p-5 mt-14 font-sans overflow-y-auto lg:h-[calc(100vh-50px)] sticky top-[50px] z-30 shadow-2xl flex flex-col justify-between" style={{ backgroundColor: '#0f172a' }}>
+          <div className="space-y-6">
+            <div className="pb-4 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-1.5">
+                  <Layout size={16} className="text-pink-500" />
+                  <span>Editor de Vitrine</span>
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Customize seu e-commerce em tempo real</p>
+              </div>
+              <span className="bg-pink-600/15 border-pink-500/20 border text-pink-400 text-[8px] tracking-wider uppercase font-black px-2 py-0.5 rounded-full">
+                ADMIN DIRECT
+              </span>
+            </div>
+
+            {/* Quick Editor Navigation */}
+            <div className="grid grid-cols-4 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+              <button
+                onClick={() => setEditorTab('geral')}
+                className={`py-2 text-[10px] font-bold rounded-lg transition-all border-none cursor-pointer outline-none ${editorTab === 'geral' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white bg-transparent'}`}
+                title="Identidade Geral"
+              >
+                Geral
+              </button>
+              <button
+                onClick={() => setEditorTab('ticker')}
+                className={`py-2 text-[10px] font-bold rounded-lg transition-all border-none cursor-pointer outline-none ${editorTab === 'ticker' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white bg-transparent'}`}
+                title="Barra de Avisos"
+              >
+                Avisos
+              </button>
+              <button
+                onClick={() => setEditorTab('carrossel')}
+                className={`py-2 text-[10px] font-bold rounded-lg transition-all border-none cursor-pointer outline-none ${editorTab === 'carrossel' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white bg-transparent'}`}
+                title="Slides do Carrossel"
+              >
+                Slides
+              </button>
+              <button
+                onClick={() => setEditorTab('campanha')}
+                className={`py-2 text-[10px] font-bold rounded-lg transition-all border-none cursor-pointer outline-none ${editorTab === 'campanha' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white bg-transparent'}`}
+                title="Banners"
+              >
+                Banners
+              </button>
+            </div>
+
+            {/* Content for TAB: general info & theme */}
+            {editorTab === 'geral' && (
+              <div className="space-y-4 text-left">
+                <div>
+                  <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1 tracking-wider">Nome da Vitrine</label>
+                  <input
+                    type="text"
+                    value={storeName}
+                    onChange={(e) => setStoreName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-bold tracking-tight focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1 tracking-wider">Subtítulo / Tagline da Loja</label>
+                  <input
+                    type="text"
+                    value={storeSub}
+                    onChange={(e) => setStoreSub(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-medium tracking-tight focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 uppercase text-[9px] font-bold block mb-2 tracking-wider">Cor de Destaque / Tema</label>
+                  <div className="flex items-center gap-2">
+                    {[
+                      { name: 'Pink', hex: '#db2777' },
+                      { name: 'Emerald', hex: '#059669' },
+                      { name: 'Violet', hex: '#7c3aed' },
+                      { name: 'Rose', hex: '#e11d48' },
+                      { name: 'Amber', hex: '#d97706' },
+                      { name: 'Slate', hex: '#1e293b' }
+                    ].map((themeOpt) => (
+                      <button
+                        key={themeOpt.hex}
+                        onClick={() => setThemeColor(themeOpt.hex)}
+                        style={{ backgroundColor: themeOpt.hex }}
+                        className={`w-7 h-7 rounded-lg transition duration-300 relative border-none cursor-pointer scale-100 hover:scale-110 active:scale-95`}
+                        title={themeOpt.name}
+                        type="button"
+                      >
+                        {themeColor === themeOpt.hex && (
+                          <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold drop-shadow-xs">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-500 mt-2">Escolha uma identidade. Isso mudará dinamicamente os botões e os indicadores da sua vitrine.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Content for TAB: announcement ticker bar */}
+            {editorTab === 'ticker' && (
+              <div className="space-y-4 text-left">
+                <div className="flex justify-between items-center">
+                  <label className="text-slate-400 uppercase text-[9px] font-bold block tracking-wider font-sans">Mostrar Barra de Avisos</label>
+                  <button
+                    type="button"
+                    onClick={() => setTickerConfig({ ...tickerConfig, show: !tickerConfig.show })}
+                    className={`text-[9px] font-extrabold px-3 py-1 rounded transition duration-200 cursor-pointer border
+                      ${tickerConfig.show ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-slate-850 border-slate-800 text-slate-400'}`}
+                  >
+                    {tickerConfig.show ? 'ATIVO' : 'OCULTO'}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1 tracking-wider">Texto Promocional</label>
+                  <textarea
+                    rows={3}
+                    value={tickerConfig.text}
+                    onChange={(e) => setTickerConfig({ ...tickerConfig, text: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-semibold font-sans tracking-tight focus:outline-hidden focus:border-pink-500 resize-none leading-relaxed"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1 tracking-wider">Fundo (HEX)</label>
+                    <div className="flex gap-1.5 items-center">
+                      <input
+                        type="color"
+                        value={tickerConfig.bgColor}
+                        onChange={(e) => setTickerConfig({ ...tickerConfig, bgColor: e.target.value })}
+                        className="w-7 h-7 bg-transparent border-0 rounded cursor-pointer shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={tickerConfig.bgColor}
+                        onChange={(e) => setTickerConfig({ ...tickerConfig, bgColor: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1 text-[10px] font-mono text-center text-slate-350 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1 tracking-wider">Texto (HEX)</label>
+                    <div className="flex gap-1.5 items-center">
+                      <input
+                        type="color"
+                        value={tickerConfig.textColor}
+                        onChange={(e) => setTickerConfig({ ...tickerConfig, textColor: e.target.value })}
+                        className="w-7 h-7 bg-transparent border-0 rounded cursor-pointer shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={tickerConfig.textColor}
+                        onChange={(e) => setTickerConfig({ ...tickerConfig, textColor: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1 text-[10px] font-mono text-center text-slate-350 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Content for TAB: carrossel lookbooks */}
+            {editorTab === 'carrossel' && (
+              <div className="space-y-4 text-left">
+                <div className="bg-slate-950 p-2 border border-slate-850 rounded-xl flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-450 pl-1 text-slate-400">Slides Ativos</span>
+                  <div className="flex gap-1">
+                    {lookbookSlides.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setEditingSlideIndex(idx);
+                          setCurrentSlide(idx);
+                        }}
+                        className={`w-6 h-6 rounded-md font-mono text-[10px] font-bold border-none cursor-pointer transition-all
+                          ${editingSlideIndex === idx ? 'bg-pink-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                        type="button"
+                      >
+                        {idx + 1}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSlide = {
+                          image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1100&q=80",
+                          tag: "NOVO DESTAQUE",
+                          title: "NOVO LANÇAMENTO",
+                          desc: "Adicione descrição chamativa aqui para o novo banner do lookbook."
+                        };
+                        const nextSlides = [...lookbookSlides, newSlide];
+                        setLookbookSlides(nextSlides);
+                        setEditingSlideIndex(nextSlides.length - 1);
+                        setCurrentSlide(nextSlides.length - 1);
+                      }}
+                      className="w-6 h-6 bg-emerald-600 text-white rounded-md font-bold text-xs border-none cursor-pointer flex items-center justify-center hover:bg-emerald-700 active:scale-95"
+                      title="Adicionar Slide"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Edit Selected Slide Details */}
+                {lookbookSlides[editingSlideIndex] && (
+                  <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-3.5 space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800/40">
+                      <span className="text-[10px] font-bold uppercase text-pink-400">Editando Slide #{editingSlideIndex + 1}</span>
+                      {lookbookSlides.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Tem certeza que deseja excluir este slide do carrossel?')) {
+                              const remaining = lookbookSlides.filter((_, i) => i !== editingSlideIndex);
+                              setLookbookSlides(remaining);
+                              const nextIdx = Math.max(0, editingSlideIndex - 1);
+                              setEditingSlideIndex(nextIdx);
+                              setCurrentSlide(nextIdx);
+                            }
+                          }}
+                          className="text-[9px] font-bold text-rose-455 hover:text-rose-420 flex items-center gap-1 cursor-pointer bg-transparent border-none text-rose-400 outline-none"
+                        >
+                          <Trash2 size={11} className="shrink-0" />
+                          <span>Excluir Slide</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">Tag Superior (Etiqueta)</label>
+                      <input
+                        type="text"
+                        value={lookbookSlides[editingSlideIndex].tag}
+                        onChange={(e) => {
+                          const updated = [...lookbookSlides];
+                          updated[editingSlideIndex].tag = e.target.value;
+                          setLookbookSlides(updated);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">Título Principal</label>
+                      <input
+                        type="text"
+                        value={lookbookSlides[editingSlideIndex].title}
+                        onChange={(e) => {
+                          const updated = [...lookbookSlides];
+                          updated[editingSlideIndex].title = e.target.value;
+                          setLookbookSlides(updated);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-405 uppercase text-[9px] font-bold block mb-1">Subtítulo / Descrição</label>
+                      <textarea
+                        rows={2}
+                        value={lookbookSlides[editingSlideIndex].desc}
+                        onChange={(e) => {
+                          const updated = [...lookbookSlides];
+                          updated[editingSlideIndex].desc = e.target.value;
+                          setLookbookSlides(updated);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">URL da Imagem</label>
+                      <input
+                        type="text"
+                        value={lookbookSlides[editingSlideIndex].image}
+                        onChange={(e) => {
+                          const updated = [...lookbookSlides];
+                          updated[editingSlideIndex].image = e.target.value;
+                          setLookbookSlides(updated);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-[10px] font-mono text-slate-350"
+                      />
+                      
+                      {/* Image Presets Selector inside the Workspace */}
+                      <div className="mt-2 space-y-1">
+                        <span className="text-[8px] font-bold text-slate-500 uppercase block">Presets Rápidos de Imagem:</span>
+                        <div className="flex gap-1 overflow-x-auto pb-1 max-w-[340px]">
+                          {[
+                            { name: "Treino Pesado", url: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1100&q=80" },
+                            { name: "Sessão Estúdio", url: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80" },
+                            { name: "Alongamento Along", url: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=1100&q=80" },
+                            { name: "Alta Velocidade", url: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80" }
+                          ].map((preset) => (
+                            <button
+                              key={preset.url}
+                              onClick={() => {
+                                const updated = [...lookbookSlides];
+                                updated[editingSlideIndex].image = preset.url;
+                                setLookbookSlides(updated);
+                              }}
+                              className="text-[8px] font-bold px-2 py-1 bg-slate-800 text-slate-300 hover:text-white rounded border-none cursor-pointer block whitespace-nowrap"
+                              type="button"
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Content for TAB: campanha & floating banner */}
+            {editorTab === 'campanha' && (
+              <div className="space-y-4 text-left">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-800/40">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Balão Flutuante (Cupom)</span>
+                  <button
+                    type="button"
+                    onClick={() => setFloatingBanner({ ...floatingBanner, show: !floatingBanner.show })}
+                    className={`text-[9px] font-extrabold px-3 py-1 rounded transition duration-200 cursor-pointer border
+                      ${floatingBanner.show ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-slate-850 border-slate-800 text-slate-400'}`}
+                  >
+                    {floatingBanner.show ? 'ATIVO' : 'OCULTO'}
+                  </button>
+                </div>
+
+                <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-3.5 space-y-3">
+                  <div>
+                    <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">Título do Banner</label>
+                    <input
+                      type="text"
+                      value={floatingBanner.title}
+                      onChange={(e) => setFloatingBanner({ ...floatingBanner, title: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-405 uppercase text-[9px] font-bold block mb-1">Descrição Comercial</label>
+                    <textarea
+                      rows={2}
+                      value={floatingBanner.subtitle}
+                      onChange={(e) => setFloatingBanner({ ...floatingBanner, subtitle: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">Etiqueta do Botão</label>
+                      <input
+                        type="text"
+                        value={floatingBanner.ctaText}
+                        onChange={(e) => setFloatingBanner({ ...floatingBanner, ctaText: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 uppercase text-[9px] font-bold block mb-1">Cor do Fundo</label>
+                      <input
+                        type="text"
+                        value={floatingBanner.bgColor}
+                        onChange={(e) => setFloatingBanner({ ...floatingBanner, bgColor: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-mono text-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional category banners */}
+                <div className="pt-2 border-t border-slate-800/60 space-y-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Banners de Segmentos (Nicho)</span>
+                  
+                  <div>
+                    <label className="text-slate-404 uppercase text-[9px] font-bold block mb-1">Banner "Slim Fit" (URL Imagem)</label>
+                    <input
+                      type="text"
+                      value={categoryBanners.slimFit}
+                      onChange={(e) => setCategoryBanners({ ...categoryBanners, slimFit: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-[10px] font-mono text-slate-300 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-404 uppercase text-[9px] font-bold block mb-1">Banner "Plus Size" (URL Imagem)</label>
+                    <input
+                      type="text"
+                      value={categoryBanners.plusSize}
+                      onChange={(e) => setCategoryBanners({ ...categoryBanners, plusSize: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-[10px] font-mono text-slate-300 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 border-t border-slate-800 space-y-2 shrink-0">
+            <button
+              onClick={() => {
+                alert('✨ Todas as alterações na Vitrine foram salvas com sucesso em tempo real no banco local!');
+                setViewMode('cliente');
+              }}
+              className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 active:scale-97 text-white font-bold text-xs rounded-xl transition duration-300 flex items-center justify-center gap-2 border-0 cursor-pointer text-center outline-none"
+              type="button"
+            >
+              <Check size={14} />
+              <span>Concluir e Ver como Cliente</span>
+            </button>
+            <p className="text-[9.5px] text-slate-500 text-center">As edições são gravadas instantaneamente no banco local.</p>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Main E-Commerce Scrollable Vitrine Body Block */}
+      <div className={`flex-1 ${viewMode === 'editor' ? 'lg:h-[calc(100vh-50px)] lg:overflow-y-auto mt-[50px]' : 'mt-[50px]'} relative transition-all duration-300`}>
+        
+        {/* 1. Ticker Announcement Bar */}
+        {tickerConfig.show && (
+          <div 
+            className="text-white py-2 px-4 shadow-sm relative overflow-hidden h-9"
+            style={{ backgroundColor: tickerConfig.bgColor, color: tickerConfig.textColor }}
+          >
+            <div className="absolute inset-x-0 top-0 flex items-center justify-center h-full animate-pulse">
+              <p className="text-[10px] md:text-xs font-bold tracking-widest uppercase flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                <span>{tickerConfig.text}</span>
+              </p>
+            </div>
+          </div>
+        )}
 
       {/* 2. Main Premium Sticky Header */}
       <header className="bg-white/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100 px-4 md:px-8 py-3 flex justify-between items-center max-w-7xl mx-auto rounded-b-3xl">
@@ -537,10 +1089,10 @@ export default function PublicCatalog({
         {/* Center: Curvy Elegant Serif Brand Name Logo */}
         <div className="flex flex-col items-center">
           <span className="font-serif italic text-2xl md:text-3xl font-normal leading-none tracking-normal text-slate-950 select-none cursor-pointer">
-            AP Moda Fitness
+            {storeName}
           </span>
-          <span className="text-[8px] font-bold text-pink-600 uppercase tracking-widest mt-0.5 font-sans">
-            Moda Fitness Premium
+          <span className="text-[8px] font-bold uppercase tracking-widest mt-0.5 font-sans" style={{ color: themeColor }}>
+            {storeSub}
           </span>
         </div>
 
@@ -589,7 +1141,7 @@ export default function PublicCatalog({
 
           {/* Slogan overlaid details with slide elements */}
           <div className="relative max-w-xl pl-6 pr-6 md:pl-16 space-y-4 z-10 text-left">
-            <span className="inline-flex items-center gap-1.5 bg-pink-600 text-white font-sans font-extrabold text-[9px] uppercase tracking-widest px-3 py-1 rounded-full shadow-md shadow-pink-600/10">
+            <span style={{ backgroundColor: themeColor }} className="inline-flex items-center gap-1.5 text-white font-sans font-extrabold text-[9px] uppercase tracking-widest px-3 py-1 rounded-full shadow-md">
               <Sparkles size={10} />
               <span>{lookbookSlides[currentSlide].tag}</span>
             </span>
@@ -685,7 +1237,7 @@ export default function PublicCatalog({
           >
             <div 
               className="absolute inset-0 bg-cover bg-center group-hover:scale-103 transition duration-500"
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80')` }}
+              style={{ backgroundImage: `url('${categoryBanners.slimFit}')` }}
             />
             <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/30 transition duration-300" />
             
@@ -703,7 +1255,7 @@ export default function PublicCatalog({
           >
             <div 
               className="absolute inset-0 bg-cover bg-center group-hover:scale-103 transition duration-500"
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80')` }}
+              style={{ backgroundImage: `url('${categoryBanners.plusSize}')` }}
             />
             <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/30 transition duration-300" />
             
@@ -751,9 +1303,10 @@ export default function PublicCatalog({
                   <button
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
+                    style={selectedCategory === cat ? { backgroundColor: themeColor, boxShadow: `0 4px 12px ${themeColor}20` } : {}}
                     className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all text-left flex items-center justify-between cursor-pointer w-full select-none
                       ${selectedCategory === cat 
-                        ? 'bg-pink-600 text-white shadow-md shadow-pink-600/10' 
+                        ? 'text-white' 
                         : 'bg-slate-50 text-slate-650 hover:bg-slate-100'}`}
                   >
                     <span>{cat}</span>
@@ -820,12 +1373,20 @@ export default function PublicCatalog({
                     
                     {/* Portrait Style Frame with layout ratio of the fashion site */}
                     <div className="relative aspect-[3/4] w-full rounded-2xl bg-white overflow-hidden shadow-xs cursor-pointer border border-slate-100/65" onClick={() => handleOpenProduct(prod)}>
-                      <img 
-                        src={prod.image || 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=500&q=80'} 
-                        alt={prod.name} 
-                        className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-700"
-                        referrerPolicy="no-referrer"
-                      />
+                      {prod.image ? (
+                        <img 
+                          src={prod.image} 
+                          alt={prod.name} 
+                          className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-700"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-slate-50 flex flex-col items-center justify-center p-4 text-center text-slate-400 group-hover:bg-slate-100 transition-colors duration-500">
+                          <ShoppingBag size={24} className="text-slate-350 stroke-[1.5] mb-2 animate-pulse" />
+                          <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400">AP Moda Fitness</span>
+                          <span className="text-[9px] text-slate-400 font-medium">Foto em breve</span>
+                        </div>
+                      )}
                       
                       {/* Heart Like micro indicator absolute overlay */}
                       <button 
@@ -952,73 +1513,99 @@ export default function PublicCatalog({
                 </div>
               ) : (
                 <div className="absolute inset-0">
-                  <img 
-                    src={
-                      detailImageIdx === 0 ? (selectedProduct.image || 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80') :
-                      detailImageIdx === 1 ? 'https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=600&q=80' :
-                      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80'
-                    } 
-                    alt={selectedProduct.name} 
-                    className="w-full h-full object-cover transition duration-500"
-                  />
-                  
-                  {/* Hearts wishlist interactive feedback outline bar */}
-                  <div className="absolute top-4 left-4 hidden md:flex items-center gap-2 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-full shadow-xs">
-                    <button 
-                      type="button" 
-                      onClick={() => handleToggleWishlist(selectedProduct.id)}
-                      className="text-pink-600 hover:scale-110 active:scale-95 transition"
-                    >
-                      <Heart 
-                        size={15} 
-                        className={wishlistLikes[selectedProduct.id]?.active ? 'fill-pink-600' : ''} 
-                      />
-                    </button>
-                    <span className="text-[10px] text-slate-700 font-bold">
-                      {wishlistLikes[selectedProduct.id]?.count || 12} curtidas
-                    </span>
-                  </div>
+                  {(() => {
+                    const imagesPoolRaw = selectedProduct.images && selectedProduct.images.length > 0 
+                      ? selectedProduct.images 
+                      : [selectedProduct.image];
+                    const imagesPool = imagesPoolRaw.filter(Boolean);
 
-                  {/* Play video overlay badge if link exists */}
-                  {selectedProduct.videoUrl && (
-                    <button
-                      onClick={() => setIsVideoPlaying(true)}
-                      className="absolute inset-0 m-auto w-14 h-14 bg-pink-600 hover:bg-pink-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-pink-500/20 active:scale-95 transition cursor-pointer z-20"
-                      title="Assistir demonstração de caimento"
-                    >
-                      <Play size={20} className="ml-1 fill-white" />
-                    </button>
-                  )}
+                    if (imagesPool.length === 0) {
+                      return (
+                        <div className="w-full h-full bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                          <ShoppingBag size={32} className="text-slate-300 stroke-[1.5] mb-2 animate-pulse" />
+                          <span className="text-xs font-bold tracking-widest uppercase text-slate-400">AP Moda Fitness</span>
+                          <span className="text-xs text-slate-500 mt-1">Fotografia do produto indisponível</span>
+                        </div>
+                      );
+                    }
 
-                  {/* Horizontal slider dots indicator */}
-                  <div className="absolute bottom-5 inset-x-0 mx-auto flex justify-center gap-2 z-10 select-none">
-                    {[0, 1, 2].map((idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setDetailImageIdx(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-300
-                          ${detailImageIdx === idx ? 'w-4 bg-pink-600' : 'bg-white/70'}`}
-                      />
-                    ))}
-                  </div>
+                    const currentIdx = detailImageIdx % imagesPool.length;
+                    const activeImage = imagesPool[currentIdx];
 
-                  {/* Left / Right arrows for model positions and zoom */}
-                  <button
-                    type="button"
-                    onClick={() => setDetailImageIdx(prev => (prev - 1 + 3) % 3)}
-                    className="absolute left-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailImageIdx(prev => (prev + 1) % 3)}
-                    className="absolute right-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                    return (
+                      <>
+                        <img 
+                          src={activeImage} 
+                          alt={selectedProduct.name} 
+                          className="w-full h-full object-cover transition duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                        
+                        {/* Hearts wishlist interactive feedback outline bar */}
+                        <div className="absolute top-4 left-4 hidden md:flex items-center gap-2 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-full shadow-xs">
+                          <button 
+                            type="button" 
+                            onClick={() => handleToggleWishlist(selectedProduct.id)}
+                            className="text-pink-600 hover:scale-110 active:scale-95 transition"
+                          >
+                            <Heart 
+                              size={15} 
+                              className={wishlistLikes[selectedProduct.id]?.active ? 'fill-pink-600' : ''} 
+                            />
+                          </button>
+                          <span className="text-[10px] text-slate-700 font-bold">
+                            {wishlistLikes[selectedProduct.id]?.count || 12} curtidas
+                          </span>
+                        </div>
 
+                        {/* Play video overlay badge if link exists */}
+                        {selectedProduct.videoUrl && (
+                          <button
+                            onClick={() => setIsVideoPlaying(true)}
+                            className="absolute inset-0 m-auto w-14 h-14 bg-pink-600 hover:bg-pink-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-pink-500/20 active:scale-95 transition cursor-pointer z-20"
+                            title="Assistir demonstração de caimento"
+                          >
+                            <Play size={20} className="ml-1 fill-white" />
+                          </button>
+                        )}
+
+                        {/* Horizontal slider dots indicator */}
+                        {imagesPool.length > 1 && (
+                          <div className="absolute bottom-5 inset-x-0 mx-auto flex justify-center gap-2 z-10 select-none">
+                            {imagesPool.map((_, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setDetailImageIdx(idx)}
+                                className={`w-2 h-2 rounded-full transition-all duration-300
+                                  ${currentIdx === idx ? 'w-4 bg-pink-600' : 'bg-white/70'}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Left / Right arrows for model positions and zoom */}
+                        {imagesPool.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setDetailImageIdx(prev => (prev - 1 + imagesPool.length) % imagesPool.length)}
+                              className="absolute left-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDetailImageIdx(prev => (prev + 1) % imagesPool.length)}
+                              className="absolute right-3 bottom-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-slate-800 shadow-sm hover:bg-white transition"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1766,6 +2353,51 @@ export default function PublicCatalog({
 
           </div>
 
+        </div>
+      )}
+
+      </div>
+
+      {/* 10. Floating Banner / Popup Card */}
+      {floatingBanner.show && !isFloatingDismissed && (
+        <div className="fixed bottom-6 right-6 z-[60] max-w-sm w-80 bg-white border border-rose-100 rounded-3xl p-4 shadow-2xl shadow-pink-600/15 animate-bounce-subtle font-sans transition-all duration-300">
+          <button 
+            type="button"
+            onClick={() => setIsFloatingDismissed(true)}
+            className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition cursor-pointer border-none bg-transparent flex items-center justify-center h-6 w-6"
+          >
+            <X size={12} />
+          </button>
+          
+          <div className="space-y-3 font-sans mt-1">
+            {floatingBanner.image && (
+              <img 
+                src={floatingBanner.image} 
+                className="w-full h-28 object-cover rounded-2xl" 
+                alt="Banner Promocional"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            <div className="space-y-1 text-left font-sans">
+              <span className="text-[8px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: `${floatingBanner.bgColor}15`, color: floatingBanner.bgColor }}>
+                Campanha Ativa
+              </span>
+              <h4 className="text-xs font-extrabold text-slate-800 pt-1 tracking-tight">{floatingBanner.title}</h4>
+              <p className="text-[10px] text-slate-500 font-medium leading-normal">{floatingBanner.subtitle}</p>
+            </div>
+            
+            {floatingBanner.ctaLink && (
+              <a 
+                href={floatingBanner.ctaLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center py-2 px-4 rounded-xl text-[10px] font-bold text-white transition hover:opacity-90 tracking-wide border-none"
+                style={{ backgroundColor: floatingBanner.bgColor }}
+              >
+                {floatingBanner.ctaText || "Aproveitar"}
+              </a>
+            )}
+          </div>
         </div>
       )}
 

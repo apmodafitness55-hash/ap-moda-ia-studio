@@ -41,12 +41,129 @@ import DriverAppPortal from './components/DriverAppPortal';
 import GoogleWorkspace from './components/GoogleWorkspace';
 
 import PublicCatalog from './components/PublicCatalog';
+import LoginScreen from './components/LoginScreen';
+import PartnerPortal from './components/PartnerPortal';
 
 export default function App() {
   // Sidebar toggler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(ActiveTab.DASHBOARD);
   const [isDriverPortalOpen, setIsDriverPortalOpen] = useState(false);
+
+  // Controle de Usuários e Acessos (Equipe)
+  const [teamMembers, setTeamMembers] = useState<any[]>(() => {
+    const saved = localStorage.getItem('ap_moda_team_users');
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: 'usr-1', name: 'Ana Paula Admin', login: 'admin', role: 'Admin', password: 'admin123', details: 'Administradora Geral', createdAt: '2026-06-15T12:00:00Z' },
+      { id: 'usr-2', name: 'Juliana Cardoso', login: 'juliana', role: 'Gerente', password: '123', details: 'Gerente de Vendas', createdAt: '2026-06-15T12:05:00Z' },
+      { id: 'usr-3', name: 'Ana Carolina', login: 'ana', role: 'Vendedor', password: '123', details: 'Vendedora Sênior', createdAt: '2026-06-15T12:10:00Z' },
+      { id: 'usr-4', name: 'Beatriz Rocha', login: 'beatriz', role: 'Vendedor', password: '123', details: 'Vendedora Diamante', createdAt: '2026-06-15T12:12:00Z' },
+      { id: 'usr-5', name: 'Juliana Costa', login: 'julianacost', role: 'Vendedor', password: '123', details: 'Vendedora Prata', createdAt: '2026-06-15T12:13:00Z' },
+      { id: 'usr-6', name: 'Bruna Oliveira', login: 'bruna', role: 'Vendedor', password: '123', details: 'Vendedora Bronze', createdAt: '2026-06-15T12:14:00Z' },
+      { id: 'usr-7', name: 'Marina Fitness Coach', login: 'marina', role: 'Parceiro', password: '123', details: 'Influenciadora Fitness (@marina_fit)', createdAt: '2026-06-15T12:15:00Z' },
+      { id: 'usr-8', name: 'Julia Rezende', login: 'jurezende', role: 'Parceiro', password: '123', details: 'Parceira de Estilo (@jurezendedm)', createdAt: '2026-06-15T12:17:00Z' },
+      { id: 'usr-9', name: 'Amanda Runner', login: 'amanda', role: 'Parceiro', password: '123', details: 'Parceira Corrida (@amandarun)', createdAt: '2026-06-15T12:19:00Z' },
+      { id: 'usr-10', name: 'Bruno Ramos (Moto 1)', login: 'bruno', role: 'Entregador', password: '123', details: 'Entregador Zona Sul', createdAt: '2026-06-15T12:20:00Z' },
+      { id: 'usr-11', name: 'Lucas Correia (Moto 2)', login: 'lucas', role: 'Entregador', password: '123', details: 'Entregador Zona Norte', createdAt: '2026-06-15T12:22:00Z' },
+      { id: 'usr-12', name: 'Thales Silva (Bike/Região Central)', login: 'thales', role: 'Entregador', password: '123', details: 'Entregador Centro', createdAt: '2026-06-15T12:24:00Z' },
+      { id: 'usr-13', name: 'Cláudio Santos (Parceiro Envio Rápido)', login: 'claudio', role: 'Entregador', password: '123', details: 'Entregador Parcerias', createdAt: '2026-06-15T12:26:00Z' }
+    ];
+  });
+
+  // Vendedores dinâmicos
+  const [sellers, setSellers] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ap_moda_sellers');
+    return saved ? JSON.parse(saved) : ['Ana Carolina', 'Beatriz Rocha', 'Juliana Costa', 'Bruna Oliveira'];
+  });
+
+  // Motoboys dinâmicos
+  const [motoboys, setMotoboys] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ap_moda_motoboys');
+    return saved ? JSON.parse(saved) : ['Bruno Ramos (Moto 1)', 'Lucas Correia (Moto 2)', 'Thales Silva (Bike/Região Central)', 'Cláudio Santos (Parceiro Envio Rápido)'];
+  });
+
+  // Keep sellers, motoboys, and partners in robust real-time synchrony with teamMembers
+  useEffect(() => {
+    localStorage.setItem('ap_moda_team_users', JSON.stringify(teamMembers));
+
+    // Update sellers
+    const extSellers = teamMembers.filter(m => m.role === 'Vendedor').map(m => m.name);
+    setSellers(extSellers);
+    localStorage.setItem('ap_moda_sellers', JSON.stringify(extSellers));
+
+    // Update motoboys
+    const extMotoboys = teamMembers.filter(m => m.role === 'Entregador').map(m => m.name);
+    setMotoboys(extMotoboys);
+    localStorage.setItem('ap_moda_motoboys', JSON.stringify(extMotoboys));
+
+    // Update partners (influencers list) in localStorage
+    try {
+      const savedPartners = localStorage.getItem('ap_moda_partners');
+      const currentPartnersList = savedPartners ? JSON.parse(savedPartners) : [];
+      let changed = false;
+
+      const teamPartners = teamMembers.filter(m => m.role === 'Parceiro');
+      const updatedPartnersList = [...currentPartnersList];
+
+      teamPartners.forEach(tp => {
+        const index = updatedPartnersList.findIndex(p => p.name === tp.name);
+        if (index === -1) {
+          updatedPartnersList.push({
+            id: tp.id,
+            name: tp.name,
+            instagram: tp.details || '@' + tp.login,
+            couponCode: tp.login.toUpperCase() + '10',
+            commissionRate: 10,
+            salesCount: 0,
+            totalGenerated: 0,
+            availableBalance: 0
+          });
+          changed = true;
+        }
+      });
+
+      // Prune partners that no longer exist in team
+      const activePartnerNames = teamPartners.map(tp => tp.name);
+      const filtered = updatedPartnersList.filter(p => activePartnerNames.includes(p.name));
+      if (filtered.length !== currentPartnersList.length) {
+        changed = true;
+      }
+
+      if (changed || currentPartnersList.length === 0) {
+        localStorage.setItem('ap_moda_partners', JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [teamMembers]);
+
+  // Estado de login / Sessão do usuário
+  const [currentUser, setCurrentUser] = useState<any | null>(() => {
+    const saved = localStorage.getItem('ap_moda_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ap_moda_sellers', JSON.stringify(sellers));
+  }, [sellers]);
+
+  useEffect(() => {
+    localStorage.setItem('ap_moda_motoboys', JSON.stringify(motoboys));
+  }, [motoboys]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('ap_moda_current_user', JSON.stringify(currentUser));
+      // Se for entregador, força o redirecionamento direto para o DriverAppPortal
+      if (currentUser.role === 'Entregador') {
+        setIsDriverPortalOpen(true);
+      }
+    } else {
+      localStorage.removeItem('ap_moda_current_user');
+      setIsDriverPortalOpen(false);
+    }
+  }, [currentUser]);
 
   // Tema Escuro System Mode
   const [darkMode, setDarkMode] = useState(() => {
@@ -418,11 +535,18 @@ export default function App() {
       localStorage.setItem('ap_moda_sales', JSON.stringify([]));
       localStorage.setItem('ap_moda_transactions', JSON.stringify([]));
       localStorage.setItem('ap_moda_online_orders', JSON.stringify([]));
+      localStorage.setItem('ap_moda_sellers', JSON.stringify([]));
+      localStorage.setItem('ap_moda_motoboys', JSON.stringify([]));
+      localStorage.setItem('ap_moda_opportunities', JSON.stringify([]));
+      localStorage.setItem('ap_moda_followups', JSON.stringify([]));
+      localStorage.setItem('ap_moda_partners', JSON.stringify([]));
       setProducts([]);
       setClients([]);
       setSales([]);
       setTransactions([]);
       setOnlineOrders([]);
+      setSellers([]);
+      setMotoboys([]);
       alert('Tudo limpo! O sistema está zerado e pronto para o seu uso oficial de produção de produtos e vendas.');
       setActiveTab(ActiveTab.DASHBOARD);
     }
@@ -435,6 +559,13 @@ export default function App() {
       localStorage.setItem('ap_moda_sales', JSON.stringify(INITIAL_SALES));
       localStorage.setItem('ap_moda_transactions', JSON.stringify(INITIAL_TRANSACTIONS));
       
+      const defaultSellers = ['Ana Carolina', 'Beatriz Rocha', 'Juliana Costa', 'Bruna Oliveira'];
+      const defaultMotoboys = ['Bruno Ramos (Moto 1)', 'Lucas Correia (Moto 2)', 'Thales Silva (Bike/Região Central)', 'Cláudio Santos (Parceiro Envio Rápido)'];
+      localStorage.setItem('ap_moda_sellers', JSON.stringify(defaultSellers));
+      localStorage.setItem('ap_moda_motoboys', JSON.stringify(defaultMotoboys));
+      setSellers(defaultSellers);
+      setMotoboys(defaultMotoboys);
+
       const demoOnlineOrders = [
         {
           id: 'ped-web-01',
@@ -466,6 +597,25 @@ export default function App() {
         }
       ];
       localStorage.setItem('ap_moda_online_orders', JSON.stringify(demoOnlineOrders));
+
+      const demoOpps = [
+        { id: 'op-1', clientName: 'Gabriela Souza', value: 289.90, probability: 80, stage: 'Prospecção', itemInteresse: 'Conjunto Seamless Sculpt', notes: 'Quer para o aniversário dia 20.' },
+        { id: 'op-2', clientName: 'Ana Costa', value: 159.90, probability: 50, stage: 'Foto Enviada', itemInteresse: 'Legging All-Black Cós Alto', notes: 'Gostou do cós alto anatômico.' },
+        { id: 'op-3', clientName: 'Beatriz Pereira', value: 450.00, probability: 90, stage: 'Prova / Reserva', itemInteresse: 'Combo Macacão Wave + Tops', notes: 'Reserva expira amanhã.' }
+      ];
+      const demoFups = [
+        { id: 'fup-1', clientName: 'Maria Silva', channel: 'WhatsApp', date: '2026-06-14', notes: 'Perguntar se gostou do tamanho M do Conjunto Seamless.', completed: false },
+        { id: 'fup-2', clientName: 'Carla Oliveira', channel: 'Instagram', date: '2026-06-15', notes: 'Enviar as novidades de casaco corta-vento Dry.', completed: false },
+        { id: 'fup-3', clientName: 'Julia Santos', channel: 'Call', date: '2026-06-13', notes: 'Ligar para acertar retirada de reserva.', completed: true }
+      ];
+      const demoPartners = [
+        { id: 'part-1', name: 'Marina Fitness Coach', instagram: '@marina_fit', couponCode: 'MARINAFIT10', commissionRate: 10, salesCount: 15, totalGenerated: 4250.00 },
+        { id: 'part-2', name: 'Julia Rezende', instagram: '@jurezendedm', couponCode: 'JU10', commissionRate: 8, salesCount: 8, totalGenerated: 1890.00 },
+        { id: 'part-3', name: 'Amanda Runner', instagram: '@amandarun', couponCode: 'AMANDAPRO', commissionRate: 12, salesCount: 22, totalGenerated: 6200.00 }
+      ];
+      localStorage.setItem('ap_moda_opportunities', JSON.stringify(demoOpps));
+      localStorage.setItem('ap_moda_followups', JSON.stringify(demoFups));
+      localStorage.setItem('ap_moda_partners', JSON.stringify(demoPartners));
 
       setProducts(INITIAL_PRODUCTS);
       setClients(INITIAL_CLIENTS);
@@ -550,6 +700,7 @@ export default function App() {
             onAddSale={handleAddSale}
             onAddClient={handleAddClient}
             setActiveTab={setActiveTab}
+            sellers={sellers}
           />
         );
       case ActiveTab.PEDIDOS:
@@ -579,6 +730,7 @@ export default function App() {
             clients={clients}
             sales={sales}
             onAddClient={handleAddClient}
+            currentUser={currentUser}
           />
         );
       case ActiveTab.FINANCEIRO:
@@ -627,6 +779,34 @@ export default function App() {
             clients={clients}
             transactions={transactions}
             onImportData={handleImportData}
+            sellers={sellers}
+            motoboys={motoboys}
+            teamMembers={teamMembers}
+            onUpdateTeamMembers={setTeamMembers}
+            onAddSeller={(name) => {
+              if (!sellers.includes(name)) {
+                const updated = [...sellers, name];
+                setSellers(updated);
+                localStorage.setItem('ap_moda_sellers', JSON.stringify(updated));
+              }
+            }}
+            onDeleteSeller={(name) => {
+              const updated = sellers.filter(s => s !== name);
+              setSellers(updated);
+              localStorage.setItem('ap_moda_sellers', JSON.stringify(updated));
+            }}
+            onAddMotoboy={(name) => {
+              if (!motoboys.includes(name)) {
+                const updated = [...motoboys, name];
+                setMotoboys(updated);
+                localStorage.setItem('ap_moda_motoboys', JSON.stringify(updated));
+              }
+            }}
+            onDeleteMotoboy={(name) => {
+              const updated = motoboys.filter(m => m !== name);
+              setMotoboys(updated);
+              localStorage.setItem('ap_moda_motoboys', JSON.stringify(updated));
+            }}
           />
         );
       default:
@@ -642,6 +822,25 @@ export default function App() {
     }
   };
 
+  if (!currentUser) {
+    return (
+      <LoginScreen 
+        sellers={sellers}
+        motoboys={motoboys}
+        teamMembers={teamMembers}
+        onLogin={(user) => {
+          setCurrentUser(user);
+          if (user.role === 'Vendedor') {
+            setActiveTab(ActiveTab.VENDAS); // or ActiveTab.PDV
+            setActiveTab(ActiveTab.PDV);
+          } else {
+            setActiveTab(ActiveTab.DASHBOARD);
+          }
+        }}
+      />
+    );
+  }
+
   if (isCustomerView) {
     return (
       <PublicCatalog 
@@ -655,6 +854,17 @@ export default function App() {
     );
   }
 
+  if (currentUser?.role === 'Parceiro') {
+    return (
+      <PartnerPortal 
+        currentUser={currentUser}
+        onLogout={() => setCurrentUser(null)}
+        onlineOrders={onlineOrders}
+        sales={sales}
+      />
+    );
+  }
+
   if (isDriverPortalOpen) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -662,6 +872,8 @@ export default function App() {
           onlineOrders={onlineOrders}
           onUpdateOrderStatus={handleUpdateOnlineOrderStatus}
           onExitPortal={() => setIsDriverPortalOpen(false)}
+          currentUser={currentUser}
+          onLogout={() => setCurrentUser(null)}
         />
       </div>
     );
@@ -681,6 +893,8 @@ export default function App() {
         setThemeAccent={setThemeAccent}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        currentUser={currentUser}
+        onLogout={() => setCurrentUser(null)}
       />
 
       {/* Main Screen content block (shifted on desktop) */}
@@ -828,12 +1042,12 @@ export default function App() {
 
             {/* User Profile matching screenshot */}
             <div className="flex items-center gap-2.5 pl-2 border-l border-slate-100 font-sans">
-              <div className="w-8 h-8 rounded-lg bg-pink-100 text-pink-600 font-bold text-xs flex items-center justify-center">
-                AP
+              <div className="w-8 h-8 rounded-lg bg-pink-100 text-pink-600 font-extrabold text-xs flex items-center justify-center uppercase">
+                {currentUser?.name ? currentUser.name.slice(0, 2) : 'AP'}
               </div>
               <div className="hidden sm:block text-left select-none">
-                <p className="text-xs font-bold text-slate-700 leading-none">AP Moda Fitness</p>
-                <p className="text-[10px] text-slate-400 font-mono mt-0.5">Gerente de Vendas</p>
+                <p className="text-xs font-bold text-slate-700 leading-none">{currentUser?.name || 'Administrador'}</p>
+                <p className="text-[10px] text-slate-400 font-mono mt-0.5">{currentUser?.role || 'Acesso Geral'}</p>
               </div>
             </div>
 

@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   RotateCcw,
   Check,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
@@ -38,7 +39,8 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
   const [newCost, setNewCost] = useState(55.00);
   const [newStock, setNewStock] = useState(15);
   const [newMinStock, setNewMinStock] = useState(5);
-  const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=500&q=80');
+  const [newImage, setNewImage] = useState('');
+  const [newImages, setNewImages] = useState<string[]>([]);
   const [newDescription, setNewDescription] = useState('');
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [newColors, setNewColors] = useState('Preto, Pink Glow, Branco, Azul Celeste');
@@ -61,6 +63,7 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
   const [editStock, setEditStock] = useState(0);
   const [editMinStock, setEditMinStock] = useState(0);
   const [editImage, setEditImage] = useState('');
+  const [editImages, setEditImages] = useState<string[]>([]);
   const [editDescription, setEditDescription] = useState('');
   const [editVideoUrl, setEditVideoUrl] = useState('');
   const [editColors, setEditColors] = useState('');
@@ -126,7 +129,8 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
       cost: newCost,
       stock: newStock,
       minStock: newMinStock,
-      image: newImage,
+      image: newImages[0] || newImage,
+      images: newImages.length > 0 ? newImages : [newImage],
       salesCount: 0,
       description: newDescription.trim(),
       videoUrl: newVideoUrl.trim(),
@@ -147,6 +151,8 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
     setNewCost(55.00);
     setNewStock(15);
     setNewMinStock(5);
+    setNewImage('');
+    setNewImages([]);
     setNewDescription('');
     setNewVideoUrl('');
     setNewColors('Preto, Pink Glow, Branco, Azul Celeste');
@@ -165,6 +171,7 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
     setEditStock(p.stock);
     setEditMinStock(p.minStock);
     setEditImage(p.image);
+    setEditImages(p.images || [p.image]);
     setEditDescription(p.description || '');
     setEditVideoUrl(p.videoUrl || '');
     setEditColors(p.colors ? p.colors.join(', ') : 'Preto');
@@ -201,7 +208,8 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
       cost: editCost,
       stock: editStock,
       minStock: editMinStock,
-      image: editImage,
+      image: editImages[0] || editImage,
+      images: editImages.length > 0 ? editImages : [editImage],
       description: editDescription.trim(),
       videoUrl: editVideoUrl.trim(),
       colors: colorsArray,
@@ -564,43 +572,82 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
                 />
               </div>
 
-              <div className="space-y-2 text-xs">
-                <label className="text-slate-550 font-bold uppercase text-[9px] tracking-wide block">Foto do Produto (Envio Direto para ImgBB)</label>
-                <ImageUploader 
-                  onUploadSuccess={(url) => setNewImage(url)} 
-                  currentImageUrl={newImage}
-                />
+              <div className="space-y-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <label className="text-slate-600 font-extrabold uppercase text-[10px] tracking-wide block">Galeria de Fotos do Produto (Múltiplas Fotos)</label>
                 
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 space-y-1">
-                  <label className="text-slate-400 font-medium text-[9px] block">Ou use um link público externo:</label>
+                {/* Previews grid */}
+                <div className="grid grid-cols-5 gap-2">
+                  {newImages.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-100 group shadow-xs">
+                      <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = newImages.filter((_, i) => i !== idx);
+                          setNewImages(updated);
+                        }}
+                        className="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full cursor-pointer transition-all shadow-md flex items-center justify-center border-none"
+                        title="Remover esta foto"
+                      >
+                        <X size={10} />
+                      </button>
+                      {idx === 0 && (
+                        <span className="absolute bottom-0 inset-x-0 bg-pink-600/90 text-white font-extrabold text-[8px] text-center tracking-wider py-0.5 uppercase">CAPA</span>
+                      )}
+                    </div>
+                  ))}
+                  {newImages.length === 0 && (
+                    <div className="col-span-5 py-4 text-center text-slate-400 font-medium text-xs">
+                      Nenhuma foto adicionada. Adicione pelo menos uma foto abaixo.
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct File Picker / Uploader */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold block">1. Enviar nova foto direto do aparelho:</span>
+                  <ImageUploader 
+                    onUploadSuccess={(url) => {
+                      if (url) {
+                        setNewImages(prev => [...prev, url]);
+                      }
+                    }} 
+                    currentImageUrl=""
+                  />
+                </div>
+                
+                {/* Manual Link Input */}
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60 font-sans">
+                  <span className="text-[10px] text-slate-500 font-bold block">2. Ou cole o link de uma foto da internet:</span>
                   <div className="flex gap-2">
                     <input 
-                      id="new-product-image"
+                      id="new-product-image-add-input"
                       type="text"
-                      required
-                      value={newImage}
-                      onChange={(e) => setNewImage(e.target.value)}
+                      placeholder="Cole o link da foto de um produto..."
                       className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-600 focus:outline-hidden focus:border-pink-500 transition-all font-mono text-[10px]"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val) {
+                            setNewImages(prev => [...prev, val]);
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }
+                      }}
                     />
                     <button 
-                      type="button"
-                      onClick={() => {
-                        const imagePool = [
-                          'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=500&q=80',
-                          'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=500&q=80',
-                          'https://images.unsplash.com/photo-1517438476312-10d79c092d6d?w=500&q=80',
-                          'https://images.unsplash.com/photo-1539185441755-769473a23570?w=500&q=80',
-                          'https://images.unsplash.com/photo-1571142240888-99e23e6570fd?w=500&q=80',
-                          'https://images.unsplash.com/photo-1434494878577-86c23bcb06b9?w=500&q=80',
-                          'https://images.unsplash.com/photo-1506152983158-b4a74a01c721?w=500&q=80'
-                        ];
-                        const randomImg = imagePool[Math.floor(Math.random() * imagePool.length)];
-                        setNewImage(randomImg);
+                      type="button" 
+                      onClick={(e) => {
+                        const input = document.getElementById('new-product-image-add-input') as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          setNewImages(prev => [...prev, input.value.trim()]);
+                          input.value = '';
+                        }
                       }}
-                      title="Girar Imagem"
-                      className="px-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-md transition-all text-slate-655 font-bold cursor-pointer text-[10px]"
+                      className="px-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-md transition-all cursor-pointer text-xs border-none"
                     >
-                      Girar
+                      Adicionar
                     </button>
                   </div>
                 </div>
@@ -808,43 +855,82 @@ export default function CatalogInventory({ products, onAddProduct, onUpdateProdu
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-slate-550 font-bold uppercase text-[9px] tracking-wide block">Foto do Produto (Envio Direto para ImgBB)</label>
-                <ImageUploader 
-                  onUploadSuccess={(url) => setEditImage(url)} 
-                  currentImageUrl={editImage}
-                />
+              <div className="space-y-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <label className="text-slate-600 font-extrabold uppercase text-[10px] tracking-wide block">Galeria de Fotos do Produto (Múltiplas Fotos)</label>
                 
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 space-y-1">
-                  <label className="text-slate-400 font-medium text-[9px] block">Ou use um link público externo:</label>
+                {/* Previews grid */}
+                <div className="grid grid-cols-5 gap-2">
+                  {editImages.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-100 group shadow-xs">
+                      <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = editImages.filter((_, i) => i !== idx);
+                          setEditImages(updated);
+                        }}
+                        className="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full cursor-pointer transition-all shadow-md flex items-center justify-center border-none"
+                        title="Remover esta foto"
+                      >
+                        <X size={10} />
+                      </button>
+                      {idx === 0 && (
+                        <span className="absolute bottom-0 inset-x-0 bg-pink-600/90 text-white font-extrabold text-[8px] text-center tracking-wider py-0.5 uppercase">CAPA</span>
+                      )}
+                    </div>
+                  ))}
+                  {editImages.length === 0 && (
+                    <div className="col-span-5 py-4 text-center text-slate-400 font-medium text-xs">
+                      Nenhuma foto adicionada. Adicione pelo menos uma foto abaixo.
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct File Picker / Uploader */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold block">1. Enviar nova foto direto do aparelho:</span>
+                  <ImageUploader 
+                    onUploadSuccess={(url) => {
+                      if (url) {
+                        setEditImages(prev => [...prev, url]);
+                      }
+                    }} 
+                    currentImageUrl=""
+                  />
+                </div>
+                
+                {/* Manual Link Input */}
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60 font-sans">
+                  <span className="text-[10px] text-slate-500 font-bold block">2. Ou cole o link de uma foto da internet:</span>
                   <div className="flex gap-2">
                     <input 
-                      id="edit-product-image"
+                      id="edit-product-image-add-input"
                       type="text"
-                      required
-                      value={editImage}
-                      onChange={(e) => setEditImage(e.target.value)}
+                      placeholder="Cole o link da foto de um produto..."
                       className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-md text-slate-600 focus:outline-hidden focus:border-pink-500 transition-all font-mono text-[10px]"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val) {
+                            setEditImages(prev => [...prev, val]);
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }
+                      }}
                     />
                     <button 
-                      type="button"
-                      onClick={() => {
-                        const imagePool = [
-                          'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=500&q=80',
-                          'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=500&q=80',
-                          'https://images.unsplash.com/photo-1517438476312-10d79c092d6d?w=500&q=80',
-                          'https://images.unsplash.com/photo-1539185441755-769473a23570?w=500&q=80',
-                          'https://images.unsplash.com/photo-1571142240888-99e23e6570fd?w=500&q=80',
-                          'https://images.unsplash.com/photo-1434494878577-86c23bcb06b9?w=500&q=80',
-                          'https://images.unsplash.com/photo-1506152983158-b4a74a01c721?w=500&q=80'
-                        ];
-                        const randomImg = imagePool[Math.floor(Math.random() * imagePool.length)];
-                        setEditImage(randomImg);
+                      type="button" 
+                      onClick={(e) => {
+                        const input = document.getElementById('edit-product-image-add-input') as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          setEditImages(prev => [...prev, input.value.trim()]);
+                          input.value = '';
+                        }
                       }}
-                      title="Girar Imagem"
-                      className="px-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-md transition-all text-slate-655 font-bold cursor-pointer text-[10px]"
+                      className="px-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-md transition-all cursor-pointer text-xs border-none"
                     >
-                      Girar
+                      Adicionar
                     </button>
                   </div>
                 </div>

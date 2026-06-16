@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -35,6 +35,7 @@ interface CustomersCRMProps {
   sales: Sale[];
   onAddClient: (newClient: Client) => void;
   onUpdateClients?: (updatedList: Client[]) => void;
+  currentUser?: any;
 }
 
 interface Opportunity {
@@ -66,7 +67,7 @@ interface Partner {
   totalGenerated: number;
 }
 
-export default function CustomersCRM({ clients, sales, onAddClient }: CustomersCRMProps) {
+export default function CustomersCRM({ clients, sales, onAddClient, currentUser }: CustomersCRMProps) {
   const [activeSubTab, setActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -95,11 +96,21 @@ export default function CustomersCRM({ clients, sales, onAddClient }: CustomersC
     { id: 'fup-3', clientName: 'Julia Santos', channel: 'Call', date: '2026-06-13', notes: 'Ligar para acertar retirada de reserva.', completed: true }
   ]);
 
-  const [partners, setPartners] = useState<Partner[]>([
-    { id: 'part-1', name: 'Marina Fitness Coach', instagram: '@marina_fit', couponCode: 'MARINAFIT10', commissionRate: 10, salesCount: 15, totalGenerated: 4250.00 },
-    { id: 'part-2', name: 'Julia Rezende', instagram: '@jurezendedm', couponCode: 'JU10', commissionRate: 8, salesCount: 8, totalGenerated: 1890.00 },
-    { id: 'part-3', name: 'Amanda Runner', instagram: '@amandarun', couponCode: 'AMANDAPRO', commissionRate: 12, salesCount: 22, totalGenerated: 6200.00 }
-  ]);
+  const [partners, setPartners] = useState<Partner[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_partners');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return [
+      { id: 'part-1', name: 'Marina Fitness Coach', instagram: '@marina_fit', couponCode: 'MARINAFIT10', commissionRate: 10, salesCount: 15, totalGenerated: 4250.00, availableBalance: 425.00 },
+      { id: 'part-2', name: 'Julia Rezende', instagram: '@jurezendedm', couponCode: 'JU10', commissionRate: 8, salesCount: 8, totalGenerated: 1890.00, availableBalance: 151.20 },
+      { id: 'part-3', name: 'Amanda Runner', instagram: '@amandarun', couponCode: 'AMANDAPRO', commissionRate: 12, salesCount: 22, totalGenerated: 6200.00, availableBalance: 744.00 }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ap_moda_partners', JSON.stringify(partners));
+  }, [partners]);
 
   // Form states for new Opportunity
   const [opClient, setOpClient] = useState('');
@@ -361,17 +372,19 @@ export default function CustomersCRM({ clients, sales, onAddClient }: CustomersC
           <Calendar size={14} />
           <span>Follow-up & Agendamentos</span>
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('parceiros')}
-          className={`px-4 py-2.5 font-sans text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer
-            ${activeSubTab === 'parceiros' 
-              ? 'border-pink-600 text-pink-600' 
-              : 'border-transparent text-slate-450 hover:text-slate-700'}`}
-        >
-          <Award size={14} />
-          <span>Influenciadoras & Parceiros</span>
-        </button>
+        {currentUser?.role !== 'Vendedor' && (
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('parceiros')}
+            className={`px-4 py-2.5 font-sans text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer
+              ${activeSubTab === 'parceiros' 
+                ? 'border-pink-600 text-pink-600' 
+                : 'border-transparent text-slate-450 hover:text-slate-705'}`}
+          >
+            <Award size={14} />
+            <span>Influenciadoras & Parceiros</span>
+          </button>
+        )}
       </div>
 
       {/* Tab 1: Fichário de Clientes */}

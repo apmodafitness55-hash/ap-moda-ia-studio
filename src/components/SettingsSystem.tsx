@@ -28,7 +28,17 @@ import {
   RefreshCw,
   Download,
   Upload,
-  Save
+  Save,
+  Trash2,
+  Eye,
+  Megaphone,
+  Sparkles,
+  Layout,
+  Edit,
+  Search,
+  Award,
+  Truck,
+  User
 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
 import { Product, Sale, Client, Transaction } from '../types';
@@ -42,6 +52,14 @@ interface SettingsSystemProps {
   clients: Client[];
   transactions: Transaction[];
   onImportData?: (imported: { products?: Product[]; sales?: Sale[]; clients?: Client[]; transactions?: Transaction[] }) => void;
+  sellers?: string[];
+  motoboys?: string[];
+  onAddSeller?: (name: string) => void;
+  onDeleteSeller?: (name: string) => void;
+  onAddMotoboy?: (name: string) => void;
+  onDeleteMotoboy?: (name: string) => void;
+  teamMembers?: any[];
+  onUpdateTeamMembers?: (updated: any[]) => void;
 }
 
 interface AuditLog {
@@ -62,9 +80,96 @@ export default function SettingsSystem({
   sales, 
   clients, 
   transactions, 
-  onImportData 
+  onImportData,
+  sellers = [],
+  motoboys = [],
+  onAddSeller,
+  onDeleteSeller,
+  onAddMotoboy,
+  onDeleteMotoboy,
+  teamMembers = [],
+  onUpdateTeamMembers
 }: SettingsSystemProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'empresa' | 'integracoes' | 'seguranca' | 'roadmap'>('empresa');
+  const [activeSubTab, setActiveSubTab] = useState<'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine'>('empresa');
+
+  // Vitrine States
+  const [lookbookSlides, setLookbookSlides] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_slides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
+        tag: "COLEÇÃO EXCLUSIVA",
+        title: "ATACADO PREMIUM",
+        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+      },
+      {
+        image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
+        tag: "NOVA COLEÇÃO 2 EM 1",
+        title: "COLEÇÃO DUO",
+        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+      },
+      {
+        image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
+        tag: "ALTA PERFORMANCE",
+        title: "SUA JORNADA RUN",
+        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+      }
+    ];
+  });
+
+  const [announcement, setAnnouncement] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_announcement');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      show: true,
+      text: "⚡ ENVIAMOS PARA TODO BRASIL • FRETE GRÁTIS ACIMA DE R$ 399 ATÉ 6X SEM JUROS ⚡",
+      bgColor: "#db2777", // pink-600
+      textColor: "#ffffff"
+    };
+  });
+
+  const [categoryBanners, setCategoryBanners] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_category_banners');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      slimFit: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80",
+      plusSize: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80"
+    };
+  });
+
+  const [floatingBanner, setFloatingBanner] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_floating_banner');
+      if (saved) return JSON.parse(saved);
+    } catch(e){}
+    return {
+      show: true,
+      title: "✨ CUPOM DA SEMANA",
+      subtitle: "Insira APMODAFIT no carrinho para ganhar 5% OFF e frete grátis!",
+      ctaText: "Aproveitar Desconto",
+      ctaLink: "https://wa.me/5511999990000?text=Quero%20aproveitar%20o%20cupom%20de%20desconto",
+      bgColor: "#ec4899", // pink-500
+      textColor: "#ffffff",
+      image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=505&q=80"
+    };
+  });
+
+  // State to manage editing of a slide
+  const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
+  const [slideFormImage, setSlideFormImage] = useState('');
+  const [slideFormTag, setSlideFormTag] = useState('');
+  const [slideFormTitle, setSlideFormTitle] = useState('');
+  const [slideFormDesc, setSlideFormDesc] = useState('');
 
   // Snapshot/Backup states
   const [snapshotDate, setSnapshotDate] = useState<string | null>(() => {
@@ -110,6 +215,104 @@ export default function SettingsSystem({
   });
   const [currentPassword, setCurrentPassword] = useState('•••••••••');
   const [newPassword, setNewPassword] = useState('');
+
+  // Form states to Add/Edit Team Member
+  const [memberFormName, setMemberFormName] = useState('');
+  const [memberFormLogin, setMemberFormLogin] = useState('');
+  const [memberFormPassword, setMemberFormPassword] = useState('');
+  const [memberFormRole, setMemberFormRole] = useState<'Admin' | 'Gerente' | 'Vendedor' | 'Parceiro' | 'Entregador'>('Vendedor');
+  const [memberFormDetails, setMemberFormDetails] = useState('');
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  
+  const [teamSearchText, setTeamSearchText] = useState('');
+  const [teamFilterRole, setTeamFilterRole] = useState<string>('all');
+
+  const handleSaveTeamMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberFormName.trim() || !memberFormLogin.trim() || !memberFormPassword.trim()) {
+      alert('Nome, Login de usuário e Senha são de preenchimento obrigatório!');
+      return;
+    }
+
+    const loginClean = memberFormLogin.trim().toLowerCase().replace(/\s+/g, '');
+    
+    // Check if login is already taken by someone else
+    const loginExists = teamMembers.some(m => m.login.toLowerCase() === loginClean && m.id !== editingMemberId);
+    if (loginExists) {
+      alert(`Erro: O nome de usuário (login) "${loginClean}" já está em uso por outro funcionário ou colaborador cadastrado.`);
+      return;
+    }
+
+    let updatedList = [];
+    if (editingMemberId) {
+      // Edit
+      updatedList = teamMembers.map(m => {
+        if (m.id === editingMemberId) {
+          return {
+            ...m,
+            name: memberFormName.trim(),
+            login: loginClean,
+            password: memberFormPassword.trim(),
+            role: memberFormRole,
+            details: memberFormDetails.trim()
+          };
+        }
+        return m;
+      });
+      registerAuditLog('Colaborador Atualizado', `Funcionário editado: ${memberFormName} (${memberFormRole})`);
+    } else {
+      // Create new
+      const newMember = {
+        id: `usr-${Date.now()}`,
+        name: memberFormName.trim(),
+        login: loginClean,
+        password: memberFormPassword.trim(),
+        role: memberFormRole,
+        details: memberFormDetails.trim(),
+        createdAt: new Date().toISOString()
+      };
+      updatedList = [...teamMembers, newMember];
+      registerAuditLog('Colaborador Cadastrado', `Novo funcionário registrado: ${memberFormName} (${memberFormRole})`);
+    }
+
+    onUpdateTeamMembers?.(updatedList);
+    
+    // Reset form
+    setMemberFormName('');
+    setMemberFormLogin('');
+    setMemberFormPassword('');
+    setMemberFormRole('Vendedor');
+    setMemberFormDetails('');
+    setEditingMemberId(null);
+    alert('Informações salvas e sincronizadas com sucesso no portal de logins!');
+  };
+
+  const handleEditMemberClick = (m: any) => {
+    setEditingMemberId(m.id);
+    setMemberFormName(m.name);
+    setMemberFormLogin(m.login);
+    setMemberFormPassword(m.password);
+    setMemberFormRole(m.role);
+    setMemberFormDetails(m.details || '');
+  };
+
+  const handleDeleteMemberClick = (m: any) => {
+    if (confirm(`Atenção Administrador: Tem certeza que deseja excluir o cadastro de "${m.name}" (${m.role})?\nEsta perda desativará o login e senha e o removerá do sistema.`)) {
+      const updatedList = teamMembers.filter(item => item.id !== m.id);
+      onUpdateTeamMembers?.(updatedList);
+      registerAuditLog('Colaborador Deletado', `Removido funcionário: ${m.name} (${m.role})`);
+      
+      if (editingMemberId === m.id) {
+        // Reset form too
+        setMemberFormName('');
+        setMemberFormLogin('');
+        setMemberFormPassword('');
+        setMemberFormRole('Vendedor');
+        setMemberFormDetails('');
+        setEditingMemberId(null);
+      }
+    }
+  };
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
     { id: 'log-1', user: 'Ana Paula (Admin)', level: 'Admin', action: 'Configuração Alterada', target: 'Logo da Loja atualizado', timestamp: '2026-06-13T10:04:12Z', ip: '191.132.88.10' },
@@ -508,6 +711,17 @@ export default function SettingsSystem({
         >
           <Activity size={14} />
           <span>Roadmap Tecnologia</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('vitrine')}
+          className={`px-4 py-2.5 font-sans text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer
+            ${activeSubTab === 'vitrine' 
+              ? 'border-pink-600 text-pink-600' 
+              : 'border-transparent text-slate-450 hover:text-slate-700'}`}
+        >
+          <Layout size={14} />
+          <span>Vitrine & Campanhas</span>
         </button>
       </div>
 
@@ -1115,80 +1329,329 @@ export default function SettingsSystem({
               </div>
             </div>
 
-            {/* Password edit form */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3 pb-2 border-b border-slate-50 flex items-center gap-1.5">
-                <Key size={14} className="text-pink-600" />
-                <span>Alterar Senha de Login</span>
+            {/* Formulário Interativo de Cadastro */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 pb-2 border-b border-slate-50 flex items-center gap-1.5 justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-pink-600" />
+                  <span>{editingMemberId ? 'Editar Credenciais' : 'Cadastrar Novo Colaborador'}</span>
+                </span>
+                {editingMemberId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMemberId(null);
+                      setMemberFormName('');
+                      setMemberFormLogin('');
+                      setMemberFormPassword('');
+                      setMemberFormRole('Vendedor');
+                      setMemberFormDetails('');
+                    }}
+                    className="text-[9px] font-bold text-slate-400 hover:text-rose-600 uppercase tracking-wider bg-transparent border-0 outline-none cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
               </h3>
 
-              <form onSubmit={handleUpdatePassword} className="space-y-3">
+              <form onSubmit={handleSaveTeamMember} className="space-y-3">
                 <div>
-                  <label className="block text-slate-450 font-semibold mb-1">Senha Atual</label>
+                  <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Nome do Colaborador</label>
                   <input
-                    type="password"
-                    disabled
-                    value={currentPassword}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 outline-hidden cursor-not-allowed select-none"
+                    type="text"
+                    required
+                    placeholder="Nome completo..."
+                    value={memberFormName}
+                    onChange={(e) => setMemberFormName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Função / Cargo</label>
+                    <select
+                      value={memberFormRole}
+                      onChange={(e: any) => setMemberFormRole(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all font-sans cursor-pointer"
+                    >
+                      <option value="Admin">Administrador</option>
+                      <option value="Gerente">Gerente</option>
+                      <option value="Vendedor">Vendedor</option>
+                      <option value="Parceiro">Parceiro</option>
+                      <option value="Entregador">Entregador</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Login Único</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Username (Ex: juliana, ana)"
+                      value={memberFormLogin}
+                      onChange={(e) => setMemberFormLogin(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-slate-450 font-semibold mb-1">Nova Senha Ultra-Segura</label>
+                  <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Senha Individual</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Senha para este perfil..."
+                      value={memberFormPassword}
+                      onChange={(e) => setMemberFormPassword(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 font-mono transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMemberFormPassword(Math.floor(100000 + Math.random() * 900000).toString())}
+                      className="absolute right-2 top-2 text-[9px] font-bold text-pink-600 bg-pink-50 hover:bg-pink-100 px-1.5 py-0.5 rounded cursor-pointer border-none"
+                      title="Gerar senha aleatória de 6 dígitos"
+                    >
+                      Aleatória
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Observações / Detalhes (Opcional)</label>
                   <input
-                    type="password"
-                    required
-                    placeholder="Mínimo 6 dígitos"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 focus:outline-hidden"
+                    type="text"
+                    placeholder={
+                      memberFormRole === 'Parceiro' ? 'Instagram, Ex: @marina_fit' : 
+                      memberFormRole === 'Entregador' ? 'Veículo ou Turno, Ex: Zona Sul / Moto 1' : 
+                      'Informações adicionais...'
+                    }
+                    value={memberFormDetails}
+                    onChange={(e) => setMemberFormDetails(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition"
+                  className="w-full py-2.5 bg-pink-605 bg-pink-600 hover:bg-pink-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-lg shadow-pink-550/10 cursor-pointer border-none flex items-center justify-center gap-1.5"
                 >
-                  Confirmar Nova Senha
+                  <Save size={13} />
+                  <span>{editingMemberId ? 'Salvar Alterações Credenciais' : 'Registrar Colaborador'}</span>
                 </button>
               </form>
+            </div>
+            
+            {/* Quick helper about access levels */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-[10px] text-slate-550 leading-relaxed space-y-1 font-mono">
+              <span className="font-bold text-slate-450 uppercase text-[9px] block">Níveis de Permissões:</span>
+              <div>📌 <strong className="text-pink-600 uppercase">Admin:</strong> Controle absoluto e auditoria de logs.</div>
+              <div>📌 <strong className="text-pink-600 uppercase">Gerente:</strong> Vendas, Produtos, Loja Online e Financeiro.</div>
+              <div>📌 <strong className="text-pink-600 uppercase">Vendedor:</strong> Operações rápidas de PDV e CRM.</div>
+              <div>📌 <strong className="text-pink-600 uppercase">Parceiro:</strong> Acesso à carteira de cupons e faturamento.</div>
+              <div>📌 <strong className="text-pink-600 uppercase">Entregador:</strong> Acesso ao Aplicativo de entregas e mapas.</div>
             </div>
 
           </div>
 
-          {/* List Security Audit Logs */}
-          <div className="lg:col-span-8 bg-white border border-slate-100 rounded-2xl shadow-xs p-4 overflow-hidden">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1">
-              <Lock size={14} className="text-pink-600" />
-              <span>Log de Auditoria de Segurança & Alterações Críticas</span>
-            </h3>
+          {/* List Security Audit Logs and Team Directory */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* Master Team and Accounts Catalog Card */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-50 pb-3">
+                <div>
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Users size={15} className="text-pink-600" />
+                    <span>Diretório Oficial de Credenciais & Elenco ({teamMembers.length})</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Visão consolidada de todas as contas do sistema AP Moda</p>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs font-sans">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-50 text-slate-400 font-bold uppercase text-[9px] tracking-wider select-none">
-                    <th className="p-3">Horário</th>
-                    <th className="p-3">Usuário</th>
-                    <th className="p-3">Categoria</th>
-                    <th className="p-3">Modificação</th>
-                    <th className="p-3 text-right">IP Origem</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-slate-700">
-                  {auditLogs.map(log => (
-                    <tr key={log.id} className="hover:bg-slate-50/50">
-                      <td className="p-3 font-mono text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
-                      <td className="p-3 font-bold flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${log.level === 'Admin' ? 'bg-rose-500' : log.level === 'Gerente' ? 'bg-amber-500' : 'bg-blue-400'}`} />
-                        <span>{log.user}</span>
-                      </td>
-                      <td className="p-3 font-semibold text-slate-650">{log.action}</td>
-                      <td className="p-3 text-slate-500">{log.target}</td>
-                      <td className="p-3 text-right font-mono text-[10px] text-slate-400">{log.ip}</td>
-                    </tr>
+                {/* Role filters */}
+                <div className="flex flex-wrap gap-1 font-sans">
+                  {['all', 'Admin', 'Gerente', 'Vendedor', 'Parceiro', 'Entregador'].map((roleFilter) => (
+                    <button
+                      key={roleFilter}
+                      type="button"
+                      onClick={() => setTeamFilterRole(roleFilter)}
+                      className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition cursor-pointer border-none
+                        ${teamFilterRole === roleFilter 
+                          ? 'bg-slate-900 text-white' 
+                          : 'bg-slate-55 bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      {roleFilter === 'all' ? 'Tudo' : roleFilter}
+                    </button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
+
+              {/* Search & Filter inputs */}
+              <div className="relative font-sans text-xs">
+                <input
+                  type="text"
+                  placeholder="Pesquisar por nome ou login único do colaborador..."
+                  value={teamSearchText}
+                  onChange={(e) => setTeamSearchText(e.target.value)}
+                  className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-pink-500 font-medium placeholder:text-slate-400 text-slate-700"
+                />
+                <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+              </div>
+
+              {/* Grid or Table listing members */}
+              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-left border-collapse font-sans text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-extrabold text-slate-400 select-none">
+                      <th className="p-3">Nome do Colaborador</th>
+                      <th className="p-3">Cargo</th>
+                      <th className="p-3">Login Único</th>
+                      <th className="p-3">Senha Individual</th>
+                      <th className="p-3">Observações / Detalhes</th>
+                      <th className="p-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                    {teamMembers
+                      .filter(m => {
+                        if (teamFilterRole !== 'all' && m.role !== teamFilterRole) return false;
+                        if (teamSearchText.trim()) {
+                          const query = teamSearchText.toLowerCase();
+                          return m.name.toLowerCase().includes(query) || m.login.toLowerCase().includes(query);
+                        }
+                        return true;
+                      })
+                      .map((m) => {
+                        const getRoleBadgeStyle = (r: string) => {
+                          switch (r) {
+                            case 'Admin': return 'bg-purple-100 text-purple-700 border-purple-200';
+                            case 'Gerente': return 'bg-blue-100 text-blue-700 border-blue-200';
+                            case 'Vendedor': return 'bg-pink-100 text-pink-700 border-pink-200';
+                            case 'Parceiro': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                            case 'Entregador': return 'bg-amber-100 text-amber-700 border-amber-200';
+                            default: return 'bg-slate-100 text-slate-700 border-slate-200';
+                          }
+                        };
+
+                        const getRoleBadgeIcon = (r: string) => {
+                          switch (r) {
+                            case 'Admin': return <ShieldCheck size={10} className="inline mr-1" />;
+                            case 'Gerente': return <Users size={10} className="inline mr-1" />;
+                            case 'Vendedor': return <User size={10} className="inline mr-1" />;
+                            case 'Parceiro': return <Award size={10} className="inline mr-1" />;
+                            case 'Entregador': return <Truck size={10} className="inline mr-1" />;
+                            default: return null;
+                          }
+                        };
+
+                        return (
+                          <tr key={m.id} className={`hover:bg-slate-50 transition-colors ${editingMemberId === m.id ? 'bg-pink-50/40' : ''}`}>
+                            <td className="p-3">
+                              <div className="font-bold text-slate-800">{m.name}</div>
+                              <div className="text-[9px] font-mono text-slate-400 mt-0.5">REGISTRO: {m.id}</div>
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded border text-[9px] font-extrabold uppercase tracking-wide inline-flex items-center ${getRoleBadgeStyle(m.role)}`}>
+                                {getRoleBadgeIcon(m.role)}
+                                <span>{m.role}</span>
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <code className="text-slate-900 bg-slate-100 border border-slate-200 font-mono text-[11px] px-1.5 py-0.5 rounded">
+                                {m.login}
+                              </code>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-mono bg-slate-900 text-pink-400 px-2 py-0.5 rounded text-[11px] border border-slate-950 font-bold tracking-wider select-all" title="Clique duas vezes para copiar">
+                                {m.password}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-450 italic text-[11px] max-w-[150px] truncate">
+                              {m.details || <span className="text-slate-300">Nenhum</span>}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditMemberClick(m)}
+                                  className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1 rounded-lg transition border-none cursor-pointer"
+                                  title="Editar Credenciais"
+                                >
+                                  <Edit size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={m.login === 'admin'}
+                                  onClick={() => handleDeleteMemberClick(m)}
+                                  className={`p-1 rounded-lg transition border-none cursor-pointer 
+                                    ${m.login === 'admin' 
+                                      ? 'text-slate-300 bg-slate-100 cursor-not-allowed' 
+                                      : 'text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100'}`}
+                                  title="Remover Cadastro Colaborador"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {teamMembers.filter(m => {
+                      if (teamFilterRole !== 'all' && m.role !== teamFilterRole) return false;
+                      if (teamSearchText.trim()) {
+                        const query = teamSearchText.toLowerCase();
+                        return m.name.toLowerCase().includes(query) || m.login.toLowerCase().includes(query);
+                      }
+                      return true;
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-400 italic font-mono">
+                          Nenhum colaborador encontrado com os filtros de busca atuais.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {/* List Security Audit Logs Below Table */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 overflow-hidden">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1">
+                <Lock size={14} className="text-pink-600" />
+                <span>Log de Auditoria de Segurança & Alterações Críticas</span>
+              </h3>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs font-sans">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-50 text-slate-400 font-bold uppercase text-[9px] tracking-wider select-none">
+                      <th className="p-3">Horário</th>
+                      <th className="p-3">Usuário</th>
+                      <th className="p-3">Categoria</th>
+                      <th className="p-3">Modificação</th>
+                      <th className="p-3 text-right">IP Origem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-slate-700 font-medium">
+                    {auditLogs.map(log => (
+                      <tr key={log.id} className="hover:bg-slate-50/50">
+                        <td className="p-3 font-mono text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                        <td className="p-3 font-bold flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${log.level === 'Admin' ? 'bg-rose-500' : log.level === 'Gerente' ? 'bg-amber-500' : 'bg-blue-400'}`} />
+                          <span>{log.user}</span>
+                        </td>
+                        <td className="p-3 font-semibold text-slate-650">{log.action}</td>
+                        <td className="p-3 text-slate-500">{log.target}</td>
+                        <td className="p-3 text-right font-mono text-[10px] text-slate-400">{log.ip}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </div>
 
         </div>
@@ -1216,6 +1679,430 @@ export default function SettingsSystem({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Sub-tab 5: Vitrine & Campanhas */}
+      {activeSubTab === 'vitrine' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 font-sans text-xs">
+          
+          {/* Lado Esquerdo: Controle das Campanhas & Banners */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* Bloco 1: Banner Marquee de Aviso do Topo */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5">
+              <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-1.5 pb-2 border-b border-slate-50">
+                <Megaphone size={16} className="text-pink-600" />
+                <span>Faixa de Avisos do Topo (Marquee Animado)</span>
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-3">
+                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Exibir Faixa?</label>
+                  <select 
+                    value={announcement.show ? 'sim' : 'nao'}
+                    onChange={(e) => setAnnouncement({...announcement, show: e.target.value === 'sim'})}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-700 focus:outline-hidden"
+                  >
+                    <option value="sim">Sim, Fixado no Topo</option>
+                    <option value="nao">Não, Ocultar Faixa</option>
+                  </select>
+                </div>
+                
+                <div className="md:col-span-5">
+                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Mensagem Rolante</label>
+                  <input 
+                    type="text"
+                    value={announcement.text}
+                    onChange={(e) => setAnnouncement({...announcement, text: e.target.value})}
+                    placeholder="Ex: ⚡ DESCONTOS ATÉ 50% • FRETE GRÁTIS ACIMA DE R$ 300 ⚡"
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-700 focus:outline-hidden text-[10px]"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Cor Fundo (Hex)</label>
+                  <input 
+                    type="color"
+                    value={announcement.bgColor}
+                    onChange={(e) => setAnnouncement({...announcement, bgColor: e.target.value})}
+                    className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl cursor-pointer"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Cor Texto (Hex)</label>
+                  <input 
+                    type="color"
+                    value={announcement.textColor}
+                    onChange={(e) => setAnnouncement({...announcement, textColor: e.target.value})}
+                    className="w-full h-10 bg-slate-50 border border-slate-150 rounded-xl cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 2: Banners dos Carrosseis Lookbook */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5">
+              <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-50">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <Layout size={16} className="text-pink-600" />
+                  <span>Carrossel Principal (Lookbooks de Campanhas Ativas)</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSlideIndex(-1);
+                    setSlideFormImage('');
+                    setSlideFormTag('COLEÇÃO EXCLUSIVA');
+                    setSlideFormTitle('NOVIDADE NA LOJA');
+                    setSlideFormDesc('Descrição contendo os benefícios da nova coleção...');
+                  }}
+                  className="bg-pink-50 hover:bg-pink-100 text-pink-650 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 cursor-pointer transition border-none font-sans"
+                >
+                  <Plus size={14} />
+                  <span>Novo Slide</span>
+                </button>
+              </div>
+
+              {editingSlideIndex !== null && (
+                <div className="bg-pink-50/40 p-4 rounded-xl border border-pink-100/60 mb-5 text-left font-sans space-y-3.5">
+                  <h4 className="font-bold text-pink-700 text-xs">
+                    {editingSlideIndex === -1 ? '✨ Adicionar Novo Slide de Campanha' : `⚙️ Editar Slide #${editingSlideIndex + 1}`}
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Rótulo Superior (Tag)</label>
+                      <input 
+                        type="text"
+                        value={slideFormTag}
+                        onChange={(e) => setSlideFormTag(e.target.value)}
+                        placeholder="Ex: SELEÇÃO DE INVERNO"
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold text-slate-700 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Título Principal</label>
+                      <input 
+                        type="text"
+                        value={slideFormTitle}
+                        onChange={(e) => setSlideFormTitle(e.target.value)}
+                        placeholder="Ex: ATACADO EXCLUSIVO"
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold text-slate-700 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Texto de Apoio (Descrição)</label>
+                    <textarea 
+                      rows={2}
+                      value={slideFormDesc}
+                      onChange={(e) => setSlideFormDesc(e.target.value)}
+                      placeholder="Breve descrição que convida seus clientes a clicarem..."
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold text-slate-700 focus:outline-hidden text-[11px]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Imagem do Banner (Recomendado: Proporção Retangular Larga)</label>
+                    <div className="space-y-2">
+                      <ImageUploader 
+                        onUploadSuccess={(url) => setSlideFormImage(url)}
+                        currentImageUrl={slideFormImage}
+                      />
+                      <input 
+                        type="text"
+                        value={slideFormImage}
+                        onChange={(e) => setSlideFormImage(e.target.value)}
+                        placeholder="Insira a URL da imagem ou use o uploader acima..."
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2 font-medium text-slate-700 focus:outline-hidden text-[10px] font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditingSlideIndex(null)}
+                      className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs cursor-pointer border-none font-sans"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!slideFormImage) {
+                          alert('Por favor, informe ou faça upload de uma imagem para o slide.');
+                          return;
+                        }
+                        const newSlide = {
+                          image: slideFormImage,
+                          tag: slideFormTag || 'CAMPANHA',
+                          title: slideFormTitle || 'LOJA ONLINE',
+                          desc: slideFormDesc || ''
+                        };
+
+                        if (editingSlideIndex === -1) {
+                          setLookbookSlides([...lookbookSlides, newSlide]);
+                        } else {
+                          const updated = [...lookbookSlides];
+                          updated[editingSlideIndex] = newSlide;
+                          setLookbookSlides(updated);
+                        }
+                        setEditingSlideIndex(null);
+                      }}
+                      className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg text-xs cursor-pointer border-none font-sans flex items-center gap-1.5"
+                    >
+                      <Save size={12} />
+                      <span>{editingSlideIndex === -1 ? 'Salvar Novo' : 'Salvar Alteração'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* List Slides */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {lookbookSlides.map((slide, idx) => (
+                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-xl overflow-hidden p-3 flex flex-col justify-between relative group">
+                    <div className="w-full h-24 rounded-lg overflow-hidden border border-slate-100 relative bg-slate-200 shrink-0">
+                      <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-slate-950/20" />
+                      <span className="absolute top-1.5 left-1.5 bg-pink-600 text-white font-extrabold px-1.5 py-0.5 rounded text-[7px] uppercase tracking-wider">{slide.tag}</span>
+                    </div>
+
+                    <div className="text-left mt-2 space-y-0.5 flex-grow">
+                      <h4 className="font-extrabold text-slate-800 text-[11px] truncate">{slide.title}</h4>
+                      <p className="text-slate-500 text-[10px] leading-snug line-clamp-2 min-h-[30px]">{slide.desc}</p>
+                    </div>
+
+                    <div className="flex gap-1.5 mt-3 pt-2 border-t border-slate-100 font-sans">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSlideIndex(idx);
+                          setSlideFormImage(slide.image);
+                          setSlideFormTag(slide.tag);
+                          setSlideFormTitle(slide.title);
+                          setSlideFormDesc(slide.desc);
+                        }}
+                        className="flex-1 py-1 bg-pink-50 hover:bg-pink-100 text-pink-700 text-[10px] font-bold rounded transition border-none cursor-pointer mb-0"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm('Deseja realmente apagar este slide do carrossel?')) {
+                            const updated = lookbookSlides.filter((_, i) => i !== idx);
+                            setLookbookSlides(updated);
+                            if (editingSlideIndex === idx) setEditingSlideIndex(null);
+                          }
+                        }}
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded transition border-none cursor-pointer"
+                        title="Apagar Slide"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {lookbookSlides.length === 0 && (
+                  <div className="p-8 text-center text-slate-450 italic md:col-span-3">Nenhum slide em exibição. Adicione um para iniciar seu marketing visual!</div>
+                )}
+              </div>
+            </div>
+
+            {/* Bloco 3: Destaques Slim Fit / Plus Size */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5">
+              <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-1.5 pb-2 border-b border-slate-50">
+                <Sparkles size={16} className="text-pink-600" />
+                <span>Banners de Campanhas de Categoria (Slim Fit / Plus Size)</span>
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Slim Fit Card Banner configuration */}
+                <div className="space-y-2 text-left">
+                  <span className="text-[10px] font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full uppercase tracking-wider">1. Coleção Slim Fit (Modeladores)</span>
+                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 space-y-3">
+                    <div className="w-full h-24 rounded-lg overflow-hidden border border-slate-200">
+                      <img src={categoryBanners.slimFit} className="w-full h-full object-cover" alt="Slim Fit Banner Preview" referrerPolicy="no-referrer" />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Upload Novo Banner Slim Fit</label>
+                      <ImageUploader 
+                        onUploadSuccess={(url) => setCategoryBanners({...categoryBanners, slimFit: url})}
+                        currentImageUrl={categoryBanners.slimFit}
+                      />
+                      <input 
+                        type="text"
+                        value={categoryBanners.slimFit}
+                        onChange={(e) => setCategoryBanners({...categoryBanners, slimFit: e.target.value})}
+                        className="w-full bg-white border border-slate-150 rounded-lg p-2 font-mono text-[9px] mt-1.5 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Plus Size Card Banner configuration */}
+                <div className="space-y-2 text-left">
+                  <span className="text-[10px] font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full uppercase tracking-wider">2. Coleção Plus Size (Esculpido)</span>
+                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 space-y-3">
+                    <div className="w-full h-24 rounded-lg overflow-hidden border border-slate-200">
+                      <img src={categoryBanners.plusSize} className="w-full h-full object-cover" alt="Plus Size Banner Preview" referrerPolicy="no-referrer" />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Upload Novo Banner Plus Size</label>
+                      <ImageUploader 
+                        onUploadSuccess={(url) => setCategoryBanners({...categoryBanners, plusSize: url})}
+                        currentImageUrl={categoryBanners.plusSize}
+                      />
+                      <input 
+                        type="text"
+                        value={categoryBanners.plusSize}
+                        onChange={(e) => setCategoryBanners({...categoryBanners, plusSize: e.target.value})}
+                        className="w-full bg-white border border-slate-150 rounded-lg p-2 font-mono text-[9px] mt-1.5 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          {/* Lado Direito: Modals Flutuantes & Salvar Geral */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* Bloco 4: Card Config de Banner Flutuante */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5">
+              <h3 className="text-sm font-bold text-slate-800 mb-3.5 flex items-center gap-1.5 pb-2 border-b border-slate-50">
+                <BellRing size={16} className="text-pink-600" />
+                <span>Banner Flutuante Ativo (Campanha Popup/Overlay)</span>
+              </h3>
+
+              <div className="space-y-3 text-left">
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Exibir Banner Flutuante?</label>
+                  <select 
+                    value={floatingBanner.show ? 'sim' : 'nao'}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, show: e.target.value === 'sim'})}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-700 focus:outline-hidden"
+                  >
+                    <option value="sim">Sim, Exibir de Forma Visível</option>
+                    <option value="nao">Não, Manter Oculto</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Título Chamativo</label>
+                  <input 
+                    type="text"
+                    value={floatingBanner.title}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, title: e.target.value})}
+                    placeholder="Ex: ✨ GANHE CUPOM DE 10% OFF!"
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-semibold text-slate-700 focus:outline-hidden text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Descrição da Campanha</label>
+                  <textarea 
+                    rows={2}
+                    value={floatingBanner.subtitle}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, subtitle: e.target.value})}
+                    placeholder="Mande sua mensagem de persuasão aqui..."
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-700 focus:outline-hidden text-[10px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Texto do Botão CTA</label>
+                  <input 
+                    type="text"
+                    value={floatingBanner.ctaText}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, ctaText: e.target.value})}
+                    placeholder="Ex: Quero Desconto!"
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-semibold text-slate-700 focus:outline-hidden text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Link de Destino do Botão (WhatsApp / Interno)</label>
+                  <input 
+                    type="text"
+                    value={floatingBanner.ctaLink}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, ctaLink: e.target.value})}
+                    placeholder="Ex: https://wa.me/55..."
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-mono text-[9px] text-slate-650 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-450 font-bold mb-1 uppercase text-[9px]">Cor Temática do Popup (Hex)</label>
+                  <input 
+                    type="color"
+                    value={floatingBanner.bgColor}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, bgColor: e.target.value})}
+                    className="w-full h-8 bg-slate-50 border border-slate-150 rounded-xl cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Upload de Imagem Promocional do Popup</label>
+                  <ImageUploader 
+                    onUploadSuccess={(url) => setFloatingBanner({...floatingBanner, image: url})}
+                    currentImageUrl={floatingBanner.image}
+                  />
+                  <input 
+                    type="text"
+                    value={floatingBanner.image || ''}
+                    onChange={(e) => setFloatingBanner({...floatingBanner, image: e.target.value})}
+                    placeholder="URL direta do gráfico do popup..."
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 font-mono text-[9px] mt-1 bg-white focus:outline-hidden"
+                  />
+                </div>
+
+              </div>
+            </div>
+
+            {/* Bloco 5: Botão de Ação para Salvar tudo na Vitrine */}
+            <div className="bg-gradient-to-tr from-pink-500 to-rose-600 rounded-3xl p-5 text-white shadow-lg shadow-pink-600/10 space-y-4">
+              <div className="text-left font-sans space-y-1">
+                <h4 className="font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1.5 text-pink-100">
+                  <FileCheck2 size={13} />
+                  <span>Sincronização Ativa</span>
+                </h4>
+                <p className="text-xs font-bold leading-normal">Lançar Atualizações Visuais</p>
+                <p className="text-[10px] text-pink-100/90 leading-tight">Ao salvar, toda a vitrine online disponível aos seus clientes finais será reconfigurada e redesenhada de acordo com as campanhas informadas.</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.setItem('ap_vitrine_slides', JSON.stringify(lookbookSlides));
+                    localStorage.setItem('ap_vitrine_announcement', JSON.stringify(announcement));
+                    localStorage.setItem('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+                    localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+                    
+                    alert('✨ Vitrine Pública atualizada com sucesso! Suas campanhas, banners do carrossel, faixa de avisos e o banner flutuante já se encontram ativos na visualização de varejo/atacado!');
+                  } catch (e) {
+                    alert('Erro ao persistir configurações da vitrine. Por favor, tente novamente!');
+                  }
+                }}
+                className="w-full py-3 bg-white hover:bg-slate-50 text-pink-750 font-extrabold text-xs rounded-xl transition duration-300 shadow-md flex items-center justify-center gap-2 cursor-pointer border-none font-sans active:scale-97"
+              >
+                <Save size={15} />
+                <span>Salvar Todas Campanhas</span>
+              </button>
+            </div>
+
+          </div>
+
         </div>
       )}
 

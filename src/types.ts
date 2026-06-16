@@ -31,6 +31,7 @@ export interface Product {
   stock: number;
   minStock: number;
   image: string;
+  images?: string[];
   salesCount: number;
   description?: string;
   videoUrl?: string;

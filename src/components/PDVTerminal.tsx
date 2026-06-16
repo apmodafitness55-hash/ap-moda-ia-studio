@@ -33,9 +33,10 @@ interface PDVTerminalProps {
   onAddSale: (sale: Sale) => void;
   onAddClient: (client: Client) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  sellers?: string[];
 }
 
-export default function PDVTerminal({ products, clients, onAddSale, onAddClient, setActiveTab }: PDVTerminalProps) {
+export default function PDVTerminal({ products, clients, onAddSale, onAddClient, setActiveTab, sellers = [] }: PDVTerminalProps) {
   const [selectedClientName, setSelectedClientName] = useState<string>('Maria Silva');
   const [selectedChannel, setSelectedChannel] = useState<SalesChannel>('Instagram');
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
@@ -45,7 +46,25 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
   const [isThermalReceiptOpen, setIsThermalReceiptOpen] = useState<boolean>(false);
   const [createdReceipt, setCreatedReceipt] = useState<Sale | null>(null);
-  const [selectedSalesperson, setSelectedSalesperson] = useState<string>('Ana Carolina');
+  
+  // Real seller listing
+  const salespersonList = useMemo(() => {
+    return sellers.length > 0 ? sellers : ['Ana Carolina', 'Beatriz Rocha', 'Juliana Costa', 'Bruna Oliveira'];
+  }, [sellers]);
+
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string>(salespersonList[0] || 'Ana Carolina');
+
+  // Quick Add Client states
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
+  const [quickPhone, setQuickPhone] = useState<string>('');
+  const [quickEmail, setQuickEmail] = useState<string>('');
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
+
+  // Discount states
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [couponCode, setCouponCode] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
 
   // Combination of payment methods states
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([
@@ -61,22 +80,71 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
     return cart.reduce((sum, item) => sum + item.product.cost * item.quantity, 0);
   }, [cart]);
 
+  const getPartners = (): any[] => {
+    const saved = localStorage.getItem('ap_moda_partners');
+    return saved ? JSON.parse(saved) : [
+      { id: 'part-1', name: 'Marina Fitness Coach', instagram: '@marina_fit', couponCode: 'MARINAFIT10', commissionRate: 10, salesCount: 15, totalGenerated: 4250.00 },
+      { id: 'part-2', name: 'Julia Rezende', instagram: '@jurezendedm', couponCode: 'JU10', commissionRate: 8, salesCount: 8, totalGenerated: 1890.00 },
+      { id: 'part-3', name: 'Amanda Runner', instagram: '@amandarun', couponCode: 'AMANDAPRO', commissionRate: 12, salesCount: 22, totalGenerated: 6200.00 }
+    ];
+  };
+
+  const handleApplyCoupon = () => {
+    if (!couponCode.trim()) return;
+    const codeUpper = couponCode.trim().toUpperCase();
+    const partners = getPartners();
+    const partnerWithCoupon = partners.find(p => p.couponCode.toUpperCase() === codeUpper);
+    
+    if (partnerWithCoupon) {
+      const disc = codeUpper.includes('20') ? 20 : codeUpper.includes('15') ? 15 : 10;
+      setAppliedCoupon({ code: codeUpper, percent: disc });
+      alert(`Cupom ${codeUpper} de ${partnerWithCoupon.name} aplicado com sucesso! Desconto de ${disc}% concedido.`);
+    } else {
+      alert('Cupom de parceiro não encontrado ou expirado.');
+    }
+  };
+
+  const hasPixDiscount = useMemo(() => {
+    return payments.some(p => p.method === 'PIX');
+  }, [payments]);
+
+  const totalDiscounts = useMemo(() => {
+    let sumDiscounts = 0;
+    if (discountPercent > 0) {
+      sumDiscounts += cartTotal * (discountPercent / 100);
+    }
+    if (discountValue > 0) {
+      sumDiscounts += discountValue;
+    }
+    if (appliedCoupon) {
+      sumDiscounts += cartTotal * (appliedCoupon.percent / 100);
+    }
+    if (hasPixDiscount) {
+      sumDiscounts += cartTotal * 0.05;
+    }
+    return Math.min(sumDiscounts, cartTotal);
+  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount]);
+
+  const finalCartTotal = useMemo(() => {
+    return Math.max(0, cartTotal - totalDiscounts);
+  }, [cartTotal, totalDiscounts]);
+
   React.useEffect(() => {
     if (payments.length === 1) {
-      setPayments([{ method: payments[0].method, amount: cartTotal }]);
+      setPayments([{ method: payments[0].method, amount: Number(finalCartTotal.toFixed(2)) }]);
     }
-  }, [cartTotal, payments.length]);
+  }, [finalCartTotal, payments.length]);
 
   const paymentsTotalSum = useMemo(() => {
     return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   }, [payments]);
 
   const isPaymentValid = useMemo(() => {
-    return Math.abs(paymentsTotalSum - cartTotal) < 0.01;
-  }, [paymentsTotalSum, cartTotal]);
+    return Math.abs(paymentsTotalSum - finalCartTotal) < 0.02;
+  }, [paymentsTotalSum, finalCartTotal]);
 
   const addPaymentRow = () => {
-    const left = Math.max(0, cartTotal - paymentsTotalSum);
+    const left = Math.max(0, finalCartTotal - paymentsTotalSum);
     const availableMethods = ['PIX', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto Bancário', 'Crediário'];
     const usedMethods = payments.map(p => p.method);
     const nextMethod = availableMethods.find(m => !usedMethods.includes(m)) || 'Dinheiro';
@@ -100,7 +168,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
   const autoBalancePayments = () => {
     if (payments.length === 0) return;
     const sumExceptLast = payments.slice(0, -1).reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const target = Math.max(0, cartTotal - sumExceptLast);
+    const target = Math.max(0, finalCartTotal - sumExceptLast);
     setPayments(prev => {
       const updated = [...prev];
       if (updated.length > 0) {
@@ -108,6 +176,46 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       }
       return updated;
     });
+  };
+
+  const selectedClientHistory = useMemo(() => {
+    if (!selectedClientName.trim()) return [];
+    try {
+      const saved = localStorage.getItem('ap_moda_sales');
+      const allSales: Sale[] = saved ? JSON.parse(saved) : [];
+      return allSales.filter(s => s.clientName.toLowerCase() === selectedClientName.trim().toLowerCase());
+    } catch (e) {
+      return [];
+    }
+  }, [selectedClientName, cart]);
+
+  const handleQuickAddClient = () => {
+    if (!selectedClientName.trim()) {
+      alert("Por favor, digite o nome completo da cliente antes de salvar.");
+      return;
+    }
+    const exists = clients.find(c => c.name.toLowerCase() === selectedClientName.trim().toLowerCase());
+    if (exists) {
+      alert(`A cliente "${selectedClientName}" já consta no sistema.`);
+      setIsQuickAddOpen(false);
+      return;
+    }
+    const newClient: Client = {
+      id: `cli-${Date.now()}`,
+      name: selectedClientName.trim(),
+      email: quickEmail.trim() || `${selectedClientName.toLowerCase().replace(/\s+/g, '')}@exemplo.com`,
+      phone: quickPhone.trim() || '(11) 99999-0000',
+      channel: selectedChannel,
+      npsScore: npsScore,
+      totalSpent: 0,
+      ordersCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    onAddClient(newClient);
+    setIsQuickAddOpen(false);
+    setQuickPhone('');
+    setQuickEmail('');
+    alert(`⚡ Cliente "${selectedClientName.trim()}" cadastrada no sistema!`);
   };
 
   // Extract categories dynamically
@@ -185,7 +293,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
     }
 
     if (!isPaymentValid) {
-      alert(`Erro: A soma das formas de pagamento (${formatCurrency(paymentsTotalSum)}) deve ser exatamente igual ao total da venda (${formatCurrency(cartTotal)}).`);
+      alert(`Erro: A soma das formas de pagamento (${formatCurrency(paymentsTotalSum)}) deve ser exatamente igual ao total da venda (${formatCurrency(finalCartTotal)}).`);
       return;
     }
 
@@ -211,11 +319,15 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
         phone: '(11) 99999-0000',
         channel: selectedChannel,
         npsScore: npsScore,
-        totalSpent: cartTotal,
+        totalSpent: finalCartTotal,
         ordersCount: 1,
         createdAt: new Date().toISOString()
       };
       onAddClient(newClient);
+    } else {
+      // update stats
+      clientExists.totalSpent = (clientExists.totalSpent || 0) + finalCartTotal;
+      clientExists.ordersCount = (clientExists.ordersCount || 0) + 1;
     }
 
     const newSale: Sale = {
@@ -223,7 +335,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       clientName: finalClientName,
       channel: selectedChannel,
       items: saleItems,
-      total: cartTotal,
+      total: finalCartTotal,
       costTotal: cartCostTotal,
       status: 'Concluída',
       createdAt: new Date().toISOString(),
@@ -234,6 +346,10 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
     onAddSale(newSale);
     setCreatedReceipt(newSale);
     setCart([]);
+    setDiscountPercent(0);
+    setDiscountValue(0);
+    setCouponCode('');
+    setAppliedCoupon(null);
     setPayments([{ method: 'PIX', amount: 0 }]); // Reset payment methods
     setIsSuccessModalOpen(true);
   };
@@ -404,39 +520,132 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
           <form onSubmit={handleCheckout} className="space-y-4 border-t border-slate-100 pt-4">
             {/* Customer select / field */}
             <div className="space-y-1.5 text-xs font-sans">
-              <label className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none">
-                <User size={10} /> Nome da Cliente
-              </label>
-              <input 
-                id="pdv-client-input"
-                type="text"
-                list="pdv-clients-list"
-                required
-                value={selectedClientName}
-                onChange={(e) => setSelectedClientName(e.target.value)}
-                placeholder="Selecione ou digite para cadastrar..."
-                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 transition-all font-medium"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none">
+                  <User size={10} /> Nome da Cliente
+                </label>
+                <div className="flex gap-2">
+                  {selectedClientHistory.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
+                      className="text-[9px] font-bold text-pink-600 hover:text-pink-700 bg-pink-50 hover:bg-pink-100 px-1.5 py-0.5 rounded cursor-pointer transition border-none"
+                    >
+                      {isHistoryPanelOpen ? '✕ Ocultar Histórico' : `📖 Histórico (${selectedClientHistory.length})`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
+                    className="text-[9px] font-bold text-slate-500 hover:text-pink-600 bg-slate-100 hover:bg-pink-50 px-1.5 py-0.5 rounded cursor-pointer transition border-none"
+                  >
+                    {isQuickAddOpen ? '✕ Fechar' : '⚡ Cadastro Rápido'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-1">
+                <input 
+                  id="pdv-client-input"
+                  type="text"
+                  list="pdv-clients-list"
+                  required
+                  value={selectedClientName}
+                  onChange={(e) => {
+                    setSelectedClientName(e.target.value);
+                    if (isHistoryPanelOpen) setIsHistoryPanelOpen(false);
+                  }}
+                  placeholder="Selecione ou digite para cadastrar..."
+                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 transition-all font-medium"
+                />
+              </div>
+
               <datalist id="pdv-clients-list">
                 {clients.map(c => <option key={c.id} value={c.name} />)}
               </datalist>
+
+              {/* QUICK ADD COLLAPSIBLE FORM CARD */}
+              {isQuickAddOpen && (
+                <div className="p-3 bg-pink-50/50 border border-pink-100 rounded-xl space-y-2 mt-1 animate-fadeIn font-sans">
+                  <span className="text-[10px] font-extrabold text-pink-600 uppercase block tracking-wider">⚡ Cadastro Rápido de Cliente</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1 font-sans">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block">Telefone / WhatsApp</label>
+                      <input 
+                        type="text"
+                        placeholder="(11) 99999-0000"
+                        value={quickPhone}
+                        onChange={(e) => setQuickPhone(e.target.value)}
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-hidden focus:border-pink-500 font-mono text-slate-700"
+                      />
+                    </div>
+                    <div className="space-y-1 font-sans">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block">E-mail</label>
+                      <input 
+                        type="email"
+                        placeholder="cliente@exemplo.com"
+                        value={quickEmail}
+                        onChange={(e) => setQuickEmail(e.target.value)}
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-[10px] focus:outline-hidden focus:border-pink-500 font-mono text-slate-700"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleQuickAddClient}
+                    className="w-full py-1 bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-[10px] uppercase rounded transition tracking-wider shadow-sm cursor-pointer border-none font-sans"
+                  >
+                    Salvar Novo Cadastro
+                  </button>
+                </div>
+              )}
+
+              {/* PAST PURCHASES HISTORY PANEL CARD */}
+              {isHistoryPanelOpen && selectedClientHistory.length > 0 && (
+                <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl space-y-2.5 mt-1 font-sans max-h-40 overflow-y-auto scrollbar-thin">
+                  <div className="flex items-center justify-between border-b border-purple-200/55 pb-1 font-sans">
+                    <span className="text-[10px] font-extrabold text-purple-700 uppercase tracking-widest block flex items-center gap-1 font-sans">
+                      📖 Histórico de {selectedClientName}
+                    </span>
+                    <span className="text-[10px] font-bold text-purple-600 font-sans">
+                      Total Comprado: {formatCurrency(selectedClientHistory.reduce((s, o) => s + o.total, 0))}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 font-sans">
+                    {selectedClientHistory.map((sale, sIdx) => (
+                      <div key={sIdx} className="text-[10px] bg-white border border-purple-100/50 rounded p-1.5 leading-tight shadow-2xs font-sans">
+                        <div className="flex items-center justify-between text-slate-500 font-semibold text-[9px] mb-1 font-sans">
+                          <span>Ref: {sale.id}</span>
+                          <span>{new Date(sale.createdAt).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div className="text-slate-700 font-medium font-sans">
+                          {sale.items.map(item => `${item.quantity}x ${item.name}`).join(', ')}
+                        </div>
+                        <div className="text-right text-pink-600 font-extrabold text-[10.5px] mt-0.5 font-mono">
+                          Total Pago: {formatCurrency(sale.total)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Vendedora / Commission attribution */}
             <div className="space-y-1.5 text-xs font-sans">
-              <label className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none">
+              <label className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none font-sans">
                 <User size={10} /> Vendedora Responsável
               </label>
               <select 
                 id="pdv-salesperson-select"
                 value={selectedSalesperson}
                 onChange={(e) => setSelectedSalesperson(e.target.value)}
-                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 focus:outline-hidden focus:border-pink-500 transition-all font-medium"
+                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 focus:outline-hidden focus:border-pink-500 transition-all font-medium cursor-pointer"
               >
-                <option value="Ana Carolina">Ana Carolina</option>
-                <option value="Beatriz Rocha">Beatriz Rocha</option>
-                <option value="Juliana Costa">Juliana Costa</option>
-                <option value="Bruna Oliveira">Bruna Oliveira</option>
+                {salespersonList.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
                 <option value="Sem Vendedor">Sem Vendedora (Faturamento Direto)</option>
               </select>
             </div>
@@ -543,11 +752,11 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
                       <span className="font-bold flex items-center gap-1">✓ Valor Total Combinado!</span>
                     ) : (
                       <div className="leading-tight">
-                        <span className="font-bold">Atenção:</span> Soma (R$ {paymentsTotalSum.toFixed(2)}) ≠ Total (R$ {cartTotal.toFixed(2)}).{' '}
-                        {paymentsTotalSum < cartTotal ? (
-                          <span>Falta: <strong className="font-mono">R$ {(cartTotal - paymentsTotalSum).toFixed(2)}</strong></span>
+                        <span className="font-bold">Atenção:</span> Soma (R$ {paymentsTotalSum.toFixed(2)}) ≠ Total (R$ {finalCartTotal.toFixed(2)}).{' '}
+                        {paymentsTotalSum < finalCartTotal ? (
+                          <span>Falta: <strong className="font-mono">R$ {(finalCartTotal - paymentsTotalSum).toFixed(2)}</strong></span>
                         ) : (
-                          <span>Excedeu: <strong className="font-mono">R$ {(paymentsTotalSum - cartTotal).toFixed(2)}</strong></span>
+                          <span>Excedeu: <strong className="font-mono">R$ {(paymentsTotalSum - finalCartTotal).toFixed(2)}</strong></span>
                         )}
                       </div>
                     )}
@@ -565,15 +774,112 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
               )}
             </div>
 
+            {/* SECTION: Descontos & Parcerias */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-sans space-y-2.5 mt-2">
+              <div className="flex items-center justify-between border-b border-slate-150 pb-1.5">
+                <span className="font-bold text-slate-700 tracking-wide">Descontos & Parcerias</span>
+                <span className="text-[10px] text-pink-600 font-bold bg-pink-50 px-1.5 py-0.5 rounded">PDV Inteligente</span>
+              </div>
+
+              {/* Percent and Cash discounts fields */}
+              <div className="grid grid-cols-2 gap-2 font-sans">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase block">Desconto (%)</label>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discountPercent || ''}
+                      onChange={(e) => {
+                        setDiscountPercent(Number(e.target.value));
+                        setDiscountValue(0); 
+                      }}
+                      className="w-full pl-2 pr-6 py-1 bg-white border border-slate-200 rounded text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono text-[11px]"
+                      placeholder="0"
+                    />
+                    <span className="absolute right-2 top-1 text-[10px] text-slate-400 font-bold">%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase block">Desconto (R$)</label>
+                  <div className="relative font-sans">
+                    <input 
+                      type="number"
+                      min="0"
+                      value={discountValue || ''}
+                      onChange={(e) => {
+                        setDiscountValue(Number(e.target.value));
+                        setDiscountPercent(0); 
+                      }}
+                      className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono text-[11px]"
+                      placeholder="0.00"
+                    />
+                    <span className="absolute left-2 top-1 text-[10px] text-slate-400 font-bold font-sans">R$</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Partner Coupons */}
+              <div className="space-y-1 font-sans">
+                <label className="text-[9px] font-bold text-slate-500 uppercase block">Cupom de Parceiro</label>
+                <div className="flex gap-1.5 font-sans">
+                  <input 
+                    type="text"
+                    placeholder="Ex: MARINAFIT10"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono text-[10px] uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-2.5 py-1 bg-pink-100 hover:bg-pink-200 hover:text-pink-700 text-pink-600 rounded font-bold text-[10px] transition cursor-pointer border-none font-sans"
+                  >
+                    Validar
+                  </button>
+                </div>
+                {appliedCoupon && (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded p-1 text-[10px] text-emerald-700 font-medium">
+                    <span>Cupom <strong>{appliedCoupon.code}</strong> ativo (-{appliedCoupon.percent}%)</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setAppliedCoupon(null)}
+                      className="text-emerald-500 hover:text-rose-600 font-bold cursor-pointer transition border-none bg-transparent"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Automated Payment-based discounts displays */}
+              {hasPixDiscount && (
+                <div className="bg-purple-50 border border-purple-100 rounded-lg p-1.5 text-[9px] text-purple-700 font-semibold flex items-center justify-between">
+                  <span>✨ Desconto Automático PIX Ativo (-5%)</span>
+                  <span>- {formatCurrency(cartTotal * 0.05)}</span>
+                </div>
+              )}
+            </div>
+
             {/* Price values and Checkout action */}
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-sans space-y-1.5 font-mono mt-1">
-              <div className="flex justify-between text-slate-450">
-                <span>Subtotal</span>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-sans space-y-1.5 font-mono mt-2">
+              <div className="flex justify-between text-slate-450 text-[11px]">
+                <span>Faturamento Bruto</span>
                 <span>{formatCurrency(cartTotal)}</span>
               </div>
-              <div className="flex justify-between text-slate-750 font-bold border-t border-slate-150 pt-1.5">
-                <span className="font-sans">Total</span>
-                <span className="text-sm font-semibold">{formatCurrency(cartTotal)}</span>
+              
+              {totalDiscounts > 0 && (
+                <div className="flex justify-between text-rose-500 text-[11px] font-medium">
+                  <span>(-) Total Descontos</span>
+                  <span>-{formatCurrency(totalDiscounts)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-slate-750 font-bold border-t border-slate-150 pt-1.5 text-xs">
+                <span className="font-sans text-xs">Total Líquido</span>
+                <span className="text-sm font-extrabold text-pink-600">{formatCurrency(finalCartTotal)}</span>
               </div>
             </div>
 

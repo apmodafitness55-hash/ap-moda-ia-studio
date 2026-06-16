@@ -32,13 +32,25 @@ interface DriverAppPortalProps {
   onlineOrders: any[];
   onUpdateOrderStatus: (orderId: string, status: any) => void;
   onExitPortal: () => void;
+  currentUser?: any;
+  onLogout?: () => void;
 }
 
-export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onExitPortal }: DriverAppPortalProps) {
+export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onExitPortal, currentUser, onLogout }: DriverAppPortalProps) {
   // Current logged riders
   const riders = ['Bruno Ramos', 'Lucas Correia', 'Thales Silva'];
   const [selectedRider, setSelectedRider] = useState<string>('Bruno Ramos');
   const [activeStep, setActiveStep] = useState<'login' | 'feed' | 'delivery_detail' | 'signature'>('login');
+
+  // Automatically adapt to logged deliveries driver
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'Entregador') {
+      // Find matching rider
+      const matched = riders.find(r => r.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(r.toLowerCase()));
+      setSelectedRider(matched || currentUser.name);
+      setActiveStep('feed');
+    }
+  }, [currentUser]);
   
   // Active delivery selected inside the smartphone
   const [activeOrder, setActiveOrder] = useState<any | null>(null);
@@ -202,7 +214,7 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
 
   // Lock bypass evaluation
   const handleConfirmExit = () => {
-    if (exitPin === '1234' || exitPin === '') {
+    if (exitPin === '123456' || exitPin === '1234') {
       setShowExitModal(false);
       onExitPortal();
     } else {
@@ -220,13 +232,26 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
       </div>
 
       <div className="absolute top-6 left-6">
-        <button 
-          onClick={() => setShowExitModal(true)}
-          className="text-xs bg-slate-800 hover:bg-slate-700 font-bold p-1 px-2.5 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
-        >
-          <LogOut size={13} />
-          <span>Voltar ao ERP</span>
-        </button>
+        {currentUser?.role === 'Entregador' ? (
+          <button 
+            onClick={onLogout}
+            className="text-xs bg-pink-600 hover:bg-pink-700 font-bold p-1 py-1.5 px-3 rounded-xl text-white hover:text-white transition-all flex items-center gap-1 cursor-pointer border-0 outline-none"
+          >
+            <LogOut size={13} />
+            <span>Sair do Sistema</span>
+          </button>
+        ) : (
+          <button 
+            onClick={() => {
+              setExitPin('');
+              setShowExitModal(true);
+            }}
+            className="text-xs bg-slate-800 hover:bg-slate-705 font-bold p-1 px-2.5 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+          >
+            <LogOut size={13} />
+            <span>Voltar ao ERP</span>
+          </button>
+        )}
       </div>
 
       {/* Primary Simulator Screen Core */}
@@ -651,15 +676,15 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
             </div>
 
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Senha (PIN Padrão: 1234 ou deixe em branco)</label>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Código PIN Gerencial</label>
               <input
                 type="password"
-                placeholder="Insira o código PIN de 4 dígitos"
+                placeholder="Código de segurança"
                 value={exitPin}
                 onChange={(e) => setExitPin(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-center text-white focus:outline-hidden focus:border-pink-500 tracking-widest text-sm"
               />
-              {pinError && <p className="text-rose-500 text-[10px] text-center font-bold font-sans">PIN Inválido! Tente "1234"</p>}
+              {pinError && <p className="text-rose-500 text-[10px] text-center font-bold font-sans">PIN Inválido! Use "123456" ou "1234"</p>}
             </div>
 
             <div className="flex gap-2 pt-2">
