@@ -122,8 +122,78 @@ export default function Sidebar({
   }, [logoUrl]);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [menuMode, setMenuMode] = useState<'classico' | 'agrupado'>(() => {
+    return (localStorage.getItem('ap_store_sidebar_mode') as 'classico' | 'agrupado') || 'classico';
+  });
 
-  const menuItems = [
+  const menuItems = menuMode === 'classico' ? [
+    {
+      group: 'PRINCIPAL',
+      items: [
+        { id: 'DASHBOARD', label: 'Dashboard Geral', icon: LayoutDashboard, keywords: 'painel index geral metricas graficos', tab: ActiveTab.DASHBOARD },
+        { id: 'DASHBOARD_EXECUTIVO', label: 'Dashboard Executivo', icon: BarChart3, keywords: 'bi executivo dashboard relatorios', tab: ActiveTab.DASHBOARD_EXECUTIVO },
+        { id: 'METAS', label: 'Simulador de Metas', icon: Target, keywords: 'metas simulador simulacao', tab: ActiveTab.METAS }
+      ]
+    },
+    {
+      group: 'VENDAS',
+      items: [
+        { id: 'PDV', label: 'PDV / Caixa', icon: DollarSign, keywords: 'pdv caixa registrar venda balcao terminal', tab: ActiveTab.PDV },
+        { id: 'VENDAS', label: 'Histórico de Vendas', icon: Percent, keywords: 'vendas cupons descontos historico relatorio', tab: ActiveTab.VENDAS },
+        { id: 'PEDIDOS_COMPLETOS', label: 'Pedidos & Sacolas', icon: ShoppingBag, keywords: 'pedidos sacola instagram internet', tab: ActiveTab.PEDIDOS, subTab: 'pedidos' },
+        { id: 'PEDIDOS_DEVOLUCOES', label: 'Devoluções & Crediário', icon: RefreshCcw, keywords: 'devolucoes trocas crediario quitacao', tab: ActiveTab.PEDIDOS, subTab: 'trocas_crediario' }
+      ]
+    },
+    {
+      group: 'CATÁLOGO & ESTOQUE',
+      items: [
+        { id: 'ESTOQUE', label: 'Estoque / Produtos', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, keywords: 'produtos estoque catalogo sku mercadorias pecas', tab: ActiveTab.PRODUTOS, subTab: 'inventario' },
+        { id: 'FORNECEDORES_CADASTRO', label: 'Parceiros Fornecedores', icon: Building2, keywords: 'fornecedores cadastrar parceiros', tab: ActiveTab.FORNECEDORES, subTab: 'fornecedores' },
+        { id: 'FORNECEDORES_COMPRAS', label: 'Compras & Suprimentos', icon: Truck, keywords: 'compras suprimentos reposicao insumos', tab: ActiveTab.FORNECEDORES, subTab: 'compras' }
+      ]
+    },
+    {
+      group: 'CLIENTES',
+      items: [
+        { id: 'CLIENTES_DIRETORIO', label: 'Diretório de Clientes', icon: Users, keywords: 'clientes crm fichario contatos', tab: ActiveTab.CLIENTES, subTab: 'diretorio' },
+        { id: 'CLIENTES_FUNIL', label: 'Funil de Vendas (NPS)', icon: TrendingUp, keywords: 'funil kanban leads oportunidades pipeline', tab: ActiveTab.CLIENTES, subTab: 'funil' },
+        { id: 'CLIENTES_REGUA', label: 'Cobranças & Follow-ups', icon: CheckSquare, keywords: 'recobranca followup pos-vendas', tab: ActiveTab.CLIENTES, subTab: 'followup' },
+        { id: 'CLIENTES_EMBAIXADORES', label: 'Programa de Embaixadores', icon: Award, keywords: 'influenciadores afiliados parceiros marketing', tab: ActiveTab.CLIENTES, subTab: 'parceiros' }
+      ]
+    },
+    {
+      group: 'LOGÍSTICA',
+      items: [
+        { id: 'PEDIDOS_LOGISTICA', label: 'Painel de Logística', icon: Compass, keywords: 'logistica entregas entregador rota de despacho', tab: ActiveTab.PEDIDOS, subTab: 'logistica' }
+      ]
+    },
+    {
+      group: 'FINANCEIRO',
+      items: [
+        { id: 'FINANCEIRO_CAIXA', label: 'Fluxo de Caixa & Contas', icon: Coins, keywords: 'financeiro accounts contas caixa transacoes', tab: ActiveTab.FINANCEIRO },
+        { id: 'METODOS_PAGAMENTO', label: 'Métodos de Pagamento', icon: CreditCard, keywords: 'pagamento pix specie maquininha cartao vitrine', tab: ActiveTab.METODOS_PAGAMENTO }
+      ]
+    },
+    {
+      group: 'VITRINE ONLINE',
+      items: [
+        { id: 'LOJA_ONLINE', label: 'Loja Online (Vitrine)', icon: ShoppingBag, keywords: 'site e-commerce vitrine loja online', tab: ActiveTab.LOJA_ONLINE }
+      ]
+    },
+    {
+      group: 'INTELIGÊNCIA & IA',
+      items: [
+        { id: 'AGENTES_IA', label: 'Copilotos & Agentes IA', icon: Bot, keywords: 'ia inteligente agentes robo whatsapp bot assistente', tab: ActiveTab.AGENTES_IA },
+        { id: 'GOOGLE_WORKSPACE', label: 'Workspace Google', icon: Calendar, keywords: 'google agenda gmail docs spreadsheets drive tasks tarefas planilhas workspace', tab: ActiveTab.GOOGLE_WORKSPACE }
+      ]
+    },
+    {
+      group: 'CONFIGURAÇÕES',
+      items: [
+        { id: 'CONFIGURACOES', label: 'Configurações do Sistema', icon: Sliders, keywords: 'configuracoes api integracao webhook token database', tab: ActiveTab.CONFIGURACOES }
+      ]
+    }
+  ] : [
     {
       group: 'PRINCIPAL',
       items: [
@@ -497,6 +567,42 @@ export default function Sidebar({
           </div>
         </div>
 
+        {/* Menu Mode Toggle */}
+        <div className="px-3 pb-2 border-b border-slate-800/20 shrink-0">
+          <div className="bg-slate-950/60 p-0.5 rounded-lg flex items-center gap-1 border border-slate-800/80">
+            <button
+              id="sidebar-btn-mode-classic"
+              type="button"
+              onClick={() => {
+                setMenuMode('classico');
+                localStorage.setItem('ap_store_sidebar_mode', 'classico');
+              }}
+              className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border-0 outline-none
+                ${menuMode === 'classico'
+                  ? 'bg-pink-600 text-white shadow font-bold'
+                  : 'text-slate-500 hover:text-slate-300 bg-transparent'
+                }`}
+            >
+              Clássico (Todos)
+            </button>
+            <button
+              id="sidebar-btn-mode-grouped"
+              type="button"
+              onClick={() => {
+                setMenuMode('agrupado');
+                localStorage.setItem('ap_store_sidebar_mode', 'agrupado');
+              }}
+              className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border-0 outline-none
+                ${menuMode === 'agrupado'
+                  ? 'bg-pink-600 text-white shadow font-bold'
+                  : 'text-slate-500 hover:text-slate-300 bg-transparent'
+                }`}
+            >
+              Agrupados
+            </button>
+          </div>
+        </div>
+
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto min-h-0">
           {filteredMenuItems.map((group, gIdx) => (
@@ -506,12 +612,22 @@ export default function Sidebar({
               </span>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
-                  const hasSubLinks = item.subLinks && item.subLinks.length > 0;
+                  const hasSubLinks = menuMode === 'agrupado' && item.subLinks && item.subLinks.length > 0;
                   const activeSubTab = getActiveSubTabForTab(item.tab);
                   
-                  // Main item is active if it has no sub-links and matches activeTab,
-                  // or if it HAS sub-links and the activeTab matches (highlight parent container subtly first)
+                  // Main item is active if it matches activeTab in modern mode, or if matched in classic mode
                   const isParentAccent = activeTab === item.tab;
+
+                  // Active highlight calculation logic
+                  const isClassicActive = activeTab === item.tab && (
+                    !(item as any).subTab || 
+                    (item.tab === ActiveTab.PEDIDOS && activeOrdersLogisticsSubTab === (item as any).subTab) ||
+                    (item.tab === ActiveTab.CLIENTES && activeCustomersCRMSubTab === (item as any).subTab) ||
+                    (item.tab === ActiveTab.FORNECEDORES && activeSuppliersManagementSubTab === (item as any).subTab) ||
+                    (item.tab === ActiveTab.PRODUTOS && activeProductsSubTab === (item as any).subTab)
+                  );
+
+                  const isActive = menuMode === 'classico' ? isClassicActive : isParentAccent;
 
                   // Sub-links to display (filter if search term is active)
                   const matchingSubLinks = item.subLinks 
@@ -524,22 +640,22 @@ export default function Sidebar({
                       <button
                          id={`sidebar-btn-${item.id}`}
                          onClick={() => {
-                           if (hasSubLinks && item.subLinks && item.subLinks.length > 0) {
+                           if (menuMode === 'agrupado' && hasSubLinks && item.subLinks && item.subLinks.length > 0) {
                              handleTabClick(item.tab, item.subLinks[0].subTab);
                            } else {
-                             handleTabClick(item.tab);
+                             handleTabClick(item.tab, (item as any).subTab);
                            }
                          }}
                          className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold font-sans transition-all duration-250 group cursor-pointer border-0 text-left outline-none bg-transparent
-                           ${isParentAccent 
-                             ? hasSubLinks 
-                               ? 'bg-slate-800/40 text-white font-bold' 
-                               : 'bg-pink-600 text-white shadow-sm shadow-pink-500/10 font-bold' 
+                           ${isActive 
+                             ? menuMode === 'classico' || !hasSubLinks
+                               ? 'bg-pink-600 text-white shadow-sm shadow-pink-500/10 font-bold' 
+                               : 'bg-slate-800/40 text-white font-bold' 
                              : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
                            }`}
                       >
                         <div className="flex items-center gap-2.5">
-                          <item.icon size={15} className={isParentAccent ? (hasSubLinks ? 'text-pink-500' : 'text-white') : 'text-slate-400 group-hover:text-pink-400 transition-colors'} />
+                          <item.icon size={15} className={isActive ? (menuMode === 'agrupado' && hasSubLinks ? 'text-pink-500' : 'text-white') : 'text-slate-400 group-hover:text-pink-400 transition-colors'} />
                           <span>{item.label}</span>
                         </div>
 
