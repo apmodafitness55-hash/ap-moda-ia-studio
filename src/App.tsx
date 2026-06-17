@@ -53,8 +53,8 @@ export default function App() {
   const [isDriverPortalOpen, setIsDriverPortalOpen] = useState(false);
 
   // Lifted subtab states for side navigation direct access
-  const [ordersLogisticsSubTab, setOrdersLogisticsSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica'>('pedidos');
-  const [customersCRMSubTab, setCustomersCRMSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
+  const [ordersLogisticsSubTab, setOrdersLogisticsSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional'>('pedidos');
+  const [customersCRMSubTab, setCustomersCRMSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade'>('diretorio');
   const [suppliersManagementSubTab, setSuppliersManagementSubTab] = useState<'fornecedores' | 'compras'>('fornecedores');
   const [productsSubTab, setProductsSubTab] = useState<'inventario' | 'restoque' | 'cadastro'>('inventario');
   const [lojaOnlineSubTab, setLojaOnlineSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine'>('compartilhar');
@@ -724,6 +724,7 @@ export default function App() {
             products={products}
             clients={clients}
             onAddSale={handleAddSale}
+            onUpdateClients={setClients}
             onAddClient={handleAddClient}
             setActiveTab={setActiveTab}
             sellers={sellers}
@@ -760,6 +761,7 @@ export default function App() {
             clients={clients}
             sales={sales}
             onAddClient={handleAddClient}
+            onUpdateClients={setClients}
             currentUser={currentUser}
             activeSubTab={customersCRMSubTab}
             setActiveSubTab={setCustomersCRMSubTab}

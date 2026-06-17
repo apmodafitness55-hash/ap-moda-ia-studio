@@ -36,8 +36,8 @@ interface CustomersCRMProps {
   onAddClient: (newClient: Client) => void;
   onUpdateClients?: (updatedList: Client[]) => void;
   currentUser?: any;
-  activeSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros';
-  setActiveSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros') => void;
+  activeSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade';
+  setActiveSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade') => void;
 }
 
 interface Opportunity {
@@ -77,7 +77,7 @@ export default function CustomersCRM({
   activeSubTab: propActiveSubTab,
   setActiveSubTab: propSetActiveSubTab
 }: CustomersCRMProps) {
-  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade'>('diretorio');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,6 +95,12 @@ export default function CustomersCRM({
   const [newBirthDate, setNewBirthDate] = useState('');
   const [newChannel, setNewChannel] = useState<SalesChannel>('Instagram');
   const [newNps, setNewNps] = useState<number>(10);
+  const [newBusto, setNewBusto] = useState<string>('');
+  const [newCintura, setNewCintura] = useState<string>('');
+  const [newQuadril, setNewQuadril] = useState<string>('');
+  const [newCoxa, setNewCoxa] = useState<string>('');
+  const [newAltura, setNewAltura] = useState<string>('');
+  const [newPeso, setNewPeso] = useState<string>('');
 
   // Interactive CRM states
   const [opportunities, setOpportunities] = useState<Opportunity[]>([
@@ -108,6 +114,46 @@ export default function CustomersCRM({
     { id: 'fup-2', clientName: 'Carla Oliveira', channel: 'Instagram', date: '2026-06-15', notes: 'Enviar as novidades de casaco corta-vento Dry.', completed: false },
     { id: 'fup-3', clientName: 'Julia Santos', channel: 'Call', date: '2026-06-13', notes: 'Ligar para acertar retirada de reserva.', completed: true }
   ]);
+
+  // Cashback config and manual adjust states
+  const [cashbackRateConfig, setCashbackRateConfig] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_cashback_rate');
+      return saved ? parseFloat(saved) : 10;
+    } catch (e) {
+      return 10;
+    }
+  });
+
+  const [adjustingClient, setAdjustingClient] = useState<Client | null>(null);
+  const [adjustValue, setAdjustValue] = useState<string>('');
+
+  const handleSaveCashbackRateConfig = (rate: number) => {
+    setCashbackRateConfig(rate);
+    try {
+      localStorage.setItem('ap_moda_cashback_rate', rate.toString());
+    } catch (e) {}
+  };
+
+  const handleSaveCashbackAdjustment = () => {
+    if (!adjustingClient) return;
+    const value = parseFloat(adjustValue);
+    if (isNaN(value) || value < 0) {
+      alert('Por favor, informe um valor numérico válido maior ou igual a zero.');
+      return;
+    }
+    const updated = clients.map(c => {
+      if (c.id === adjustingClient.id) {
+        return { ...c, cashbackBalance: value };
+      }
+      return c;
+    });
+    if (onUpdateClients) {
+      onUpdateClients(updated);
+    }
+    setAdjustingClient(null);
+    setAdjustValue('');
+  };
 
   const [partners, setPartners] = useState<Partner[]>(() => {
     try {
@@ -187,6 +233,15 @@ export default function CustomersCRM({
       editingClient.birthDate = newBirthDate.trim() || undefined;
       editingClient.channel = newChannel;
       editingClient.npsScore = newNps;
+      
+      // Save measurements
+      editingClient.busto = newBusto ? parseFloat(newBusto) : undefined;
+      editingClient.cintura = newCintura ? parseFloat(newCintura) : undefined;
+      editingClient.quadril = newQuadril ? parseFloat(newQuadril) : undefined;
+      editingClient.coxa = newCoxa ? parseFloat(newCoxa) : undefined;
+      editingClient.altura = newAltura ? parseFloat(newAltura) : undefined;
+      editingClient.peso = newPeso ? parseFloat(newPeso) : undefined;
+      
       alert('Dados da cliente atualizados com sucesso no CRM!');
       setEditingClient(null);
     } else {
@@ -201,7 +256,15 @@ export default function CustomersCRM({
         npsScore: newNps,
         totalSpent: 0,
         ordersCount: 0,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        
+        // Save measurements
+        busto: newBusto ? parseFloat(newBusto) : undefined,
+        cintura: newCintura ? parseFloat(newCintura) : undefined,
+        quadril: newQuadril ? parseFloat(newQuadril) : undefined,
+        coxa: newCoxa ? parseFloat(newCoxa) : undefined,
+        altura: newAltura ? parseFloat(newAltura) : undefined,
+        peso: newPeso ? parseFloat(newPeso) : undefined
       };
       onAddClient(newClient);
       alert('Nova cliente adicionada com sucesso no diretório!');
@@ -220,6 +283,15 @@ export default function CustomersCRM({
     setNewBirthDate(client.birthDate || '');
     setNewChannel(client.channel);
     setNewNps(client.npsScore || 10);
+    
+    // Set measurements edit
+    setNewBusto(client.busto ? String(client.busto) : '');
+    setNewCintura(client.cintura ? String(client.cintura) : '');
+    setNewQuadril(client.quadril ? String(client.quadril) : '');
+    setNewCoxa(client.coxa ? String(client.coxa) : '');
+    setNewAltura(client.altura ? String(client.altura) : '');
+    setNewPeso(client.peso ? String(client.peso) : '');
+    
     setIsAddModalOpen(true);
   };
 
@@ -232,6 +304,14 @@ export default function CustomersCRM({
     setNewBirthDate('');
     setNewChannel('Instagram');
     setNewNps(10);
+    
+    // Reset measurements
+    setNewBusto('');
+    setNewCintura('');
+    setNewQuadril('');
+    setNewCoxa('');
+    setNewAltura('');
+    setNewPeso('');
   };
 
   // Funnel operations
@@ -407,6 +487,17 @@ export default function CustomersCRM({
             <span>Influenciadoras & Parceiros</span>
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('fidelidade')}
+          className={`px-4 py-2.5 font-sans text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer
+            ${activeSubTab === 'fidelidade' 
+              ? 'border-pink-600 text-pink-600' 
+              : 'border-transparent text-slate-450 hover:text-slate-705'}`}
+        >
+          <Coins size={14} />
+          <span>Fidelidade & Cashback</span>
+        </button>
       </div>
 
       {/* Tab 1: Fichário de Clientes */}
@@ -896,6 +987,223 @@ export default function CustomersCRM({
         </div>
       )}
 
+      {/* Tab 5: Clube Fidelidade & Cashback */}
+      {activeSubTab === 'fidelidade' && (
+        <div className="space-y-6 font-sans">
+          
+          {/* Top Panel: Metrics & Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            {/* KPI Card 1: Total de Membros */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-pink-100 text-pink-600 rounded-2xl">
+                <Users size={20} />
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Membros no Clube</span>
+                <span className="font-mono font-black text-xl text-slate-800">{clients.length}</span>
+              </div>
+            </div>
+
+            {/* KPI Card 2: Saldo Total Acumulado */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
+                <Coins size={20} />
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Cashback Acumulado</span>
+                <span className="font-mono font-black text-xl text-slate-800">
+                  {formatCurrency(clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0))}
+                </span>
+              </div>
+            </div>
+
+            {/* KPI Card 3: Reserva de Segurança / Cashback Médio */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+              <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+                <Award size={20} />
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Média por Cliente</span>
+                <span className="font-mono font-black text-xl text-slate-800">
+                  {formatCurrency(clients.length > 0 ? (clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0) / clients.length) : 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* KPI Card 4: Regra de Acúmulo de Cashback (Configurável) */}
+            <div className="bg-gradient-to-br from-pink-600 to-rose-600 text-white rounded-2xl p-4 shadow-md shadow-pink-500/10 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-80">Porcentagem Padrão</span>
+                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">VIP AP Fitness</span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono">{cashbackRateConfig}%</span>
+                <span className="text-[10px] opacity-90 font-medium">de volta</span>
+              </div>
+              <div className="mt-2.5 flex items-center gap-1.5 bg-white/10 p-1 rounded-lg">
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="30" 
+                  value={cashbackRateConfig}
+                  onChange={(e) => handleSaveCashbackRateConfig(Number(e.target.value))}
+                  className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                />
+                <span className="text-[10px] font-black font-mono w-6 text-center">{cashbackRateConfig}%</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Core Table Section of Loyalty Members */}
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-150 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+              <div>
+                <h4 className="font-bold text-sm text-slate-800">Diretório do Clube de Fidelidade</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Veja quem acumula cashback, históricos de resgate e faça ajustes manuais de bônus.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text"
+                  placeholder="Buscar cliente no clube..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 text-xs w-48 font-semibold transition"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-450 text-[9px] font-extrabold uppercase tracking-widest">
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Compras</th>
+                    <th className="px-4 py-3">Total Gasto</th>
+                    <th className="px-4 py-3">Cashback Acumulado</th>
+                    <th className="px-4 py-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-[11px] text-slate-650">
+                  {clients
+                    .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((client) => {
+                      const clientHistory = sales.filter(s => s.clientName.toLowerCase() === client.name.toLowerCase());
+                      const totalPurchases = clientHistory.length || client.ordersCount || 0;
+                      const totalSpentSum = clientHistory.reduce((sum, s) => sum + s.total, 0) || client.totalSpent || 0;
+                      const cBalance = client.cashbackBalance || 0;
+                      
+                      return (
+                        <tr key={client.id} className="hover:bg-slate-50/50 transition duration-150">
+                          <td className="px-4 py-3 flex items-center gap-3.5">
+                            <div className="w-8 h-8 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-xs shadow-xs uppercase">
+                              {client.name[0]}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800 block text-[11.5px]">{client.name}</span>
+                              <span className="text-[9.5px] text-slate-400 font-sans block">{client.email}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-mono font-semibold text-slate-500">
+                            {totalPurchases}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                            {formatCurrency(totalSpentSum)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span className="font-mono font-black text-emerald-700 text-[12px]">
+                                {formatCurrency(cBalance)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdjustingClient(client);
+                                setAdjustValue((client.cashbackBalance || 0).toString());
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-pink-50 hover:text-pink-600 text-slate-600 rounded-lg font-bold text-[10px] transition cursor-pointer border-none"
+                            >
+                              Ajustar Saldo
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Manual Adjust Modal */}
+          {adjustingClient && (
+            <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
+              <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden font-sans">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-none">
+                  <h3 className="font-bold text-xs uppercase tracking-wider">Ajustar Saldo de Cashback</h3>
+                  <button 
+                    type="button"
+                    onClick={() => setAdjustingClient(null)}
+                    className="text-slate-400 hover:text-white transition-colors text-xs bg-transparent border-none font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-sm mx-auto shadow-sm mb-2 uppercase">
+                      {adjustingClient.name[0]}
+                    </div>
+                    <span className="block font-black text-slate-800 text-[13px]">{adjustingClient.name}</span>
+                    <span className="block text-[10px] text-slate-400">Saldo Atual: {formatCurrency(adjustingClient.cashbackBalance || 0)}</span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">Novo Saldo (BRL)</label>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={adjustValue}
+                        onChange={(e) => setAdjustValue(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono font-bold text-sm"
+                        placeholder="0.00"
+                        required
+                        autoFocus
+                      />
+                      <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold font-sans">R$</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2.5 pt-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setAdjustingClient(null)}
+                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleSaveCashbackAdjustment}
+                      className="flex-1 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none shadow-md shadow-pink-500/10"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
       {/* Customer profile detail drawer */}
       {selectedClientDetail && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
@@ -924,6 +1232,87 @@ export default function CustomersCRM({
                   <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
                     <Star size={10} fill="currentColor" /> {selectedClientDetail.npsScore || '10'}/10 Score
                   </span>
+                </div>
+              </div>
+
+              {/* Sizing & Measurements Assistant */}
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[10px] text-slate-500 uppercase tracking-widest font-mono">📏 Medidas & Sugestão</span>
+                  {selectedClientDetail.busto || selectedClientDetail.cintura || selectedClientDetail.quadril ? (
+                    <span className="bg-pink-105 text-pink-700 font-bold px-2 py-0.5 rounded-full text-[10px]">
+                      Tamanho Ideal: {(() => {
+                        const busto = selectedClientDetail.busto;
+                        const cintura = selectedClientDetail.cintura;
+                        const quadril = selectedClientDetail.quadril;
+                        const sizes = [];
+                        if (busto) {
+                          if (busto <= 88) sizes.push(1);
+                          else if (busto <= 96) sizes.push(2);
+                          else if (busto <= 104) sizes.push(3);
+                          else sizes.push(4);
+                        }
+                        if (cintura) {
+                          if (cintura <= 68) sizes.push(1);
+                          else if (cintura <= 76) sizes.push(2);
+                          else if (cintura <= 84) sizes.push(3);
+                          else sizes.push(4);
+                        }
+                        if (quadril) {
+                          if (quadril <= 98) sizes.push(1);
+                          else if (quadril <= 106) sizes.push(2);
+                          else if (quadril <= 114) sizes.push(3);
+                          else sizes.push(4);
+                        }
+                        const max = sizes.length > 0 ? Math.max(...sizes) : 2;
+                        return max === 1 ? 'P' : max === 2 ? 'M' : max === 3 ? 'G' : 'GG';
+                      })()}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">Não cadastradas</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Busto</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.busto ? `${selectedClientDetail.busto} cm` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Cintura</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.cintura ? `${selectedClientDetail.cintura} cm` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Quadril</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.quadril ? `${selectedClientDetail.quadril} cm` : '--'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Coxa</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.coxa ? `${selectedClientDetail.coxa} cm` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Altura</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.altura ? `${selectedClientDetail.altura} m` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                    <span className="block text-[8px] text-slate-400 font-bold uppercase">Peso</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {selectedClientDetail.peso ? `${selectedClientDetail.peso} kg` : '--'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1073,6 +1462,77 @@ export default function CustomersCRM({
                   >
                     {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
+                </div>
+              </div>
+
+              {/* Medidas da Cliente (Opcional) */}
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider font-mono">📏 Medidas Corporais (Opcional)</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-slate-450 font-bold uppercase text-[8px] tracking-wide block">Busto (cm)</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 92"
+                      value={newBusto}
+                      onChange={(e) => setNewBusto(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-450 font-bold uppercase text-[8px] tracking-wide block">Cintura (cm)</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 72"
+                      value={newCintura}
+                      onChange={(e) => setNewCintura(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-450 font-bold uppercase text-[8px] tracking-wide block">Quadril (cm)</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 102"
+                      value={newQuadril}
+                      onChange={(e) => setNewQuadril(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-slate-455 font-bold uppercase text-[8px] tracking-wide block">Coxa (cm)</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 58"
+                      value={newCoxa}
+                      onChange={(e) => setNewCoxa(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-455 font-bold uppercase text-[8px] tracking-wide block">Altura (m)</label>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 1.65"
+                      value={newAltura}
+                      onChange={(e) => setNewAltura(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-455 font-bold uppercase text-[8px] tracking-wide block">Peso (kg)</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 62"
+                      value={newPeso}
+                      onChange={(e) => setNewPeso(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-300 focus:outline-none focus:border-pink-500 transition-all font-mono text-center"
+                    />
+                  </div>
                 </div>
               </div>
 

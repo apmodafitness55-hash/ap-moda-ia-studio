@@ -31,12 +31,13 @@ interface PDVTerminalProps {
   products: Product[];
   clients: Client[];
   onAddSale: (sale: Sale) => void;
+  onUpdateClients?: (clients: Client[]) => void;
   onAddClient: (client: Client) => void;
   setActiveTab: (tab: ActiveTab) => void;
   sellers?: string[];
 }
 
-export default function PDVTerminal({ products, clients, onAddSale, onAddClient, setActiveTab, sellers = [] }: PDVTerminalProps) {
+export default function PDVTerminal({ products, clients, onAddSale, onUpdateClients, onAddClient, setActiveTab, sellers = [] }: PDVTerminalProps) {
   const [selectedClientName, setSelectedClientName] = useState<string>('Maria Silva');
   const [selectedChannel, setSelectedChannel] = useState<SalesChannel>('Instagram');
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
@@ -46,6 +47,23 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
   const [isThermalReceiptOpen, setIsThermalReceiptOpen] = useState<boolean>(false);
   const [createdReceipt, setCreatedReceipt] = useState<Sale | null>(null);
+  
+  // Cashback usage states
+  const [useCashback, setUseCashback] = useState<boolean>(false);
+
+  // Find selected client object
+  const selectedClientObject = useMemo(() => {
+    return clients.find(c => c.name.toLowerCase() === selectedClientName.trim().toLowerCase());
+  }, [clients, selectedClientName]);
+
+  const clientCashbackAvailable = useMemo(() => {
+    return selectedClientObject?.cashbackBalance || 0;
+  }, [selectedClientObject]);
+
+  // Reset cashback checkbox when client changes
+  React.useEffect(() => {
+    setUseCashback(false);
+  }, [selectedClientName]);
   
   // Real seller listing
   const salespersonList = useMemo(() => {
@@ -138,8 +156,11 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
     if (hasPixDiscount) {
       sumDiscounts += cartTotal * (pixDiscountPercent / 100);
     }
+    if (useCashback && clientCashbackAvailable > 0) {
+      sumDiscounts += clientCashbackAvailable;
+    }
     return Math.min(sumDiscounts, cartTotal);
-  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount, pixDiscountPercent]);
+  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount, pixDiscountPercent, useCashback, clientCashbackAvailable]);
 
   const finalCartTotal = useMemo(() => {
     return Math.max(0, cartTotal - totalDiscounts);
@@ -334,14 +355,40 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       (c.cpf && c.cpf.replace(/\D/g, '') === finalClientName.replace(/\D/g, ''))
     );
 
+    const cashbackRate = (() => {
+      try {
+        const saved = localStorage.getItem('ap_moda_cashback_rate');
+        return saved ? parseFloat(saved) : 10;
+      } catch (e) {
+        return 10;
+      }
+    })();
+
     if (clientExists) {
       finalClientName = clientExists.name;
       // update stats
       clientExists.totalSpent = (clientExists.totalSpent || 0) + finalCartTotal;
       clientExists.ordersCount = (clientExists.ordersCount || 0) + 1;
+      
+      // deduct used cashback
+      let cashbackDeducted = 0;
+      if (useCashback && clientExists.cashbackBalance && clientExists.cashbackBalance > 0) {
+        // Calculate what was actually paid out from cashback
+        cashbackDeducted = Math.min(clientExists.cashbackBalance, Math.max(0, cartTotal - (totalDiscounts - clientExists.cashbackBalance)));
+        clientExists.cashbackBalance = Math.max(0, clientExists.cashbackBalance - cashbackDeducted);
+      }
+      
+      // add new cashback earned
+      const cashbackEarned = finalCartTotal * (cashbackRate / 100);
+      clientExists.cashbackBalance = Number(((clientExists.cashbackBalance || 0) + cashbackEarned).toFixed(2));
+      
+      if (onUpdateClients) {
+        onUpdateClients([...clients]);
+      }
     } else {
       // Create client inline!
       const isCpfText = /^\d[\d.\-/]+$/.test(finalClientName);
+      const cashbackEarned = finalCartTotal * (cashbackRate / 100);
       const newClient: Client = {
         id: `cli-${Date.now()}`,
         name: isCpfText ? `Cliente CPF ${finalClientName}` : finalClientName,
@@ -352,6 +399,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
         npsScore: npsScore,
         totalSpent: finalCartTotal,
         ordersCount: 1,
+        cashbackBalance: Number(cashbackEarned.toFixed(2)),
         createdAt: new Date().toISOString()
       };
       onAddClient(newClient);
@@ -838,6 +886,28 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
                 <span className="font-bold text-slate-700 tracking-wide">Descontos & Parcerias</span>
                 <span className="text-[10px] text-pink-600 font-bold bg-pink-50 px-1.5 py-0.5 rounded">PDV Inteligente</span>
               </div>
+
+              {/* Cashback Disponível */}
+              {clientCashbackAvailable > 0 && (
+                <div className="bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200/50 rounded-lg p-2.5 flex items-center justify-between gap-2 transition-all">
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] font-bold text-pink-700 block uppercase tracking-wider leading-none">✨ Cashback Clube AP Fitness</span>
+                    <span className="font-sans font-bold text-slate-800 text-[10.5px]">
+                      Disponível: <strong className="font-mono text-pink-600 font-extrabold">{formatCurrency(clientCashbackAvailable)}</strong>
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={useCashback}
+                      onChange={(e) => setUseCashback(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                    <span className="ml-1.5 text-[9px] font-bold text-slate-500 uppercase">{useCashback ? 'Ativo' : 'Usar'}</span>
+                  </label>
+                </div>
+              )}
 
               {/* Percent and Cash discounts fields */}
               <div className="grid grid-cols-2 gap-2 font-sans">

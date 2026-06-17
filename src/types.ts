@@ -83,6 +83,14 @@ export interface Client {
   totalSpent: number;
   ordersCount: number;
   createdAt: string;
+  cashbackBalance?: number; // Accumulated cashback for loyalty club (AP Moda Fitness VIP)
+  // Body measurements for fit/sizing recommendation (AP Moda Fitness)
+  busto?: number;
+  cintura?: number;
+  quadril?: number;
+  coxa?: number;
+  altura?: number;
+  peso?: number;
 }
 
 export interface Transaction {

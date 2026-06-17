@@ -40,6 +40,62 @@ export default function CatalogInventory({
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // Product Sub-Tab Switcher (Inventário, Combos, Markup, Curva ABC)
+  const [internalSubTab, setInternalSubTab] = useState<'inventario' | 'combos' | 'markup' | 'abc'>('inventario');
+
+  // Combos State with LocalStorage Persistence
+  const [combos, setCombos] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_combos');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [
+      {
+        id: 'combo-1',
+        name: 'Combo Legging Glow + Top Cross',
+        price: 199.90,
+        items: [
+          { name: 'Legging Glow Cós Anatômico', quantity: 1, productId: 'prod-1' },
+          { name: 'Top Cross Alta Sustentação', quantity: 1, productId: 'prod-2' }
+        ],
+        salesCount: 18,
+        active: true
+      },
+      {
+        id: 'combo-2',
+        name: 'Conjunto Tri-Blend Sem Costura (3 peças)',
+        price: 289.90,
+        items: [
+          { name: 'Shorts Seamless Sculpt', quantity: 1, productId: 'prod-3' },
+          { name: 'Top Seamless Confort', quantity: 1, productId: 'prod-4' }
+        ],
+        salesCount: 12,
+        active: true
+      }
+    ];
+  });
+
+  // Sync combos
+  React.useEffect(() => {
+    localStorage.setItem('ap_moda_combos', JSON.stringify(combos));
+  }, [combos]);
+
+  // Form states for creating custom combo
+  const [isComboModalOpen, setIsComboModalOpen] = useState(false);
+  const [comboName, setComboName] = useState('');
+  const [comboPrice, setComboPrice] = useState(199.90);
+  const [selectedComboProducts, setSelectedComboProducts] = useState<string[]>([]);
+
+  // Form states for Pricing / Markup tool
+  const [markupCost, setMarkupCost] = useState<number>(50.00);
+  const [markupTax, setMarkupTax] = useState<number>(6.00); // 6% simples nacional
+  const [markupCommission, setMarkupCommission] = useState<number>(5.00); // 5% comissão
+  const [markupGateway, setMarkupGateway] = useState<number>(3.00); // 3%gateway maquininha
+  const [markupDiscount, setMarkupDiscount] = useState<number>(10.00); // 10% desconto programado
+  const [markupDesiredProfit, setMarkupDesiredProfit] = useState<number>(30.00); // 30% lucro líquido desejado
+
   React.useEffect(() => {
     if (activeSubTab === 'cadastro') {
       setIsAddModalOpen(true);
@@ -268,7 +324,53 @@ export default function CatalogInventory({
         </button>
       </div>
 
-      {/* Filter and Category Pills */}
+      {/* Product sub-tabs */}
+      <div className="flex border-b border-slate-100 pb-px gap-6 overflow-x-auto text-xs font-sans">
+        <button
+          onClick={() => setInternalSubTab('inventario')}
+          className={`pb-2.5 font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            internalSubTab === 'inventario'
+              ? 'border-pink-600 text-pink-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          📦 Inventário Geral
+        </button>
+        <button
+          onClick={() => setInternalSubTab('combos')}
+          className={`pb-2.5 font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            internalSubTab === 'combos'
+              ? 'border-pink-600 text-pink-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🏷️ Combos & Looks
+        </button>
+        <button
+          onClick={() => setInternalSubTab('markup')}
+          className={`pb-2.5 font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            internalSubTab === 'markup'
+              ? 'border-pink-600 text-pink-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🧮 Simulador de Markup
+        </button>
+        <button
+          onClick={() => setInternalSubTab('abc')}
+          className={`pb-2.5 font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            internalSubTab === 'abc'
+              ? 'border-pink-600 text-pink-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          📊 Giro & Curva ABC
+        </button>
+      </div>
+
+      {internalSubTab === 'inventario' && (
+        <>
+          {/* Filter and Category Pills */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs space-y-4">
         <div className="relative">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -420,6 +522,427 @@ export default function CatalogInventory({
           </table>
         </div>
       </div>
+        </>
+      )}
+
+      {/* VIEW 2: Combos & Looks */}
+      {internalSubTab === 'combos' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Looks & Kits Promocionais Ativos</h3>
+                <p className="text-slate-400 text-xs mt-0.5">Monte conjuntos combinando em uma única oferta para alavancar o ticket médio</p>
+              </div>
+              <button
+                onClick={() => {
+                  setComboName('');
+                  setComboPrice(199.90);
+                  setSelectedComboProducts([]);
+                  setIsComboModalOpen(true);
+                }}
+                className="bg-pink-600 hover:bg-pink-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} /> Criar Combo
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {combos.map((combo) => {
+                const areProductsAvailable = combo.items.every((item: any) => {
+                  const p = products.find(prod => prod.id === item.productId || prod.name === item.name);
+                  return p ? p.stock >= item.quantity : true;
+                });
+
+                return (
+                  <div key={combo.id} className="border border-slate-150 bg-slate-50/40 rounded-xl p-4 flex flex-col justify-between hover:border-pink-200 hover:shadow-md hover:shadow-pink-500/5 transition-all">
+                    <div>
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-slate-800 text-xs font-sans block">{combo.name}</span>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${areProductsAvailable ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                          {areProductsAvailable ? 'Pronto para Entrega' : 'Estoque Parcial'}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-3 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider block">Itens do Combo</span>
+                        <div className="space-y-1">
+                          {combo.items.map((it: any, i: number) => {
+                            const linkedProd = products.find(p => p.id === it.productId || p.name === it.name);
+                            return (
+                              <div key={i} className="flex justify-between items-center text-[11px] bg-white p-1.5 px-2.5 rounded-lg border border-slate-100">
+                                <span className="text-slate-650 font-medium font-sans">{it.quantity}x {it.name}</span>
+                                <span className="font-mono text-[10px] text-slate-455">
+                                  Estoque: {linkedProd ? `${linkedProd.stock} uni` : 'Não vinculado'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider font-mono font-sans">Preço Combo</span>
+                        <span className="font-mono font-bold text-sm text-pink-600">{formatCurrency(combo.price)}</span>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            let stockMissing = false;
+                            combo.items.forEach((item: any) => {
+                              const p = products.find(prod => prod.id === item.productId || prod.name === item.name);
+                              if (!p || p.stock < item.quantity) {
+                                stockMissing = true;
+                              }
+                            });
+
+                            if (stockMissing) {
+                              const confirmSell = window.confirm('Algumas peças deste combo estão esgotadas ou abaixo do estoque necessário. Deseja efetuar a venda assim mesmo?');
+                              if (!confirmSell) return;
+                            }
+
+                            combo.items.forEach((item: any) => {
+                              const p = products.find(prod => prod.id === item.productId || prod.name === item.name);
+                              if (p) {
+                                onUpdateProduct({
+                                  ...p,
+                                  stock: Math.max(0, p.stock - item.quantity),
+                                  salesCount: p.salesCount + item.quantity
+                                });
+                              }
+                            });
+
+                            setCombos(prev => prev.map(c => c.id === combo.id ? { ...c, salesCount: c.salesCount + 1 } : c));
+                            alert(`Venda registrada! Os estoques das peças individuais do "${combo.name}" foram atualizados com sucesso.`);
+                          }}
+                          className="bg-slate-900 border border-slate-800 hover:bg-slate-950 text-white font-sans font-semibold px-2.5 py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer"
+                        >
+                          Vender Combo
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Tem certeza que deseja remover este combo?')) {
+                              setCombos(prev => prev.filter(c => c.id !== combo.id));
+                            }
+                          }}
+                          className="p-1.5 bg-rose-50 border border-rose-100 hover:bg-rose-100 rounded-lg text-rose-600 transition-all cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: Pricing Simulator / Markup */}
+      {internalSubTab === 'markup' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
+          {/* Calculator controls */}
+          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-2xl p-6 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-slate-800">Formação de Preço de Venda</h3>
+            <p className="text-slate-400 text-xs">Planeje as despesas e taxas para descobrir o preço ideal e fator Markup</p>
+            
+            <div className="space-y-4 text-xs font-sans">
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide">Custo Unitário da Fábrica (R$)</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-bold">R$</span>
+                  <input
+                    type="number"
+                    value={markupCost}
+                    onChange={(e) => setMarkupCost(parseFloat(e.target.value) || 0)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-705 font-mono font-bold focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide font-sans">Impostos s/ Venda (%)</label>
+                <input
+                  type="number"
+                  value={markupTax}
+                  onChange={(e) => setMarkupTax(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-705 font-mono font-medium focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide font-sans">Comissão de Venda (%)</label>
+                <input
+                  type="number"
+                  value={markupCommission}
+                  onChange={(e) => setMarkupCommission(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-705 font-mono font-medium focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide font-sans">Taxa Maquininha / Meio (%)</label>
+                <input
+                  type="number"
+                  value={markupGateway}
+                  onChange={(e) => setMarkupGateway(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-705 font-mono font-medium focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide font-sans">Provisão Desconto Máximo (%)</label>
+                <input
+                  type="number"
+                  value={markupDiscount}
+                  onChange={(e) => setMarkupDiscount(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-705 font-mono font-medium focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="space-y-1 text-pink-650 font-bold bg-pink-50/15 p-3 rounded-xl border border-pink-100/50">
+                <label className="text-pink-650 font-bold block uppercase text-[9px] tracking-wide font-sans">Lucro Líquido Desejado (%)</label>
+                <input
+                  type="number"
+                  value={markupDesiredProfit}
+                  onChange={(e) => setMarkupDesiredProfit(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-white border border-pink-250 rounded-xl text-pink-700 font-mono font-bold focus:outline-none focus:border-pink-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Calculator results */}
+          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 text-white flex flex-col justify-between">
+            <div className="space-y-5">
+              <span className="font-bold text-[10px] tracking-wider uppercase font-mono text-slate-400 block border-b border-slate-800 pb-2">Resultado da Formação</span>
+
+              {(() => {
+                const totalDeductions = markupTax + markupCommission + markupGateway + markupDiscount + markupDesiredProfit;
+                const markupFactor = totalDeductions < 100 ? (100 / (100 - totalDeductions)) : 0;
+                const sellingPrice = markupCost * (markupFactor || 1);
+                
+                const taxValue = sellingPrice * (markupTax / 100);
+                const commissionValue = sellingPrice * (markupCommission / 100);
+                const gatewayValue = sellingPrice * (markupGateway / 100);
+                const discountValue = sellingPrice * (markupDiscount / 100);
+                const rawProfitValue = sellingPrice * (markupDesiredProfit / 100);
+                const breakevenPrice = markupCost + taxValue + commissionValue + gatewayValue + discountValue;
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-slate-950 text-center rounded-xl border border-slate-850">
+                        <span className="block text-[8px] text-slate-455 uppercase font-mono font-bold tracking-wider mb-1">Fator de Markup</span>
+                        <span className="text-xl font-mono font-semibold font-bold text-amber-500">{markupFactor ? `${markupFactor.toFixed(2)}x` : 'N/A'}</span>
+                      </div>
+                      <div className="p-4 bg-slate-950 text-center rounded-xl border border-slate-855">
+                        <span className="block text-[8px] text-slate-455 uppercase font-mono font-bold tracking-wider mb-1">Preço de Custo Total</span>
+                        <span className="text-xl font-mono font-semibold font-bold text-slate-300">{formatCurrency(breakevenPrice)}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center space-y-1">
+                      <span className="block text-[10px] text-pink-400 uppercase font-bold tracking-widest font-mono">Preço Venda Sugerido</span>
+                      <span className="text-3xl font-mono font-extrabold text-white block">{formatCurrency(sellingPrice)}</span>
+                      <span className="text-[10px] text-slate-450 italic font-sans block mt-1">Multiplicador do Custo de Aquisição</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="block text-[9px] text-slate-455 uppercase font-mono font-bold tracking-wider">Abertura do Valor de Venda</span>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-805">
+                          <span className="block text-[8px] text-slate-500 font-bold uppercase font-sans">Custo Fábrica</span>
+                          <span className="font-mono text-slate-300 font-semibold">{formatCurrency(markupCost)}</span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-805">
+                          <span className="block text-[8px] text-slate-500 font-bold uppercase font-sans">Impostos</span>
+                          <span className="font-mono text-rose-400 font-semibold">{formatCurrency(taxValue)}</span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-805">
+                          <span className="block text-[8px] text-slate-500 font-bold uppercase font-sans">Comissões</span>
+                          <span className="font-mono text-rose-400 font-semibold">{formatCurrency(commissionValue)}</span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-805">
+                          <span className="block text-[8px] text-slate-500 font-bold uppercase font-sans">Maquininha</span>
+                          <span className="font-mono text-rose-400 font-semibold">{formatCurrency(gatewayValue)}</span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-805">
+                          <span className="block text-[8px] text-slate-500 font-bold uppercase font-sans">Fração Desc.</span>
+                          <span className="font-mono text-rose-400 font-semibold">{formatCurrency(discountValue)}</span>
+                        </div>
+                        <div className="bg-pink-955/20 p-2.5 rounded-lg border border-pink-900/40 bg-pink-950/30">
+                          <span className="block text-[8px] text-pink-400 font-bold uppercase font-sans">Lucro Líquido</span>
+                          <span className="font-mono text-emerald-400 font-bold">{formatCurrency(rawProfitValue)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-805 text-[10px] text-slate-400 font-sans leading-relaxed">
+              💡 <strong>Dica AP Moda Fitness:</strong> Em produtos de fabricação própria ou importação de alta tecnologia (ex: costura inteligente, tecidos Seamless), margens saudáveis permitem markups acima de <strong className="text-white">2.2x</strong>.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 4: Curva ABC */}
+      {internalSubTab === 'abc' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-xs space-y-5 flex flex-col font-sans">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">📊 Giro de Estoque - Relatório Curva ABC</h3>
+              <p className="text-slate-400 text-xs mt-0.5">Visão analítica de giro das peças trazendo inteligência para reposições rápidas de estoque</p>
+            </div>
+
+            {(() => {
+              const sortedProducts = [...products].sort((a, b) => b.salesCount - a.salesCount);
+              const totalUnitsSold = sortedProducts.reduce((sum, p) => sum + p.salesCount, 0);
+
+              let cumulativeCount = 0;
+              const annotated = sortedProducts.map((p) => {
+                cumulativeCount += p.salesCount;
+                const cumulativePercentage = totalUnitsSold > 0 ? (cumulativeCount / totalUnitsSold) * 100 : 0;
+                
+                let classification: 'A' | 'B' | 'C' = 'C';
+                if (cumulativePercentage <= 70) {
+                  classification = 'A';
+                } else if (cumulativePercentage <= 90) {
+                  classification = 'B';
+                } else {
+                  classification = 'C';
+                }
+
+                if (totalUnitsSold === 0) classification = 'C';
+
+                return {
+                  ...p,
+                  classification,
+                  cumulativePercentage
+                };
+              });
+
+              // Break down stats
+              const aCount = annotated.filter(p => p.classification === 'A').length;
+              const bCount = annotated.filter(p => p.classification === 'B').length;
+              const cCount = annotated.filter(p => p.classification === 'C').length;
+
+              const aSales = annotated.filter(p => p.classification === 'A').reduce((s, p) => s + p.salesCount, 0);
+              const bSales = annotated.filter(p => p.classification === 'B').reduce((s, p) => s + p.salesCount, 0);
+              const cSales = annotated.filter(p => p.classification === 'C').reduce((s, p) => s + p.salesCount, 0);
+
+              return (
+                <div className="space-y-6">
+                  {/* Cards boxes */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+                    <div className="bg-pink-50/40 border border-pink-100 p-4 rounded-xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-800">Classe A (Líquido Total)</span>
+                        <span className="bg-pink-600 text-white font-bold px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-mono">Top Giro</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Produtos de rápido escoamento. Representam cerca de 70% das peças consumidas.</p>
+                      <div className="pt-2 border-t border-pink-100/60 flex justify-between font-mono font-bold text-slate-705">
+                        <span>{aCount} Modelos</span>
+                        <span className="text-pink-650">{aSales} vendas</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50/20 border border-amber-100 p-4 rounded-xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-800">Classe B (Frequente)</span>
+                        <span className="bg-amber-500 text-white font-bold px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-mono">Médio</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Artigos de consumo intermediário. Garantem liquidez constante na vitrine física/online.</p>
+                      <div className="pt-2 border-t border-amber-100/60 flex justify-between font-mono font-bold text-slate-705">
+                        <span>{bCount} Modelos</span>
+                        <span className="text-amber-600">{bSales} vendas</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-800">Classe C (Estoque Parado)</span>
+                        <span className="bg-slate-550 text-white font-bold px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-mono">Frio</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Baixo giro. Ideais para cupons de desconto, liquidações ou combos promocionais.</p>
+                      <div className="pt-2 border-t border-slate-150 flex justify-between font-mono font-bold text-slate-705">
+                        <span>{cCount} Modelos</span>
+                        <span className="text-slate-505">{cSales} vendas</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Table mapping */}
+                  <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
+                    <div className="bg-slate-50 p-3 font-semibold text-slate-650 border-b border-slate-100 font-sans">Análise Individual por Peça</div>
+                    
+                    <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto pr-1">
+                      {annotated.map((p, idx) => (
+                        <div key={p.id} className="p-3 bg-white flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-slate-350 font-bold">#{idx + 1}</span>
+                            <div className="w-8 h-8 rounded bg-slate-50 overflow-hidden flex-shrink-0">
+                              {p.image ? (
+                                <img src={p.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400">🧥</div>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800 text-[11px] block">{p.name}</span>
+                              <span className="font-mono text-[9px] text-slate-400 block mt-0.5">SKU: {p.sku} | Estoque: {p.stock} uni</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-right">
+                            <div className="font-mono">
+                              <span className="font-bold text-slate-700 block text-[11px]">{p.salesCount} vendas</span>
+                              {totalUnitsSold > 0 && (
+                                <span className="text-[9px] text-slate-400 block mt-0.5">Acumulado {p.cumulativePercentage.toFixed(0)}%</span>
+                              )}
+                            </div>
+
+                            <span className={`flex items-center justify-center font-bold text-[10px] font-mono rounded-full w-6 h-6 ${
+                              p.classification === 'A' 
+                                ? 'bg-pink-100 text-pink-700' 
+                                : p.classification === 'B' 
+                                  ? 'bg-amber-100 text-amber-700' 
+                                  : 'bg-slate-100 text-slate-550'
+                            }`}>
+                              {p.classification}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+
+                      {annotated.length === 0 && (
+                        <div className="py-8 text-center text-slate-400 italic">Nenhum produto cadastrado para análise.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Recommendations panel */}
+                  <div className="bg-slate-900 text-slate-105 rounded-2xl p-4.5 space-y-2 text-xs border border-slate-800">
+                    <span className="font-bold font-mono text-[10px] uppercase text-amber-500 block">💡 Diretrizes Estratégicas de Estoque AP Moda Fitness</span>
+                    <ul className="list-disc list-inside space-y-1.5 text-slate-350 leading-relaxed text-[11px]">
+                      <li>Utilize os itens <strong className="text-white">Classe C</strong> como brinde ou desconto na compra de combos inteiros de <strong className="text-white">Classe A</strong>.</li>
+                      <li>Projete o estoque de segurança sempre multiplicando por 1.5 a média de vendas mensal das peças de <strong className="text-pink-400">Classe A</strong>.</li>
+                      <li>Para os produtos <strong className="text-amber-500">Classe B</strong>, planeje ações de impulsionamento e marketing para transformá-los em Classe A.</li>
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Add Product Modal Sheet */}
       {isAddModalOpen && (
@@ -979,6 +1502,122 @@ export default function CatalogInventory({
                   className="flex-1 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center shadow-md shadow-pink-500/10"
                 >
                   Gravar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Custom Combo Modal Popup */}
+      {isComboModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-50 overflow-hidden font-sans">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <span className="font-bold text-xs tracking-wider uppercase">Criador de Combo Promocional</span>
+              <button 
+                onClick={() => setIsComboModalOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!comboName.trim()) {
+                  alert('Insira o nome do combo!');
+                  return;
+                }
+                if (selectedComboProducts.length === 0) {
+                  alert('Selecione pelo menos uma peça de roupa para o combo!');
+                  return;
+                }
+
+                const comboItems = selectedComboProducts.map(prodId => {
+                  const p = products.find(prod => prod.id === prodId);
+                  return {
+                    productId: prodId,
+                    name: p ? p.name : 'Peça desconhecida',
+                    quantity: 1
+                  };
+                });
+
+                const newCombo = {
+                  id: `combo-${Date.now()}`,
+                  name: comboName.trim(),
+                  price: comboPrice,
+                  items: comboItems,
+                  salesCount: 0,
+                  active: true
+                };
+
+                setCombos(prev => [newCombo, ...prev]);
+                setIsComboModalOpen(false);
+                alert('Combo promocional cadastrado com sucesso!');
+              }}
+              className="p-6 space-y-4 text-xs text-slate-700"
+            >
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Nome do Combo</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="Ex: Conjunto Top + Legging"
+                  value={comboName}
+                  onChange={(e) => setComboName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-pink-500 transition-all font-medium"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Preço Promocional Combo (R$)</label>
+                <input 
+                  type="number"
+                  required
+                  value={comboPrice}
+                  onChange={(e) => setComboPrice(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-pink-500 transition-all font-mono font-medium"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-400 font-bold uppercase text-[9px] tracking-wide block">Selecione as Peças que fazem parte:</label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto border border-slate-100 p-2 rounded-lg bg-slate-50/50 pr-1">
+                  {products.map(p => (
+                    <label key={p.id} className="flex items-center gap-2 p-1.5 bg-white border border-slate-100 rounded-md cursor-pointer hover:border-slate-200">
+                      <input 
+                        type="checkbox"
+                        checked={selectedComboProducts.includes(p.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedComboProducts(prev => [...prev, p.id]);
+                          } else {
+                            setSelectedComboProducts(prev => prev.filter(id => id !== p.id));
+                          }
+                        }}
+                        className="rounded border-slate-200 text-pink-600 focus:ring-pink-500"
+                      />
+                      <span className="text-[11px] font-sans font-medium text-slate-700 truncate">{p.name} (SKU: {p.sku})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsComboModalOpen(false)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-650 rounded-lg font-bold transition-all hover:bg-slate-205 cursor-pointer text-center border-none"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 py-2 bg-pink-600 text-white rounded-lg font-bold transition-all hover:bg-pink-700 cursor-pointer text-center shadow-md shadow-pink-500/10 border-none"
+                >
+                  Confirmar Combo
                 </button>
               </div>
             </form>

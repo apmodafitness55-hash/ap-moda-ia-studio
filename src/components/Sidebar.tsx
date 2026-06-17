@@ -18,6 +18,7 @@ import {
   CheckSquare,
   Truck,
   HelpCircle,
+  Briefcase,
   TrendingUp,
   Sliders,
   BadgeAlert,
@@ -54,16 +55,16 @@ interface SidebarProps {
   setDarkMode: (val: boolean) => void;
   currentUser?: any;
   onLogout?: () => void;
-  onSetOrdersLogisticsSubTab?: (subTab: 'pedidos' | 'trocas_crediario' | 'logistica') => void;
-  onSetCustomersCRMSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros') => void;
+  onSetOrdersLogisticsSubTab?: (subTab: 'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional') => void;
+  onSetCustomersCRMSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade') => void;
   onSetSuppliersManagementSubTab?: (subTab: 'fornecedores' | 'compras') => void;
   onSetProductsSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
   onSetLojaOnlineSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine') => void;
   onSetAiAgentsHubSubTab?: (subTab: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador') => void;
   onSetGoogleWorkspaceSubTab?: (subTab: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config') => void;
   onSetSettingsSystemSubTab?: (subTab: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine') => void;
-  activeOrdersLogisticsSubTab?: 'pedidos' | 'trocas_crediario' | 'logistica';
-  activeCustomersCRMSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros';
+  activeOrdersLogisticsSubTab?: 'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional';
+  activeCustomersCRMSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade';
   activeSuppliersManagementSubTab?: 'fornecedores' | 'compras';
   activeProductsSubTab?: 'inventario' | 'restoque' | 'cadastro';
   activeLojaOnlineSubTab?: 'compartilhar' | 'cupons' | 'vitrine';
@@ -141,7 +142,8 @@ export default function Sidebar({
         { id: 'PDV', label: 'PDV / Caixa', icon: DollarSign, keywords: 'pdv caixa registrar venda balcao terminal', tab: ActiveTab.PDV },
         { id: 'VENDAS', label: 'Histórico de Vendas', icon: Percent, keywords: 'vendas cupons descontos historico relatorio', tab: ActiveTab.VENDAS },
         { id: 'PEDIDOS_COMPLETOS', label: 'Pedidos & Sacolas', icon: ShoppingBag, keywords: 'pedidos sacola instagram internet', tab: ActiveTab.PEDIDOS, subTab: 'pedidos' },
-        { id: 'PEDIDOS_DEVOLUCOES', label: 'Devoluções & Crediário', icon: RefreshCcw, keywords: 'devolucoes trocas crediario quitacao', tab: ActiveTab.PEDIDOS, subTab: 'trocas_crediario' }
+        { id: 'PEDIDOS_DEVOLUCOES', label: 'Devoluções & Crediário', icon: RefreshCcw, keywords: 'devolucoes trocas crediario quitacao', tab: ActiveTab.PEDIDOS, subTab: 'trocas_crediario' },
+        { id: 'PEDIDOS_CONDICIONAL', label: 'Mala de Condicional', icon: Briefcase, keywords: 'condicional sacola casa mala prova provador', tab: ActiveTab.PEDIDOS, subTab: 'condicional' }
       ]
     },
     {
@@ -158,7 +160,8 @@ export default function Sidebar({
         { id: 'CLIENTES_DIRETORIO', label: 'Diretório de Clientes', icon: Users, keywords: 'clientes crm fichario contatos', tab: ActiveTab.CLIENTES, subTab: 'diretorio' },
         { id: 'CLIENTES_FUNIL', label: 'Funil de Vendas (NPS)', icon: TrendingUp, keywords: 'funil kanban leads oportunidades pipeline', tab: ActiveTab.CLIENTES, subTab: 'funil' },
         { id: 'CLIENTES_REGUA', label: 'Cobranças & Follow-ups', icon: CheckSquare, keywords: 'recobranca followup pos-vendas', tab: ActiveTab.CLIENTES, subTab: 'followup' },
-        { id: 'CLIENTES_EMBAIXADORES', label: 'Programa de Embaixadores', icon: Award, keywords: 'influenciadores afiliados parceiros marketing', tab: ActiveTab.CLIENTES, subTab: 'parceiros' }
+        { id: 'CLIENTES_EMBAIXADORES', label: 'Programa de Embaixadores', icon: Award, keywords: 'influenciadores afiliados parceiros marketing', tab: ActiveTab.CLIENTES, subTab: 'parceiros' },
+        { id: 'CLIENTES_FIDELIDADE', label: 'Clube Fidelidade & Cashback', icon: Coins, keywords: 'fidelidade cashback pontos clube bonus premium vip', tab: ActiveTab.CLIENTES, subTab: 'fidelidade' }
       ]
     },
     {
@@ -216,6 +219,7 @@ export default function Sidebar({
           subLinks: [
             { label: 'Controle de Pedidos', subTab: 'pedidos' },
             { label: 'Devoluções & Crediário', subTab: 'trocas_crediario' },
+            { label: 'Sacola Condicional', subTab: 'condicional' },
             { label: 'Painel de Logística', subTab: 'logistica' }
           ]
         }
@@ -263,7 +267,8 @@ export default function Sidebar({
             { label: 'Diretório de Clientes', subTab: 'diretorio' },
             { label: 'Funil de Vendas (NPS)', subTab: 'funil' },
             { label: 'Cobranças & Follow-ups', subTab: 'followup' },
-            { label: 'Programa de Embaixadores', subTab: 'parceiros' }
+            { label: 'Programa de Embaixadores', subTab: 'parceiros' },
+            { label: 'Clube Fidelidade & Cashback', subTab: 'fidelidade' }
           ]
         }
       ]
