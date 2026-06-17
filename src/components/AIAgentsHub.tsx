@@ -33,11 +33,20 @@ import ImageUploader from './ImageUploader';
 interface AIAgentsHubProps {
   products: Product[];
   clients: Client[];
+  activeSubTab?: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador';
+  setActiveSubTab?: (subTab: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador') => void;
 }
 
-export default function AIAgentsHub({ products, clients }: AIAgentsHubProps) {
+export default function AIAgentsHub({ 
+  products, 
+  clients,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
+}: AIAgentsHubProps) {
   // Navigation tabs for the AI Agente Hub
-  const [activeSubTab, setActiveSubTab] = useState<'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador'>('descritor');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador'>('descritor');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
 
   // Loading States and Result States
   const [loading, setLoading] = useState(false);

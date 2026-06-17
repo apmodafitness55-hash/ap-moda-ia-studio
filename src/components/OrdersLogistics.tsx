@@ -31,6 +31,8 @@ interface OrdersLogisticsProps {
   onlineOrders: any[];
   setOnlineOrders: React.Dispatch<React.SetStateAction<any[]>>;
   onUpdateOnlineOrderStatus: (orderId: string, status: any) => void;
+  activeSubTab?: 'pedidos' | 'trocas_crediario' | 'logistica';
+  setActiveSubTab?: (subTab: 'pedidos' | 'trocas_crediario' | 'logistica') => void;
 }
 
 interface OnlineOrder {
@@ -76,8 +78,20 @@ interface TrocaItem {
   reason: string;
 }
 
-export default function OrdersLogistics({ products, clients, sales, onAddSale, onlineOrders, setOnlineOrders, onUpdateOnlineOrderStatus }: OrdersLogisticsProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica'>('pedidos');
+export default function OrdersLogistics({ 
+  products, 
+  clients, 
+  sales, 
+  onAddSale, 
+  onlineOrders, 
+  setOnlineOrders, 
+  onUpdateOnlineOrderStatus,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
+}: OrdersLogisticsProps) {
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica'>('pedidos');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
 
   const [reservas, setReservas] = useState<Reserva[]>([
     {

@@ -36,6 +36,8 @@ interface GoogleWorkspaceProps {
   products: Product[];
   sales: Sale[];
   clients: Client[];
+  activeSubTab?: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config';
+  setActiveSubTab?: (subTab: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config') => void;
 }
 
 interface GoogleProfile {
@@ -44,9 +46,17 @@ interface GoogleProfile {
   picture: string;
 }
 
-export default function GoogleWorkspace({ products, sales, clients }: GoogleWorkspaceProps) {
+export default function GoogleWorkspace({ 
+  products, 
+  sales, 
+  clients,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
+}: GoogleWorkspaceProps) {
   // Current active sub-tab: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config'
-  const [activeSubTab, setActiveSubTab] = useState<'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config'>('config');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config'>('config');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
 
   // OAuth Setup States
   const [clientId, setClientId] = useState('');

@@ -24,12 +24,38 @@ interface CatalogInventoryProps {
   onAddProduct: (prod: Product) => void;
   onUpdateProduct: (prod: Product) => void;
   onDeleteProduct: (id: string) => void;
+  activeSubTab?: 'inventario' | 'restoque' | 'cadastro';
+  setActiveSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
 }
 
-export default function CatalogInventory({ products, onAddProduct, onUpdateProduct, onDeleteProduct }: CatalogInventoryProps) {
+export default function CatalogInventory({ 
+  products, 
+  onAddProduct, 
+  onUpdateProduct, 
+  onDeleteProduct,
+  activeSubTab,
+  setActiveSubTab
+}: CatalogInventoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (activeSubTab === 'cadastro') {
+      setIsAddModalOpen(true);
+      if (setActiveSubTab) {
+        // Reset so it doesn't keep opening on back and forth clicks
+        setActiveSubTab('inventario');
+      }
+    } else if (activeSubTab === 'restoque') {
+      // Filter by items that need restock
+      setSearchQuery('');
+      setSelectedCategory('Todos');
+      if (setActiveSubTab) {
+        setActiveSubTab('inventario');
+      }
+    }
+  }, [activeSubTab, setActiveSubTab]);
 
   // Form states for new product
   const [newName, setNewName] = useState('');

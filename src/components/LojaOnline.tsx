@@ -28,6 +28,8 @@ import { Product } from '../types';
 interface LojaOnlineProps {
   products: Product[];
   onEnterCustomerView?: () => void;
+  activeSubTab?: 'compartilhar' | 'cupons' | 'vitrine';
+  setActiveSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine') => void;
 }
 
 export interface Coupon {
@@ -40,8 +42,15 @@ export interface Coupon {
   validUntil: string;
 }
 
-export default function LojaOnline({ products, onEnterCustomerView }: LojaOnlineProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine'>('compartilhar');
+export default function LojaOnline({ 
+  products, 
+  onEnterCustomerView,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
+}: LojaOnlineProps) {
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine'>('compartilhar');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Bio state handlers with localStorage persistence

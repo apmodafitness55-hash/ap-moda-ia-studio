@@ -60,6 +60,8 @@ interface SettingsSystemProps {
   onDeleteMotoboy?: (name: string) => void;
   teamMembers?: any[];
   onUpdateTeamMembers?: (updated: any[]) => void;
+  activeSubTab?: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine';
+  setActiveSubTab?: (subTab: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine') => void;
 }
 
 interface AuditLog {
@@ -88,9 +90,13 @@ export default function SettingsSystem({
   onAddMotoboy,
   onDeleteMotoboy,
   teamMembers = [],
-  onUpdateTeamMembers
+  onUpdateTeamMembers,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
 }: SettingsSystemProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine'>('empresa');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine'>('empresa');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
 
   // Vitrine States
   const [lookbookSlides, setLookbookSlides] = useState<any[]>(() => {

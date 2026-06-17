@@ -52,6 +52,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(ActiveTab.DASHBOARD);
   const [isDriverPortalOpen, setIsDriverPortalOpen] = useState(false);
 
+  // Lifted subtab states for side navigation direct access
+  const [ordersLogisticsSubTab, setOrdersLogisticsSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica'>('pedidos');
+  const [customersCRMSubTab, setCustomersCRMSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
+  const [suppliersManagementSubTab, setSuppliersManagementSubTab] = useState<'fornecedores' | 'compras'>('fornecedores');
+  const [productsSubTab, setProductsSubTab] = useState<'inventario' | 'restoque' | 'cadastro'>('inventario');
+  const [lojaOnlineSubTab, setLojaOnlineSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine'>('compartilhar');
+  const [aiAgentsHubSubTab, setAiAgentsHubSubTab] = useState<'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador'>('descritor');
+  const [googleWorkspaceSubTab, setGoogleWorkspaceSubTab] = useState<'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config'>('config');
+  const [settingsSystemSubTab, setSettingsSystemSubTab] = useState<'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine'>('empresa');
+
   // Controle de Usuários e Acessos (Equipe)
   const [teamMembers, setTeamMembers] = useState<any[]>(() => {
     const saved = localStorage.getItem('ap_moda_team_users');
@@ -729,6 +739,8 @@ export default function App() {
             onlineOrders={onlineOrders}
             setOnlineOrders={setOnlineOrders}
             onUpdateOnlineOrderStatus={handleUpdateOnlineOrderStatus}
+            activeSubTab={ordersLogisticsSubTab}
+            setActiveSubTab={setOrdersLogisticsSubTab}
           />
         );
       case ActiveTab.PRODUTOS:
@@ -738,6 +750,8 @@ export default function App() {
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
             onDeleteProduct={handleDeleteProduct}
+            activeSubTab={productsSubTab}
+            setActiveSubTab={setProductsSubTab}
           />
         );
       case ActiveTab.CLIENTES:
@@ -747,6 +761,8 @@ export default function App() {
             sales={sales}
             onAddClient={handleAddClient}
             currentUser={currentUser}
+            activeSubTab={customersCRMSubTab}
+            setActiveSubTab={setCustomersCRMSubTab}
           />
         );
       case ActiveTab.FINANCEIRO:
@@ -831,6 +847,8 @@ export default function App() {
             products={products}
             onUpdateProduct={handleUpdateProduct}
             onAddTransaction={handleAddTransaction}
+            activeSubTab={suppliersManagementSubTab}
+            setActiveSubTab={setSuppliersManagementSubTab}
           />
         );
       case ActiveTab.METODOS_PAGAMENTO:
@@ -923,6 +941,22 @@ export default function App() {
         setDarkMode={setDarkMode}
         currentUser={currentUser}
         onLogout={() => setCurrentUser(null)}
+        onSetOrdersLogisticsSubTab={setOrdersLogisticsSubTab}
+        onSetCustomersCRMSubTab={setCustomersCRMSubTab}
+        onSetSuppliersManagementSubTab={setSuppliersManagementSubTab}
+        onSetProductsSubTab={setProductsSubTab}
+        onSetLojaOnlineSubTab={setLojaOnlineSubTab}
+        onSetAiAgentsHubSubTab={setAiAgentsHubSubTab}
+        onSetGoogleWorkspaceSubTab={setGoogleWorkspaceSubTab}
+        onSetSettingsSystemSubTab={setSettingsSystemSubTab}
+        activeOrdersLogisticsSubTab={ordersLogisticsSubTab}
+        activeCustomersCRMSubTab={customersCRMSubTab}
+        activeSuppliersManagementSubTab={suppliersManagementSubTab}
+        activeProductsSubTab={productsSubTab}
+        activeLojaOnlineSubTab={lojaOnlineSubTab}
+        activeAiAgentsHubSubTab={aiAgentsHubSubTab}
+        activeGoogleWorkspaceSubTab={googleWorkspaceSubTab}
+        activeSettingsSystemSubTab={settingsSystemSubTab}
       />
 
       {/* Main Screen content block (shifted on desktop) */}

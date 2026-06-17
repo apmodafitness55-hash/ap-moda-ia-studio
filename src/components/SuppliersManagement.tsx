@@ -56,14 +56,20 @@ interface SuppliersManagementProps {
   products: Product[];
   onUpdateProduct: (product: Product) => void;
   onAddTransaction: (transaction: Transaction) => void;
+  activeSubTab?: 'fornecedores' | 'compras';
+  setActiveSubTab?: (subTab: 'fornecedores' | 'compras') => void;
 }
 
 export default function SuppliersManagement({ 
   products, 
   onUpdateProduct, 
-  onAddTransaction 
+  onAddTransaction,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
 }: SuppliersManagementProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'fornecedores' | 'compras'>('fornecedores');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'fornecedores' | 'compras'>('fornecedores');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
   
   // Suppliers state
   const [suppliers, setSuppliers] = useState<Supplier[]>(() => {

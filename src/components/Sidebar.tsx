@@ -54,6 +54,22 @@ interface SidebarProps {
   setDarkMode: (val: boolean) => void;
   currentUser?: any;
   onLogout?: () => void;
+  onSetOrdersLogisticsSubTab?: (subTab: 'pedidos' | 'trocas_crediario' | 'logistica') => void;
+  onSetCustomersCRMSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros') => void;
+  onSetSuppliersManagementSubTab?: (subTab: 'fornecedores' | 'compras') => void;
+  onSetProductsSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
+  onSetLojaOnlineSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine') => void;
+  onSetAiAgentsHubSubTab?: (subTab: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador') => void;
+  onSetGoogleWorkspaceSubTab?: (subTab: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config') => void;
+  onSetSettingsSystemSubTab?: (subTab: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine') => void;
+  activeOrdersLogisticsSubTab?: 'pedidos' | 'trocas_crediario' | 'logistica';
+  activeCustomersCRMSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros';
+  activeSuppliersManagementSubTab?: 'fornecedores' | 'compras';
+  activeProductsSubTab?: 'inventario' | 'restoque' | 'cadastro';
+  activeLojaOnlineSubTab?: 'compartilhar' | 'cupons' | 'vitrine';
+  activeAiAgentsHubSubTab?: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador';
+  activeGoogleWorkspaceSubTab?: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config';
+  activeSettingsSystemSubTab?: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine';
 }
 
 export default function Sidebar({ 
@@ -68,7 +84,23 @@ export default function Sidebar({
   darkMode,
   setDarkMode,
   currentUser,
-  onLogout
+  onLogout,
+  onSetOrdersLogisticsSubTab,
+  onSetCustomersCRMSubTab,
+  onSetSuppliersManagementSubTab,
+  onSetProductsSubTab,
+  onSetLojaOnlineSubTab,
+  onSetAiAgentsHubSubTab,
+  onSetGoogleWorkspaceSubTab,
+  onSetSettingsSystemSubTab,
+  activeOrdersLogisticsSubTab,
+  activeCustomersCRMSubTab,
+  activeSuppliersManagementSubTab,
+  activeProductsSubTab,
+  activeLojaOnlineSubTab,
+  activeAiAgentsHubSubTab,
+  activeGoogleWorkspaceSubTab,
+  activeSettingsSystemSubTab
 }: SidebarProps) {
   const [logoUrl, setLogoUrl] = useState(() => {
     return localStorage.getItem('ap_store_logo') || '';
@@ -95,36 +127,156 @@ export default function Sidebar({
     {
       group: 'PRINCIPAL',
       items: [
-        { id: ActiveTab.DASHBOARD, label: 'Dashboard Geral', icon: LayoutDashboard, keywords: 'painel index geral metricas graficos' },
-        { id: ActiveTab.DASHBOARD_EXECUTIVO, label: 'Painel Executivo / BI', icon: BarChart3, keywords: 'bi executivo dashboard relatorios' },
-        { id: ActiveTab.METAS, label: 'Simulador de Metas', icon: Target, keywords: 'metas simulador simulacao' }
+        { id: 'DASHBOARD', label: 'Dashboard Geral', icon: LayoutDashboard, keywords: 'painel index geral metricas graficos', tab: ActiveTab.DASHBOARD },
+        { id: 'DASHBOARD_EXECUTIVO', label: 'Dashboard Executivo', icon: BarChart3, keywords: 'bi executivo dashboard relatorios', tab: ActiveTab.DASHBOARD_EXECUTIVO },
+        { id: 'METAS', label: 'Simulador de Metas', icon: Target, keywords: 'metas simulador simulacao', tab: ActiveTab.METAS }
       ]
     },
     {
-      group: 'OPERAÇÕES & VENDAS',
+      group: 'VENDAS',
       items: [
-        { id: ActiveTab.PRODUTOS, label: 'Estoque & Catálogo', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, keywords: 'produtos estoque catalogo sku mercadorias' },
-        { id: ActiveTab.FORNECEDORES, label: 'Fornecedores', icon: Building2, keywords: 'fornecedores compras estoque insumos cadastrar' },
-        { id: ActiveTab.VENDAS, label: 'Histórico de Vendas', icon: Percent, keywords: 'vendas cupons descontos historico relatorio' },
-        { id: ActiveTab.PDV, label: 'Ponto de Venda / PDV', icon: DollarSign, keywords: 'pdv caixa registrar venda balcao terminal' },
-        { id: ActiveTab.PEDIDOS, label: 'Pedidos & Logística', icon: Truck, keywords: 'pedidos logistica entregas trocas' }
+        { id: 'PDV', label: 'PDV / Caixa', icon: DollarSign, keywords: 'pdv caixa registrar venda balcao terminal', tab: ActiveTab.PDV },
+        { id: 'VENDAS', label: 'Histórico de Vendas', icon: Percent, keywords: 'vendas cupons descontos historico relatorio', tab: ActiveTab.VENDAS },
+        { 
+          id: 'PEDIDOS', 
+          label: 'Pedidos & Sacolas', 
+          icon: ShoppingBag, 
+          keywords: 'pedidos sacola instagram internet troca devolucoes', 
+          tab: ActiveTab.PEDIDOS, 
+          subLinks: [
+            { label: 'Controle de Pedidos', subTab: 'pedidos' },
+            { label: 'Devoluções & Crediário', subTab: 'trocas_crediario' },
+            { label: 'Painel de Logística', subTab: 'logistica' }
+          ]
+        }
       ]
     },
     {
-      group: 'RELACIONAMENTO & FINANCEIRO',
+      group: 'CATÁLOGO & ESTOQUE',
       items: [
-        { id: ActiveTab.CLIENTES, label: 'Clientes / CRM', icon: Users, keywords: 'clientes crm compradores contatos follow-up' },
-        { id: ActiveTab.FINANCEIRO, label: 'Contas & Caixa', icon: Sliders, keywords: 'financeiro contas caixa transacoes' },
-        { id: ActiveTab.LOJA_ONLINE, label: 'Loja Online / Vitrine', icon: ShoppingBag, keywords: 'site e-commerce vitrine loja online' },
-        { id: ActiveTab.METODOS_PAGAMENTO, label: 'Métodos de Pagamento', icon: CreditCard, keywords: 'pagamento pix especie maquininha cartao vitrine' }
+        { 
+          id: 'ESTOQUE', 
+          label: 'Estoque / Produtos', 
+          icon: Package, 
+          badge: lowStockCount > 0 ? lowStockCount : undefined, 
+          keywords: 'produtos estoque catalogo sku mercadorias pecas', 
+          tab: ActiveTab.PRODUTOS,
+          subLinks: [
+            { label: 'Inventário de Peças', subTab: 'inventario' },
+            { label: 'Entrada & Restoque', subTab: 'restoque' },
+            { label: 'Cadastro de Modelos', subTab: 'cadastro' }
+          ]
+        },
+        { 
+          id: 'FORNECEDORES', 
+          label: 'Fornecedores', 
+          icon: Building2, 
+          keywords: 'fornecedores cadastrar parceiros compras suprimentos', 
+          tab: ActiveTab.FORNECEDORES, 
+          subLinks: [
+            { label: 'Parceiros Fornecedores', subTab: 'fornecedores' },
+            { label: 'Compras & Suprimentos', subTab: 'compras' }
+          ]
+        }
       ]
     },
     {
-      group: 'TECNOLOGIA & IA',
+      group: 'CLIENTES',
       items: [
-        { id: ActiveTab.AGENTES_IA, label: 'Copilotos & Agentes IA', icon: Bot, keywords: 'ia inteligente agentes robo whatsapp bot assistente' },
-        { id: ActiveTab.GOOGLE_WORKSPACE, label: 'Workspace Google', icon: Calendar, keywords: 'google agenda gmail docs spreadsheets drive tasks tarefas planilhas workspace' },
-        { id: ActiveTab.CONFIGURACOES, label: 'Configurações & API', icon: Sliders, keywords: 'configuracoes api integracao webhook token database' }
+        { 
+          id: 'CLIENTES', 
+          label: 'Clientes / CRM VIP', 
+          icon: Users, 
+          keywords: 'clientes crm fichario contatos', 
+          tab: ActiveTab.CLIENTES, 
+          subLinks: [
+            { label: 'Diretório de Clientes', subTab: 'diretorio' },
+            { label: 'Funil de Vendas (NPS)', subTab: 'funil' },
+            { label: 'Cobranças & Follow-ups', subTab: 'followup' },
+            { label: 'Programa de Embaixadores', subTab: 'parceiros' }
+          ]
+        }
+      ]
+    },
+    {
+      group: 'FINANCEIRO',
+      items: [
+        { id: 'FINANCEIRO_CAIXA', label: 'Fluxo de Caixa & Contas', icon: Coins, keywords: 'financeiro accounts contas caixa transacoes', tab: ActiveTab.FINANCEIRO },
+        { id: 'METODOS_PAGAMENTO', label: 'Métodos de Pagamento', icon: CreditCard, keywords: 'pagamento pix specie maquininha cartao vitrine', tab: ActiveTab.METODOS_PAGAMENTO }
+      ]
+    },
+    {
+      group: 'VITRINE ONLINE',
+      items: [
+        { 
+          id: 'LOJA_ONLINE', 
+          label: 'Loja Online (Vitrine)', 
+          icon: ShoppingBag, 
+          keywords: 'site e-commerce vitrine loja online links cupons', 
+          tab: ActiveTab.LOJA_ONLINE,
+          subLinks: [
+            { label: 'Compartilhar Bio & Link', subTab: 'compartilhar' },
+            { label: 'Cupons de Desconto', subTab: 'cupons' },
+            { label: 'Vitrine Mobile & Campanhas', subTab: 'vitrine' }
+          ]
+        }
+      ]
+    },
+    {
+      group: 'INTELIGÊNCIA & IA',
+      items: [
+        { 
+          id: 'AGENTES_IA', 
+          label: 'Copilotos & Agentes IA', 
+          icon: Bot, 
+          keywords: 'ia inteligente agentes robo whatsapp bot assistente', 
+          tab: ActiveTab.AGENTES_IA,
+          subLinks: [
+            { label: 'Redator de Peças VIP', subTab: 'descritor' },
+            { label: 'Estilista Lookbook', subTab: 'estilista' },
+            { label: 'Copiloto WhatsApp', subTab: 'whatsapp' },
+            { label: 'Sentinela de Estoque', subTab: 'sentinela' },
+            { label: 'Planejador de Campanhas', subTab: 'campanha' },
+            { label: 'Combinação de Cores', subTab: 'consultoria' },
+            { label: 'Tradutor de Moda', subTab: 'tradutor' },
+            { label: 'Precificador Inteligente', subTab: 'precificador' }
+          ]
+        },
+        { 
+          id: 'GOOGLE_WORKSPACE', 
+          label: 'Workspace Google', 
+          icon: Calendar, 
+          keywords: 'google agenda gmail docs spreadsheets drive tasks tarefas planilhas workspace', 
+          tab: ActiveTab.GOOGLE_WORKSPACE,
+          subLinks: [
+            { label: 'Status da Conta Google', subTab: 'config' },
+            { label: 'Agenda Google', subTab: 'agenda' },
+            { label: 'Google Tasks (Tarefas)', subTab: 'tarefas' },
+            { label: 'Google Docs', subTab: 'docs' },
+            { label: 'Gmail Inbox', subTab: 'gmail' },
+            { label: 'Google Sheets', subTab: 'sheets' },
+            { label: 'Google Drive', subTab: 'drive' }
+          ]
+        }
+      ]
+    },
+    {
+      group: 'CONFIGURAÇÕES',
+      items: [
+        { 
+          id: 'CONFIGURACOES', 
+          label: 'Configurações do Sistema', 
+          icon: Sliders, 
+          keywords: 'configuracoes api integracao webhook token database', 
+          tab: ActiveTab.CONFIGURACOES,
+          subLinks: [
+            { label: 'Dados da Boutique & Logo', subTab: 'empresa' },
+            { label: 'Bancos de Dados & APIs', subTab: 'integracoes' },
+            { label: 'Hierarquia, Usuários & Auditoria', subTab: 'seguranca' },
+            { label: 'Roadmap de Tecnologia', subTab: 'roadmap' },
+            { label: 'Vitrine & Design Geral', subTab: 'vitrine' }
+          ]
+        }
       ]
     }
   ];
@@ -135,13 +287,13 @@ export default function Sidebar({
     // Limit views for salespeople
     if (currentUser?.role === 'Vendedor') {
       const allowedSellersTabs = [ActiveTab.PDV, ActiveTab.CLIENTES];
-      items = items.filter(it => allowedSellersTabs.includes(it.id));
+      items = items.filter(it => allowedSellersTabs.includes(it.tab));
     }
 
     // Limit views for managers (Gerente) - Oculta as abas críticas de infra e TI
     if (currentUser?.role === 'Gerente') {
       const hiddenGerenteTabs = [ActiveTab.CONFIGURACOES, ActiveTab.GOOGLE_WORKSPACE, ActiveTab.AGENTES_IA];
-      items = items.filter(it => !hiddenGerenteTabs.includes(it.id));
+      items = items.filter(it => !hiddenGerenteTabs.includes(it.tab));
     }
 
     items = items.filter(item => {
@@ -149,17 +301,60 @@ export default function Sidebar({
       const matchLabel = item.label.toLowerCase().includes(term);
       const matchGroup = group.group.toLowerCase().includes(term);
       const matchKeywords = item.keywords ? item.keywords.toLowerCase().includes(term) : false;
-      return matchLabel || matchGroup || matchKeywords;
+      const matchSubLinks = item.subLinks ? item.subLinks.some(sub => sub.label.toLowerCase().includes(term)) : false;
+      return matchLabel || matchGroup || matchKeywords || matchSubLinks;
     });
     return { ...group, items };
   }).filter(group => group.items.length > 0);
 
-  const handleTabClick = (tabId: string) => {
-    if (Object.values(ActiveTab).includes(tabId as ActiveTab)) {
-      setActiveTab(tabId as ActiveTab);
-      if (window.innerWidth < 1024) {
-        setIsOpen(false);
+  const getActiveSubTabForTab = (tab: ActiveTab): string | undefined => {
+    switch (tab) {
+      case ActiveTab.PEDIDOS:
+        return activeOrdersLogisticsSubTab;
+      case ActiveTab.CLIENTES:
+        return activeCustomersCRMSubTab;
+      case ActiveTab.FORNECEDORES:
+        return activeSuppliersManagementSubTab;
+      case ActiveTab.PRODUTOS:
+        return activeProductsSubTab;
+      case ActiveTab.LOJA_ONLINE:
+        return activeLojaOnlineSubTab;
+      case ActiveTab.AGENTES_IA:
+        return activeAiAgentsHubSubTab;
+      case ActiveTab.GOOGLE_WORKSPACE:
+        return activeGoogleWorkspaceSubTab;
+      case ActiveTab.CONFIGURACOES:
+        return activeSettingsSystemSubTab;
+      default:
+        return undefined;
+    }
+  };
+
+  const handleTabClick = (tabId: ActiveTab, subTabId?: string) => {
+    setActiveTab(tabId);
+    
+    if (subTabId) {
+      if (tabId === ActiveTab.PEDIDOS && onSetOrdersLogisticsSubTab) {
+        onSetOrdersLogisticsSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.CLIENTES && onSetCustomersCRMSubTab) {
+        onSetCustomersCRMSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.FORNECEDORES && onSetSuppliersManagementSubTab) {
+        onSetSuppliersManagementSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.PRODUTOS && onSetProductsSubTab) {
+        onSetProductsSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.LOJA_ONLINE && onSetLojaOnlineSubTab) {
+        onSetLojaOnlineSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.AGENTES_IA && onSetAiAgentsHubSubTab) {
+        onSetAiAgentsHubSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.GOOGLE_WORKSPACE && onSetGoogleWorkspaceSubTab) {
+        onSetGoogleWorkspaceSubTab(subTabId as any);
+      } else if (tabId === ActiveTab.CONFIGURACOES && onSetSettingsSystemSubTab) {
+        onSetSettingsSystemSubTab(subTabId as any);
       }
+    }
+    
+    if (window.innerWidth < 1024) {
+      setIsOpen(false);
     }
   };
 
@@ -311,21 +506,40 @@ export default function Sidebar({
               </span>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
-                  const isActive = activeTab === item.id;
+                  const hasSubLinks = item.subLinks && item.subLinks.length > 0;
+                  const activeSubTab = getActiveSubTabForTab(item.tab);
+                  
+                  // Main item is active if it has no sub-links and matches activeTab,
+                  // or if it HAS sub-links and the activeTab matches (highlight parent container subtly first)
+                  const isParentAccent = activeTab === item.tab;
+
+                  // Sub-links to display (filter if search term is active)
+                  const matchingSubLinks = item.subLinks 
+                    ? item.subLinks.filter(sub => sub.label.toLowerCase().includes(searchTerm.toLowerCase()))
+                    : [];
+                  const subLinksToRender = searchTerm ? matchingSubLinks : (item.subLinks || []);
 
                   return (
-                    <li key={item.id}>
+                    <li key={item.id} className="space-y-0.5">
                       <button
-                        id={`sidebar-btn-${item.id}`}
-                        onClick={() => handleTabClick(item.id)}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold font-sans transition-all duration-250 group cursor-pointer border-0 text-left outline-none bg-transparent
-                          ${isActive 
-                            ? 'bg-pink-600 text-white shadow-sm shadow-pink-500/10 font-bold' 
-                            : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                          }`}
+                         id={`sidebar-btn-${item.id}`}
+                         onClick={() => {
+                           if (hasSubLinks && item.subLinks && item.subLinks.length > 0) {
+                             handleTabClick(item.tab, item.subLinks[0].subTab);
+                           } else {
+                             handleTabClick(item.tab);
+                           }
+                         }}
+                         className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold font-sans transition-all duration-250 group cursor-pointer border-0 text-left outline-none bg-transparent
+                           ${isParentAccent 
+                             ? hasSubLinks 
+                               ? 'bg-slate-800/40 text-white font-bold' 
+                               : 'bg-pink-600 text-white shadow-sm shadow-pink-500/10 font-bold' 
+                             : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                           }`}
                       >
                         <div className="flex items-center gap-2.5">
-                          <item.icon size={15} className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-pink-400 transition-colors'} />
+                          <item.icon size={15} className={isParentAccent ? (hasSubLinks ? 'text-pink-500' : 'text-white') : 'text-slate-400 group-hover:text-pink-400 transition-colors'} />
                           <span>{item.label}</span>
                         </div>
 
@@ -335,6 +549,33 @@ export default function Sidebar({
                           </span>
                         )}
                       </button>
+
+                      {/* Expanded & Indented sub-links */}
+                      {hasSubLinks && subLinksToRender.length > 0 && (
+                        <ul className="pl-6 pt-0.5 pb-1 space-y-0.5 border-l border-slate-800/60 ml-4.5">
+                          {subLinksToRender.map((subLink, subIdx) => {
+                            const isSubActive = activeTab === item.tab && activeSubTab === subLink.subTab;
+                            
+                            return (
+                              <li key={subIdx}>
+                                <button
+                                  id={`sidebar-sub-btn-${item.id}-${subIdx}`}
+                                  type="button"
+                                  onClick={() => handleTabClick(item.tab, subLink.subTab)}
+                                  className={`w-full flex items-center gap-2 px-3 py-1 rounded text-[11px] font-medium font-sans border-0 text-left outline-none cursor-pointer transition-all duration-150
+                                    ${isSubActive 
+                                      ? 'text-pink-400 font-bold bg-slate-850/40' 
+                                      : 'text-slate-400 hover:text-white hover:bg-slate-850/10'
+                                    }`}
+                                >
+                                  <span className={`w-1 h-1 rounded-full shrink-0 transition-colors ${isSubActive ? 'bg-pink-500' : 'bg-slate-650'}`} />
+                                  <span className="truncate">{subLink.label}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}

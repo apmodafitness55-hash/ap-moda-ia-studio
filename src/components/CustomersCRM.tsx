@@ -36,6 +36,8 @@ interface CustomersCRMProps {
   onAddClient: (newClient: Client) => void;
   onUpdateClients?: (updatedList: Client[]) => void;
   currentUser?: any;
+  activeSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros';
+  setActiveSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros') => void;
 }
 
 interface Opportunity {
@@ -67,8 +69,17 @@ interface Partner {
   totalGenerated: number;
 }
 
-export default function CustomersCRM({ clients, sales, onAddClient, currentUser }: CustomersCRMProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
+export default function CustomersCRM({ 
+  clients, 
+  sales, 
+  onAddClient, 
+  currentUser,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab
+}: CustomersCRMProps) {
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros'>('diretorio');
+  const activeSubTab = propActiveSubTab || internalActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
