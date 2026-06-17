@@ -16,79 +16,49 @@ interface LoginScreenProps {
 export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLogin }: LoginScreenProps) {
   const [role, setRole] = useState<'Admin' | 'Gerente' | 'Vendedor' | 'Parceiro' | 'Entregador'>('Admin');
   
-  // Toggles between choosing from registered list or typing unique login username
-  const [isManualLogin, setIsManualLogin] = useState(false);
+  // Clean states - always empty on load to guarantee pristine secure state (no password or user prefill)
   const [loginInput, setLoginInput] = useState('');
-  
-  const [selectedUser, setSelectedUser] = useState<string>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Get team members matching current selected role
-  const membersOfSelectedRole = useMemo(() => {
-    return teamMembers.filter(m => m.role === role);
-  }, [role, teamMembers]);
-
-  // Synchronize dynamic lists and states when role changes (no password auto-filling)
+  // Sincroniza e reseta os inputs ao trocar de perfil de acesso (evita carregar logins salvos ou sugeridos)
   React.useEffect(() => {
     setErrorMsg('');
-    setPassword(''); // Force empty password when switching roles/tabs
-    
-    const sameRoleMembers = teamMembers.filter(m => m.role === role);
-    if (sameRoleMembers.length > 0) {
-      setSelectedUser(sameRoleMembers[0].name);
-      setLoginInput(sameRoleMembers[0].login);
-    } else {
-      setSelectedUser('');
-      setLoginInput('');
-    }
-  }, [role, teamMembers]);
+    setLoginInput('');
+    setPassword('');
+  }, [role]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
+    const targetLogin = loginInput.trim().toLowerCase();
     const targetPassword = password.trim();
-    if (!targetPassword) {
-      setErrorMsg('Por favor, digite a sua senha de acesso.');
+
+    if (!targetLogin) {
+      setErrorMsg('Por favor, informe seu login de usuário.');
       return;
     }
 
-    let authenticatedUser: any = null;
-
-    if (isManualLogin) {
-      const inputVal = loginInput.trim().toLowerCase();
-      if (!inputVal) {
-        setErrorMsg('Por favor, digite o login de usuário da sua conta.');
-        return;
-      }
-
-      // Find user matching exact login username and selected role
-      authenticatedUser = teamMembers.find(m => 
-        m.login.toLowerCase() === inputVal && 
-        m.role === role
-      );
-    } else {
-      if (!selectedUser) {
-        setErrorMsg('Por favor, selecione ou cadastre uma conta para efetuar o login.');
-        return;
-      }
-
-      // Dropdown selection - search user by name and role
-      authenticatedUser = teamMembers.find(m => 
-        m.name === selectedUser && 
-        m.role === role
-      );
+    if (!targetPassword) {
+      setErrorMsg('Por favor, informe sua senha secreta de acesso.');
+      return;
     }
 
+    // Busca o profissional correspondente ao login e perfil de forma manual e estrita
+    const authenticatedUser = teamMembers.find(m => 
+      m.login.toLowerCase() === targetLogin && 
+      m.role === role
+    );
+
     if (!authenticatedUser) {
-      setErrorMsg('Acesso recusado! O usuário/login informado não foi encontrado ou não pertence a esta função.');
+      setErrorMsg('Senha ou login de profissional inválido para o nível selecionado.');
       return;
     }
 
     if (authenticatedUser.password !== targetPassword) {
-      setErrorMsg(`Senha incorreta para a conta de "${authenticatedUser.name}". Tente novamente.`);
+      setErrorMsg('Senha ou login de profissional inválido para o nível selecionado.');
       return;
     }
 
@@ -160,74 +130,37 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="p-3 bg-pink-950/25 border border-pink-900/40 rounded-2xl text-[10.5px] leading-relaxed text-center text-pink-300">
             🔒 Nível selecionado: <strong className="text-pink-100 uppercase">{roleLabels[role]}</strong>
-            <div className="mt-1 flex items-center justify-center gap-1.5 text-slate-400">
-              <span>{isManualLogin ? "Login Manual por usuário único" : "Selecione o cadastro para acessar"}</span>
-              <span>•</span>
-              <button 
-                type="button" 
-                onClick={() => setIsManualLogin(!isManualLogin)}
-                className="text-pink-400 underline font-bold hover:text-pink-300 bg-transparent border-0 outline-none cursor-pointer"
-              >
-                {isManualLogin ? "Trocar para Listagem" : "Digitar login de usuário"}
-              </button>
+            <div className="mt-1 flex items-center justify-center gap-1.5 text-slate-400 font-medium text-[9.5px]">
+              Por favor, insira o seu login de acesso e sua senha secreta.
             </div>
           </div>
 
-          {/* User selector or label */}
-          <div className="space-y-1.5 text-xs">
+          {/* User manual login field */}
+          <div className="space-y-1.5 text-xs text-left">
             <label className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">
-              {isManualLogin ? "Login do Usuário" : "Selecione seu Nome"}
+              Login do Profissional
             </label>
-            
-            {isManualLogin ? (
-              <input
-                type="text"
-                required
-                value={loginInput}
-                onChange={(e) => setLoginInput(e.target.value)}
-                placeholder="Exemplo: ana, juliana, bruno..."
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-medium focus:outline-none focus:border-pink-500 transition-all font-mono placeholder:text-slate-700"
-              />
-            ) : (
-              <div>
-                {/* Dropdown with all accounts of this role */}
-                {membersOfSelectedRole.length > 0 ? (
-                  <select
-                    value={selectedUser}
-                    onChange={(e) => {
-                      setSelectedUser(e.target.value);
-                      setPassword(''); // Clear password field on selecting a different user
-                    }}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-bold focus:outline-none focus:border-pink-500 transition-all cursor-pointer"
-                  >
-                    {membersOfSelectedRole.map((val) => (
-                      <option key={val.id} value={val.name}>
-                        {val.name} (login: {val.login})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="p-3 bg-rose-950/20 border border-rose-900/30 rounded-xl text-[10.5px] text-center text-rose-400">
-                    Nenhum profissional cadastrado com o perfil de <strong>{roleLabels[role]}</strong> neste sistema.
-                  </div>
-                )}
-              </div>
-            )}
+            <input
+              type="text"
+              required
+              value={loginInput}
+              onChange={(e) => setLoginInput(e.target.value)}
+              placeholder="Digite seu usuário de login..."
+              className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-white font-medium focus:outline-none focus:border-pink-500 transition-all font-mono placeholder:text-slate-700"
+            />
           </div>
 
           {/* Password field */}
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">Senha de Acesso</label>
-            </div>
+          <div className="space-y-1.5 text-xs text-left">
+            <label className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">Senha de Acesso</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Introduza os dígitos da senha"
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 pr-10 text-white font-medium focus:outline-none focus:border-pink-500 transition-all font-mono"
+                placeholder="Insira a sua senha..."
+                className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 pr-10 text-white font-medium focus:outline-none focus:border-pink-500 transition-all font-mono placeholder:text-slate-700"
               />
               <button
                 type="button"
@@ -248,11 +181,7 @@ export default function LoginScreen({ sellers, motoboys, teamMembers = [], onLog
           {/* Submit */}
           <button
             type="submit"
-            disabled={!isManualLogin && membersOfSelectedRole.length === 0}
-            className={`w-full py-3 text-white font-extrabold rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider cursor-pointer
-              ${(!isManualLogin && membersOfSelectedRole.length === 0)
-                ? 'bg-slate-850 text-slate-500 shadow-none cursor-not-allowed'
-                : 'bg-pink-600 hover:bg-pink-700 shadow-pink-600/10'}`}
+            className="w-full py-3 text-white font-extrabold rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider cursor-pointer bg-pink-600 hover:bg-pink-700 shadow-pink-600/10 border-0"
           >
             Entrar no Painel
           </button>

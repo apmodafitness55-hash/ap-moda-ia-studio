@@ -11,10 +11,12 @@ export enum ActiveTab {
   PDV = 'PDV', // Ponto de Venda / Registro de Vendas
   PEDIDOS = 'PEDIDOS', // Pedidos Online, Logística e Trocas
   PRODUTOS = 'PRODUTOS', // Catálogo, Estoque, Combos e Fornecedores
+  FORNECEDORES = 'FORNECEDORES', // Cadastro de Fornecedores e Vínculo de Compras
   CLIENTES = 'CLIENTES', // CRM, Funil de Vendas e Follow-ups
   FINANCEIRO = 'FINANCEIRO', // Caixa, Contas a Pagar/Receber e Fiscal NFC-e
   LOJA_ONLINE = 'LOJA_ONLINE', // Loja Online, Vitrine e Cupons
   CONFIGURACOES = 'CONFIGURACOES', // Supabase, Webhooks, ImgBB, Auditoria e Usuários
+  METODOS_PAGAMENTO = 'METODOS_PAGAMENTO', // Configuração de Métodos de Pagamento da Vitrine
   AGENTES_IA = 'AGENTES_IA', // Agentes e Assistentes de IA
   METAS = 'METAS', // Simulador de Metas de Vendas
 }

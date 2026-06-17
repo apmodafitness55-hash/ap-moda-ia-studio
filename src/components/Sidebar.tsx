@@ -35,7 +35,9 @@ import {
   FileText,
   MessageCircle,
   Sun,
-  LogOut
+  LogOut,
+  Building2,
+  CreditCard
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -101,7 +103,8 @@ export default function Sidebar({
     {
       group: 'OPERAÇÕES & VENDAS',
       items: [
-        { id: ActiveTab.PRODUTOS, label: 'Estoque & Catálogo', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, keywords: 'produtos estoque catalogo fornecedores sku mercadorias' },
+        { id: ActiveTab.PRODUTOS, label: 'Estoque & Catálogo', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, keywords: 'produtos estoque catalogo sku mercadorias' },
+        { id: ActiveTab.FORNECEDORES, label: 'Fornecedores', icon: Building2, keywords: 'fornecedores compras estoque insumos cadastrar' },
         { id: ActiveTab.VENDAS, label: 'Histórico de Vendas', icon: Percent, keywords: 'vendas cupons descontos historico relatorio' },
         { id: ActiveTab.PDV, label: 'Ponto de Venda / PDV', icon: DollarSign, keywords: 'pdv caixa registrar venda balcao terminal' },
         { id: ActiveTab.PEDIDOS, label: 'Pedidos & Logística', icon: Truck, keywords: 'pedidos logistica entregas trocas' }
@@ -112,7 +115,8 @@ export default function Sidebar({
       items: [
         { id: ActiveTab.CLIENTES, label: 'Clientes / CRM', icon: Users, keywords: 'clientes crm compradores contatos follow-up' },
         { id: ActiveTab.FINANCEIRO, label: 'Contas & Caixa', icon: Sliders, keywords: 'financeiro contas caixa transacoes' },
-        { id: ActiveTab.LOJA_ONLINE, label: 'Loja Online / Vitrine', icon: ShoppingBag, keywords: 'site e-commerce vitrine loja online' }
+        { id: ActiveTab.LOJA_ONLINE, label: 'Loja Online / Vitrine', icon: ShoppingBag, keywords: 'site e-commerce vitrine loja online' },
+        { id: ActiveTab.METODOS_PAGAMENTO, label: 'Métodos de Pagamento', icon: CreditCard, keywords: 'pagamento pix especie maquininha cartao vitrine' }
       ]
     },
     {

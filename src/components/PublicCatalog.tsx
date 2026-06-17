@@ -39,7 +39,8 @@ import {
   Palette,
   Layout,
   Megaphone,
-  Save
+  Save,
+  QrCode
 } from 'lucide-react';
 import { Product, Client } from '../types';
 
@@ -259,6 +260,15 @@ export default function PublicCatalog({
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; fixedDiscount: number } | null>(null);
 
+  // Payment states in storefront Checkout
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao'>('pix');
+  const [isCopiedPix, setIsCopiedPix] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardInstallments, setCardInstallments] = useState('1');
+
   // Lists categories
   const categoriesList = useMemo(() => {
     const list = new Set(products.map(p => p.category).filter(Boolean));
@@ -473,9 +483,63 @@ export default function PublicCatalog({
     return Math.min(cartSubtotal, appliedCoupon.fixedDiscount);
   }, [appliedCoupon, cartSubtotal]);
 
+  // Load payment configs dynamically from local storage
+  const paymentConfig = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_payment_config');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    // Backward compatibility with legacy company info
+    try {
+      const savedLegacy = localStorage.getItem('ap_moda_company_info');
+      if (savedLegacy) {
+        const parsed = JSON.parse(savedLegacy);
+        if (parsed && parsed.pixKey) {
+          return {
+            pixActive: true,
+            pixKey: parsed.pixKey,
+            pixKeyType: 'E-mail',
+            pixDiscountPercent: 5
+          };
+        }
+      }
+    } catch (e) {}
+    return {
+      pixActive: true,
+      pixKey: 'apmodafitness55@gmail.com',
+      pixKeyType: 'E-mail',
+      pixDiscountPercent: 5
+    };
+  }, []);
+
+  const storePixKey = useMemo(() => {
+    return paymentConfig.pixKey || 'apmodafitness55@gmail.com';
+  }, [paymentConfig]);
+
+  const pixDiscountPercent = useMemo(() => {
+    return paymentConfig.pixDiscountPercent ?? 5;
+  }, [paymentConfig]);
+
+  const pixDiscount = useMemo(() => {
+    if (paymentMethod !== 'pix') return 0;
+    // Dynamic discount on the product subtotal (after coupon discount)
+    return Number(((cartSubtotal - cartDiscount) * (pixDiscountPercent / 100)).toFixed(2));
+  }, [paymentMethod, cartSubtotal, cartDiscount, pixDiscountPercent]);
+
   const cartTotal = useMemo(() => {
-    return Math.max(0, cartSubtotal - cartDiscount + deliveryFee);
-  }, [cartSubtotal, cartDiscount, deliveryFee]);
+    return Math.max(0, cartSubtotal - cartDiscount - pixDiscount + deliveryFee);
+  }, [cartSubtotal, cartDiscount, pixDiscount, deliveryFee]);
+
+  const pixPayload = useMemo(() => {
+    const amountStr = cartTotal.toFixed(2).replace('.', '');
+    return `00020101021126580014br.gov.bcb.pix0136${storePixKey}5204000053039865407${amountStr}5802BR5915APModaFitness6009SaoPaulo62070503***6304A1B2`;
+  }, [storePixKey, cartTotal]);
+
+  const handleCopyPix = () => {
+    navigator.clipboard.writeText(pixPayload);
+    setIsCopiedPix(true);
+    setTimeout(() => setIsCopiedPix(false), 2000);
+  };
 
   // Checkout submission
   const handleCheckoutWhatsApp = () => {
@@ -511,6 +575,25 @@ export default function PublicCatalog({
       }
     }
 
+    if (paymentMethod === 'cartao') {
+      if (!cardNumber.trim() || cardNumber.replace(/\s/g, '').length < 16) {
+        alert('Por favor, insira um número de cartão de crédito válido (16 dígitos).');
+        return;
+      }
+      if (!cardHolder.trim()) {
+        alert('Por favor, insira o nome impresso no cartão de crédito.');
+        return;
+      }
+      if (!cardExpiry.trim() || !cardExpiry.includes('/')) {
+        alert('Por favor, insira a data de vencimento do cartão (MM/AA).');
+        return;
+      }
+      if (!cardCvv.trim() || cardCvv.length < 3) {
+        alert('Por favor, insira o código CVV de segurança do cartão.');
+        return;
+      }
+    }
+
     let finalAddress = 'Retirada no Local';
     if (deliveryMethod !== 'retirada') {
       finalAddress = `${addressStreet.trim()}, ${addressNum.trim()}${addressComp.trim() ? ` (${addressComp.trim()})` : ''} - Bairro: ${addressBairro.trim()} - ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}`;
@@ -522,10 +605,15 @@ export default function PublicCatalog({
     ).join('\n\n');
 
     const couponInfo = appliedCoupon ? `\n🏷️ Cupom: *${appliedCoupon.code}* (-R$ ${cartDiscount.toFixed(2)})` : '';
+    const pixDiscountInfo = paymentMethod === 'pix' ? `\n⚡ Desconto Pix (${pixDiscountPercent}% OFF Extra): -R$ ${pixDiscount.toFixed(2)}` : '';
     const deliveryTypeLabel = 
       deliveryMethod === 'motoboy' ? 'Entrega por Motoboy 🏍️' :
       deliveryMethod === 'correios' ? 'Envio via Correios 📦' :
       'Retirar no Local de Venda 🏠';
+
+    const paymentLabelText = paymentMethod === 'pix' 
+      ? `PIX (Pago via QR Code/Chave Pix de destino: ${storePixKey}) ⚡`
+      : `Cartão de Crédito em ${cardInstallments}x de R$ ${(cartTotal / Number(cardInstallments)).toFixed(2)} (Aprovado Instantâneo via Gateway SSL) 💳`;
 
     const orderMsg = 
       `🌸 *PEDIDO CONFIRMADO: AP MODA FITNESS* 🌸\n\n` +
@@ -537,13 +625,15 @@ export default function PublicCatalog({
       `🛍️ *Produtos Solicitados:*\n${itemsListText}\n` +
       `---------------------------------\n` +
       `💵 *Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n` +
-      `${couponInfo}\n` +
+      `${couponInfo}` +
+      `${pixDiscountInfo}\n` +
       `🚚 *Taxa de Entrega:* R$ ${deliveryFee.toFixed(2)}\n` +
       `💰 *Total Geral:* R$ ${cartTotal.toFixed(2)}\n\n` +
+      `💳 *Forma de Pagamento:* ${paymentLabelText}\n` +
       `📍 *Forma de Recebimento:* ${deliveryTypeLabel}\n` +
       (deliveryMethod !== 'retirada' ? `🏠 *Endereço Completo:*\n  Rua: ${addressStreet.trim()}, Nº ${addressNum.trim()}\n  Bairro: ${addressBairro.trim()}\n  Cidade: ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}${addressComp.trim() ? `\n  Compl.: ${addressComp.trim()}` : ''}\n` : '') +
       (clientNotes.trim() ? `📝 *Observações:* ${clientNotes.trim()}\n` : '') +
-      `\nOlá, gostaria de confirmar se estas peças encontram-se disponíveis no estoque para que eu possa efetuar o pagamento. Aguardo retorno! Obrigada! 🌸✨`;
+      `\nOlá! Acabei de finalizar meu pedido e efetuar o pagamento via ${paymentMethod === 'pix' ? 'PIX (comprovante anexo)' : `Cartão de Crédito (${cardInstallments}x)`}. Aguardo a entrega das minhas lidas peças! Gratidão! 🌸✨`;
 
     // Process order back to the administration orders system via hook
     if (onAddOnlineOrder) {
@@ -556,12 +646,12 @@ export default function PublicCatalog({
           quantity: it.quantity,
           price: it.priceAtTime
         })),
-        total: cartTotal - deliveryFee,
+        total: cartTotal,
         status: 'Pendente',
         createdAt: new Date().toISOString(),
         address: finalAddress,
         deliveryFee: deliveryFee,
-        notes: `Cor: ${cart.map(c=>c.color).join(', ')} | CPF: ${clientCpf.trim()} | Obs: ${clientNotes.trim()}`
+        notes: `Cor: ${cart.map(c=>c.color).join(', ')} | CPF: ${clientCpf.trim()} | Pg: ${paymentMethod === 'pix' ? 'PIX' : `Cartão (${cardInstallments}x)`} | Obs: ${clientNotes.trim()}`
       };
       
       onAddOnlineOrder(orderData);
@@ -1280,7 +1370,7 @@ export default function PublicCatalog({
             </div>
             <div className="text-left text-[10px] leading-tight">
               <p className="font-extrabold text-slate-800">Desconto Extra no Pix</p>
-              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Ganhe brindes especiais!</p>
+              <p className="text-slate-450 text-[9px] font-medium mt-0.5">Ganhe {pixDiscountPercent}% OFF Extra!</p>
             </div>
           </div>
         </div>
@@ -2459,6 +2549,193 @@ export default function PublicCatalog({
                       <span className="text-[8px] text-slate-400 block mt-1">Dica: Use cupons como <strong>FITNESS10</strong>, <strong>BEMVINDA50</strong> ou <strong>FRETEGRATIS</strong> para testar.</span>
                     </div>
 
+                    {/* Forma de Pagamento */}
+                    <div className="border-t border-slate-100/60 pt-4 space-y-3">
+                      <p className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500">Forma de Pagamento Desejada</p>
+                      
+                      <div className="grid grid-cols-2 gap-2 font-sans font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('pix')}
+                          className={`py-2 px-2.5 transition rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border
+                            ${paymentMethod === 'pix' 
+                              ? 'bg-pink-50 border-pink-550 text-pink-700 font-extrabold ring-1 ring-pink-550/20' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <QrCode size={13} className={paymentMethod === 'pix' ? "text-pink-600" : "text-slate-400"} />
+                          <div className="text-left leading-normal">
+                            <span className="block font-extrabold text-[10.5px]">Pagar com PIX</span>
+                            <span className="block text-[7.5px] text-emerald-600 font-medium leading-none">Ganhe {pixDiscountPercent}% OFF Extra! ⚡</span>
+                          </div>
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('cartao')}
+                          className={`py-2 px-2.5 transition rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border
+                            ${paymentMethod === 'cartao' 
+                              ? 'bg-pink-50 border-pink-550 text-pink-700 font-extrabold ring-1 ring-pink-550/20' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <CreditCard size={13} className={paymentMethod === 'cartao' ? "text-pink-600" : "text-slate-400"} />
+                          <div className="text-left leading-normal">
+                            <span className="block font-extrabold text-[10.5px]">Cartão de Crédito</span>
+                            <span className="block text-[7.5px] text-slate-500 font-medium leading-none">Até 6x sem juros 💳</span>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Dynamic fields based on payment option selected */}
+                      {paymentMethod === 'pix' && (
+                        <div className="bg-emerald-50/50 rounded-2xl border border-emerald-100/40 p-3.5 space-y-3 font-sans animate-in fade-in duration-200 text-left">
+                          <div className="flex items-start gap-2">
+                            <div className="p-1 bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg shrink-0">
+                              <Sparkles size={11} className="animate-pulse" />
+                            </div>
+                            <div className="text-left leading-tight">
+                              <p className="font-extrabold text-[10px] text-emerald-900 uppercase tracking-wide">Pague Seguro via PIX</p>
+                              <p className="text-[9px] text-emerald-700 font-medium">Sua compra foi bonificada com <strong>{pixDiscountPercent}% de desconto extra</strong>! Pague agora de forma segura:</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2.5 rounded-xl border border-emerald-100 shadow-xs">
+                            {/* Dynamic bank QR Code generator */}
+                            <div className="p-1 border border-slate-100 rounded-lg bg-slate-50 shrink-0">
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(pixPayload)}`}
+                                alt="Pix QR Code"
+                                className="w-20 h-20 object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="flex-1 w-full text-left space-y-2">
+                              <div className="space-y-0.5 leading-snug">
+                                <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest font-mono">Chave Pix de Destino</p>
+                                <p className="text-[9.5px] font-extrabold text-slate-705 font-mono truncate lowercase">{storePixKey}</p>
+                              </div>
+                              
+                              <div className="space-y-1">
+                                <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest block font-mono">PIX Copia e Cola</span>
+                                <div className="flex gap-1">
+                                  <input 
+                                    type="text"
+                                    readOnly
+                                    value={pixPayload}
+                                    className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[9px] font-mono focus:outline-hidden"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleCopyPix}
+                                    className="px-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg text-[9px] transition cursor-pointer shrink-0 py-1"
+                                  >
+                                    {isCopiedPix ? "Copiado!" : "Copiar"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-[9px] font-medium text-emerald-700 text-center leading-normal">
+                            💡 <strong>Como funciona:</strong> Copie o código Pix Copia e Cola acima ou escaneie o QR Code no app do seu banco. Depois, clique abaixo para enviar seu pedido e o comprovante no WhatsApp!
+                          </p>
+                        </div>
+                      )}
+
+                      {paymentMethod === 'cartao' && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-3 font-sans animate-in fade-in duration-200 text-left">
+                          <div className="bg-white p-3 rounded-xl border border-slate-150 shadow-xs space-y-2.5 relative overflow-hidden">
+                            {/* Subtle decorative background micro-chip card overlay */}
+                            <div className="absolute right-3 top-3 text-slate-350 opacity-15">
+                              <CreditCard size={32} />
+                            </div>
+                            
+                            <p className="font-extrabold text-[9px] uppercase text-slate-700 tracking-wider">Dados do Cartão de Crédito</p>
+                            
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-slate-450 font-bold text-[7.5px] uppercase block tracking-wider mb-0.5">Número do Cartão *</label>
+                                <input 
+                                  type="text"
+                                  required
+                                  placeholder="0000 0000 0000 0000"
+                                  value={cardNumber}
+                                  onChange={(e) => {
+                                    const clean = e.target.value.replace(/\D/g, '').slice(0, 16);
+                                    const matched = clean.match(/.{1,4}/g);
+                                    setCardNumber(matched ? matched.join(' ') : clean);
+                                  }}
+                                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-mono tracking-wider focus:outline-hidden"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-slate-450 font-bold text-[7.5px] uppercase block tracking-wider mb-0.5">Nome do Titular *</label>
+                                <input 
+                                  type="text"
+                                  required
+                                  placeholder="NOME IMPRESSO NO CARTÃO"
+                                  value={cardHolder}
+                                  onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+                                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] uppercase placeholder:normal-case font-medium focus:outline-hidden"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-slate-450 font-bold text-[7.5px] uppercase block tracking-wider mb-0.5">Vencimento (MM/AA) *</label>
+                                  <input 
+                                    type="text"
+                                    required
+                                    placeholder="Ex: 12/29"
+                                    value={cardExpiry}
+                                    onChange={(e) => {
+                                      let val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                      if (val.length > 2) {
+                                        val = val.slice(0, 2) + '/' + val.slice(2);
+                                      }
+                                      setCardExpiry(val);
+                                    }}
+                                    className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-mono tracking-widest focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-slate-450 font-bold text-[7.5px] uppercase block tracking-wider mb-0.5">Código CVV *</label>
+                                  <input 
+                                    type="password"
+                                    required
+                                    placeholder="Ex: 123"
+                                    value={cardCvv}
+                                    onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                    className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-mono tracking-widest focus:outline-hidden"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-slate-450 font-bold text-[7.5px] uppercase block tracking-wider mb-0.5">Condições de Parcelamento *</label>
+                                <select
+                                  value={cardInstallments}
+                                  onChange={(e) => setCardInstallments(e.target.value)}
+                                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-bold text-slate-700 focus:outline-hidden cursor-pointer"
+                                >
+                                  <option value="1">1x de R$ {cartTotal.toFixed(2)} (Sem Juros)</option>
+                                  {cartTotal >= 60 && <option value="2">2x de R$ {(cartTotal / 2).toFixed(2)} (Sem Juros)</option>}
+                                  {cartTotal >= 90 && <option value="3">3x de R$ {(cartTotal / 3).toFixed(2)} (Sem Juros)</option>}
+                                  {cartTotal >= 120 && <option value="4">4x de R$ {(cartTotal / 4).toFixed(2)} (Sem Juros)</option>}
+                                  {cartTotal >= 150 && <option value="5">5x de R$ {(cartTotal / 5).toFixed(2)} (Sem Juros)</option>}
+                                  {cartTotal >= 180 && <option value="6">6x de R$ {(cartTotal / 6).toFixed(2)} (Sem Juros)</option>}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-[8.5px] font-medium text-slate-550 text-center leading-normal">
+                            🔒 Seus dados de cartão são protegidos via gateway seguro SSL 256 bits. A transação é faturada imediatamente ao submeter.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </div>
               )}
@@ -2490,6 +2767,13 @@ export default function PublicCatalog({
                     <div className="flex justify-between text-rose-600 font-bold">
                       <span>Desconto Especial ({appliedCoupon.code}):</span>
                       <span>-R$ {cartDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {paymentMethod === 'pix' && pixDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Desconto Extra Pix ({pixDiscountPercent}% OFF):</span>
+                      <span>-R$ {pixDiscount.toFixed(2)}</span>
                     </div>
                   )}
 

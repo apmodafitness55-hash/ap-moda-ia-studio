@@ -66,6 +66,21 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [couponCode, setCouponCode] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
+  const [pixDiscountPercent, setPixDiscountPercent] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ap_pdv_pix_discount');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 0) return parsed;
+      }
+    } catch (e) {}
+    return 5; // default to 5%
+  });
+
+  const handlePixDiscountPercentChange = (newVal: number) => {
+    setPixDiscountPercent(newVal);
+    localStorage.setItem('ap_pdv_pix_discount', newVal.toString());
+  };
 
   // Combination of payment methods states
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([
@@ -121,10 +136,10 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
       sumDiscounts += cartTotal * (appliedCoupon.percent / 100);
     }
     if (hasPixDiscount) {
-      sumDiscounts += cartTotal * 0.05;
+      sumDiscounts += cartTotal * (pixDiscountPercent / 100);
     }
     return Math.min(sumDiscounts, cartTotal);
-  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount]);
+  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount, pixDiscountPercent]);
 
   const finalCartTotal = useMemo(() => {
     return Math.max(0, cartTotal - totalDiscounts);
@@ -899,9 +914,30 @@ export default function PDVTerminal({ products, clients, onAddSale, onAddClient,
 
               {/* Automated Payment-based discounts displays */}
               {hasPixDiscount && (
-                <div className="bg-purple-50 border border-purple-100 rounded-lg p-1.5 text-[9px] text-purple-700 font-semibold flex items-center justify-between">
-                  <span>✨ Desconto Automático PIX Ativo (-5%)</span>
-                  <span>- {formatCurrency(cartTotal * 0.05)}</span>
+                <div className="bg-pink-50 border border-pink-200/60 rounded-xl p-2.5 text-[10px] text-pink-700 font-semibold space-y-1.5 font-sans">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1">✨ Desconto Automático PIX Ativo</span>
+                    <span className="font-mono text-[10.5px] font-extrabold text-pink-800">
+                      -{formatCurrency(cartTotal * (pixDiscountPercent / 100))}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <span className="text-[8.5px] text-pink-600 font-bold uppercase tracking-wide">Desconto Pix (%):</span>
+                    <div className="flex items-center bg-white border border-pink-300 rounded-md shadow-2xs overflow-hidden w-16">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={pixDiscountPercent}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          handlePixDiscountPercentChange(isNaN(val) ? 0 : val);
+                        }}
+                        className="w-full text-center text-xs font-mono font-bold text-pink-700 py-0.5 border-none outline-none focus:ring-0 bg-transparent"
+                      />
+                      <span className="text-[9px] font-bold text-slate-400 pr-1 select-none">%</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

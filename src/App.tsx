@@ -43,6 +43,8 @@ import GoogleWorkspace from './components/GoogleWorkspace';
 import PublicCatalog from './components/PublicCatalog';
 import LoginScreen from './components/LoginScreen';
 import PartnerPortal from './components/PartnerPortal';
+import SuppliersManagement from './components/SuppliersManagement';
+import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
 
 export default function App() {
   // Sidebar toggler
@@ -529,7 +531,21 @@ export default function App() {
   };
 
   const handleClearAllData = () => {
-    if (confirm('ATENÇÃO: Isso irá apagar COMPLETAMENTE os produtos, clientes, vendas, despesas, caixa e pedidos do sistema. Deseja prosseguir com o sistema 100% LIMPO (Produção)?')) {
+    const adminUser = teamMembers.find(m => m.role === 'Admin');
+    const adminPassword = adminUser ? adminUser.password : 'admin123';
+    
+    const enteredPassword = prompt('Confirmação de Segurança: Por favor, insira a sua senha de ADMINISTRADOR para autorizar o reset e a formatação total dos dados fantasmas do Dashboard:');
+    
+    if (enteredPassword === null) {
+      return; // cancellation
+    }
+    
+    if (enteredPassword !== adminPassword) {
+      alert('Acesso negado! A senha de administrador informada está incorreta. O reset foi cancelado por motivos de segurança.');
+      return;
+    }
+
+    if (confirm('ATENÇÃO: Você confirmou a senha com sucesso! Deseja realmente apagar COMPLETAMENTE todos os produtos, clientes, vendas, despesas, caixa e pedidos do sistema para iniciar o trabalho do zero (Produção)?')) {
       localStorage.setItem('ap_moda_products', JSON.stringify([]));
       localStorage.setItem('ap_moda_clients', JSON.stringify([]));
       localStorage.setItem('ap_moda_sales', JSON.stringify([]));
@@ -547,7 +563,7 @@ export default function App() {
       setOnlineOrders([]);
       setSellers([]);
       setMotoboys([]);
-      alert('Tudo limpo! O sistema está zerado e pronto para o seu uso oficial de produção de produtos e vendas.');
+      alert('Tudo limpo! O sistema está zerado e com todos os dados fantasmas excluídos, pronto para o seu uso oficial.');
       setActiveTab(ActiveTab.DASHBOARD);
     }
   };
@@ -808,6 +824,18 @@ export default function App() {
               localStorage.setItem('ap_moda_motoboys', JSON.stringify(updated));
             }}
           />
+        );
+      case ActiveTab.FORNECEDORES:
+        return (
+          <SuppliersManagement 
+            products={products}
+            onUpdateProduct={handleUpdateProduct}
+            onAddTransaction={handleAddTransaction}
+          />
+        );
+      case ActiveTab.METODOS_PAGAMENTO:
+        return (
+          <StorefrontPaymentConfig />
         );
       default:
         return (
