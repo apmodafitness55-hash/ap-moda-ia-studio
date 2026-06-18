@@ -43,6 +43,7 @@ import GoogleWorkspace from './components/GoogleWorkspace';
 import PublicCatalog from './components/PublicCatalog';
 import LoginScreen from './components/LoginScreen';
 import PartnerPortal from './components/PartnerPortal';
+import CustomerPortal from './components/CustomerPortal';
 import SuppliersManagement from './components/SuppliersManagement';
 import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
 
@@ -884,11 +885,14 @@ export default function App() {
         sellers={sellers}
         motoboys={motoboys}
         teamMembers={teamMembers}
+        clients={clients}
         onLogin={(user) => {
           setCurrentUser(user);
           if (user.role === 'Vendedor') {
             setActiveTab(ActiveTab.VENDAS); // or ActiveTab.PDV
             setActiveTab(ActiveTab.PDV);
+          } else if (user.role === 'Cliente') {
+            // Handled automatically by the CustomerPortal intercept below
           } else {
             setActiveTab(ActiveTab.DASHBOARD);
           }
@@ -906,6 +910,19 @@ export default function App() {
         onAddClient={handleAddClient}
         onUpdateClients={(updatedList) => setClients(updatedList)}
         onExitCustomerView={() => setIsCustomerView(false)}
+      />
+    );
+  }
+
+  if (currentUser?.role === 'Cliente') {
+    return (
+      <CustomerPortal 
+        currentUser={currentUser}
+        onLogout={() => setCurrentUser(null)}
+        sales={sales}
+        products={products}
+        clients={clients}
+        onUpdateClients={setClients}
       />
     );
   }
