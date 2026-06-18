@@ -35,6 +35,7 @@ interface OrdersLogisticsProps {
   onUpdateOnlineOrderStatus: (orderId: string, status: any) => void;
   activeSubTab?: 'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional';
   setActiveSubTab?: (subTab: 'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional') => void;
+  sellers?: string[];
 }
 
 interface OnlineOrder {
@@ -89,7 +90,8 @@ export default function OrdersLogistics({
   setOnlineOrders, 
   onUpdateOnlineOrderStatus,
   activeSubTab: propActiveSubTab,
-  setActiveSubTab: propSetActiveSubTab
+  setActiveSubTab: propSetActiveSubTab,
+  sellers = []
 }: OrdersLogisticsProps) {
   const [internalActiveSubTab, setInternalActiveSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional'>('pedidos');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
@@ -1594,11 +1596,16 @@ export default function OrdersLogistics({
                             onChange={(e) => setCondSalesperson(e.target.value)}
                             className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-pink-500"
                           >
-                            <option value="Juliana Cardoso">Juliana Cardoso</option>
-                            <option value="Ana Carolina">Ana Carolina</option>
-                            <option value="Beatriz Rocha">Beatriz Rocha</option>
-                            <option value="Juliana Costa">Juliana Costa</option>
-                            <option value="Bruna Oliveira">Bruna Oliveira</option>
+                            {sellers.length > 0 ? (
+                              sellers.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                              ))
+                            ) : (
+                              <>
+                                <option value="Sem Vendedor">Sem Vendedor</option>
+                                <option value="Juliana Cardoso">Juliana Cardoso</option>
+                              </>
+                            )}
                           </select>
                         </div>
                         <div className="space-y-1">

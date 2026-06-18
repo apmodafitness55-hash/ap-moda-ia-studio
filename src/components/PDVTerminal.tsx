@@ -67,10 +67,23 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
   
   // Real seller listing
   const salespersonList = useMemo(() => {
-    return sellers.length > 0 ? sellers : ['Ana Carolina', 'Beatriz Rocha', 'Juliana Costa', 'Bruna Oliveira'];
+    return sellers;
   }, [sellers]);
 
-  const [selectedSalesperson, setSelectedSalesperson] = useState<string>(salespersonList[0] || 'Ana Carolina');
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string>(() => {
+    return sellers.length > 0 ? sellers[0] : 'Sem Vendedor';
+  });
+
+  // Keep state updated in case sellers update dynamically
+  React.useEffect(() => {
+    if (sellers.length > 0) {
+      if (!sellers.includes(selectedSalesperson)) {
+        setSelectedSalesperson(sellers[0]);
+      }
+    } else {
+      setSelectedSalesperson('Sem Vendedor');
+    }
+  }, [sellers, selectedSalesperson]);
 
   // Quick Add Client states
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);

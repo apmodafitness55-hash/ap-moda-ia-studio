@@ -26,9 +26,10 @@ interface DashboardExecutiveProps {
   sales: Sale[];
   clients: Client[];
   transactions: Transaction[];
+  sellers?: string[];
 }
 
-export default function DashboardExecutive({ products, sales, clients, transactions }: DashboardExecutiveProps) {
+export default function DashboardExecutive({ products, sales, clients, transactions, sellers = [] }: DashboardExecutiveProps) {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -171,7 +172,17 @@ export default function DashboardExecutive({ products, sales, clients, transacti
   }, [sales]);
 
   const salespersonStats = useMemo(() => {
-    const list = ["Ana Carolina", "Beatriz Rocha", "Juliana Costa", "Bruna Oliveira"];
+    // Collect active sellers from the props
+    const activeSellersSet = new Set<string>(sellers);
+    
+    // Also include any salesperson name that is in the actual completed sales list
+    sales.forEach(s => {
+      if (s.status === 'Concluída' && s.salesperson) {
+        activeSellersSet.add(s.salesperson);
+      }
+    });
+
+    const list = Array.from(activeSellersSet);
     const stats = list.map(name => ({
       name,
       revenue: 0,
@@ -197,7 +208,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
     });
 
     return stats.sort((a, b) => b.revenue - a.revenue);
-  }, [sales]);
+  }, [sales, sellers]);
 
   const monthlyRevenuePct = useMemo(() => {
     const target = 30000;

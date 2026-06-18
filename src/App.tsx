@@ -555,7 +555,11 @@ export default function App() {
       return;
     }
 
-    if (confirm('ATENÇÃO: Você confirmou a senha com sucesso! Deseja realmente apagar COMPLETAMENTE todos os produtos, clientes, vendas, despesas, caixa e pedidos do sistema para iniciar o trabalho do zero (Produção)?')) {
+    if (confirm('ATENÇÃO: Você confirmou a senha com sucesso! Deseja realmente apagar COMPLETAMENTE todos os produtos, clientes, vendas, despesas, caixa, equipe (mantendo apenas administradores) e pedidos do sistema para iniciar o trabalho do zero (Produção)?')) {
+      const cleanTeam = teamMembers.filter(m => m.role === 'Admin');
+      setTeamMembers(cleanTeam);
+      localStorage.setItem('ap_moda_team_users', JSON.stringify(cleanTeam));
+
       localStorage.setItem('ap_moda_products', JSON.stringify([]));
       localStorage.setItem('ap_moda_clients', JSON.stringify([]));
       localStorage.setItem('ap_moda_sales', JSON.stringify([]));
@@ -705,6 +709,7 @@ export default function App() {
             sales={sales}
             clients={clients}
             transactions={transactions}
+            sellers={sellers}
           />
         );
       case ActiveTab.VENDAS:
@@ -742,6 +747,7 @@ export default function App() {
             onUpdateOnlineOrderStatus={handleUpdateOnlineOrderStatus}
             activeSubTab={ordersLogisticsSubTab}
             setActiveSubTab={setOrdersLogisticsSubTab}
+            sellers={sellers}
           />
         );
       case ActiveTab.PRODUTOS:
