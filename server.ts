@@ -64,13 +64,57 @@ async function fetchImageAsBase64(url: string): Promise<{ mimeType: string; data
   }
 }
 
+// Helper to clean up cryptically raw Gemini JSON errors
+function cleanGeminiError(error: any): string {
+  const errStr = String(error?.message || error || '');
+  try {
+    if (errStr.trim().startsWith('{')) {
+      const parsed = JSON.parse(errStr);
+      if (parsed.error && parsed.error.message) {
+        return parsed.error.message;
+      }
+    }
+  } catch (ex) {}
+
+  if (errStr.includes('503') || errStr.toLowerCase().includes('unavailable') || errStr.toLowerCase().includes('high demand') || errStr.toLowerCase().includes('overloaded')) {
+    return 'O servidor do Gemini está com alta demanda temporária neste momento. Por favor, aguarde alguns instantes e clique no botão novamente.';
+  }
+  return errStr;
+}
+
+// Wrapper to perform Gemini model generation with a robust retry mechanism (backoff)
+async function generateContentWithRetry(params: { model: string; contents: any }): Promise<any> {
+  const ai = getGeminiClient();
+  const maxRetries = 3;
+  let delay = 600;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent(params);
+      return response;
+    } catch (error: any) {
+      const errStr = String(error?.message || error || '');
+      const is503 = errStr.includes('503') || errStr.toLowerCase().includes('unavailable') || errStr.toLowerCase().includes('high demand') || errStr.toLowerCase().includes('resource_exhausted') || errStr.toLowerCase().includes('overloaded');
+      
+      console.warn(`[Gemini Retry Alert] Tentativa ${attempt} de geração falhou. Erro:`, errStr);
+      
+      if (is503 && attempt < maxRetries) {
+        console.log(`[Gemini Retry System] Aguardando ${delay}ms devido a alta demanda (503), e tentando novamente...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 // API Routes
 
 // 1. Product Description Generator Agent
 app.post('/api/gemini/generate-description', async (req, res) => {
   try {
     const { image, name, materials, style, extraInstructions } = req.body;
-    const ai = getGeminiClient();
 
     const parts: any[] = [];
 
@@ -108,7 +152,7 @@ Por favor, gere e retorne APENAS a descrição estruturada com formatação Mark
 
     parts.push({ text: textPrompt });
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: { parts }
     });
@@ -116,7 +160,7 @@ Por favor, gere e retorne APENAS a descrição estruturada com formatação Mark
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini generate-description error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -124,7 +168,6 @@ Por favor, gere e retorne APENAS a descrição estruturada com formatação Mark
 app.post('/api/gemini/trends-lookbook', async (req, res) => {
   try {
     const { products, styleTone } = req.body;
-    const ai = getGeminiClient();
 
     const productNames = (products || []).map((p: any) => `${p.name} (SKU: ${p.sku})`).join(', ');
 
@@ -143,7 +186,7 @@ Para cada Combo/Look, responda em formato Markdown contendo:
 
 Retorne os dois looks divididos de forma elegante com divisórias Markdown.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -151,7 +194,7 @@ Retorne os dois looks divididos de forma elegante com divisórias Markdown.`;
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini lookbook error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -159,7 +202,6 @@ Retorne os dois looks divididos de forma elegante com divisórias Markdown.`;
 app.post('/api/gemini/whatsapp-script', async (req, res) => {
   try {
     const { scenario, clientName, productDetails } = req.body;
-    const ai = getGeminiClient();
 
     const prompt = `Você é a Gerente de Relacionamento da "AP Moda Fitness". Escreva um script de atendimento via WhatsApp altamente humanizado, educado, e focado em conversão.
 
@@ -177,7 +219,7 @@ Retorne duas versões do script:
 - **Versão 1 (Curta e Prática)**: Perfeita para contatos rápidos e diretos.
 - **Versão 2 (Boutique Personalizada)**: Um atendimento mais detalhado, sugerindo novidades complementares ou cuidado VIP.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -185,7 +227,7 @@ Retorne duas versões do script:
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini whatsapp-script error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -193,7 +235,6 @@ Retorne duas versões do script:
 app.post('/api/gemini/stock-sentinel', async (req, res) => {
   try {
     const { productsList } = req.body;
-    const ai = getGeminiClient();
 
     // Serialize catalog parameters to keep payload light but smart
     const serializedProducts = (productsList || []).map((p: any) => ({
@@ -217,7 +258,7 @@ Elabore um Relatório Executivo Analítico rápido em Markdown. Sua análise dev
 
 Por favor, seja direto, profissional, analítico e use tabelas Markdown para facilitar a leitura.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -225,7 +266,7 @@ Por favor, seja direto, profissional, analítico e use tabelas Markdown para fac
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini stock-sentinel error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -233,7 +274,6 @@ Por favor, seja direto, profissional, analítico e use tabelas Markdown para fac
 app.post('/api/gemini/marketing-campaign', async (req, res) => {
   try {
     const { theme, discount, focusCategory, targetAudience } = req.body;
-    const ai = getGeminiClient();
 
     const prompt = `Você é o "Diretor de Marketing e Branding IA" no ecossistema "AP Moda Fitness", com foco em vestuário esportivo feminino de luxo.
 Gere um planejamento expresso de campanha promocional de alta conversão.
@@ -251,7 +291,7 @@ REQUISITOS DO PLANEJAMENTO (Responda em formato Markdown elegante):
 4. **Cupom de Desconto Exclusivo**: Gere uma palavra-chave/código promocional criativo e estimule o senso de urgência.
 5. **Sugestão de Reels / Vídeo Curto**: Descreva o roteiro visual de um vídeo rápido de 15 segundos para stories ou feed que gere engajamento instantâneo.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -259,7 +299,7 @@ REQUISITOS DO PLANEJAMENTO (Responda em formato Markdown elegante):
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini marketing-campaign error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -267,7 +307,6 @@ REQUISITOS DO PLANEJAMENTO (Responda em formato Markdown elegante):
 app.post('/api/gemini/color-consultant', async (req, res) => {
   try {
     const { primaryColor, fabricTexture, usageVibe } = req.body;
-    const ai = getGeminiClient();
 
     const prompt = `Você é a "Personal Stylist e Specialist em Colorimetria Têxtil IA" da boutique "AP Moda Fitness".
 Analise as propriedades físicas e estéticas da cor e textura inseridas e construa um Guia de Coordenação Cromática.
@@ -284,7 +323,7 @@ RETORNE (Em formato Markdown com formatação impecável):
 4. **Paleta de Cores Recomendada (Visão Pantone Express)**: Descreva de forma textual com blocos de emojis pretos/coloridos simulando a escala de cores ideal para a AP Moda.
 5. **Aconselhamento de Modelagem**: Dicas para valorizar a silhueta de quem veste essa textura específica.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -292,7 +331,7 @@ RETORNE (Em formato Markdown com formatação impecável):
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini color-consultant error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -300,7 +339,6 @@ RETORNE (Em formato Markdown com formatação impecável):
 app.post('/api/gemini/fashion-translator', async (req, res) => {
   try {
     const { textToTranslate, targetLanguage } = req.body;
-    const ai = getGeminiClient();
 
     const prompt = `Você é o "Tradutor Sênior Especializado em Moda Ativa Premium, E-commerce de Luxo e Tecnologia Têxtil".
 Sua função é traduzir a descrição de produto fornecida para o idioma selecionado, mantendo toda a sofisticação, precisão técnica têxtil e sensualidade/empoderamento próprios da marca "AP Moda Fitness".
@@ -314,7 +352,7 @@ INSTRUÇÕES DE TRADUÇÃO:
 - Garanta que a descrição permaneça fluida, vendedora e atraente para clientes de e-commerce internacional de alto padrão.
 - Retorne a tradução estruturada e com espaçamentos limpos em Markdown. Do lado do título traduzido de cada seção, coloque uma pequena flag emoji representativa do idioma.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -322,7 +360,7 @@ INSTRUÇÕES DE TRADUÇÃO:
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini fashion-translator error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
@@ -330,7 +368,6 @@ INSTRUÇÕES DE TRADUÇÃO:
 app.post('/api/gemini/analyze-pricing', async (req, res) => {
   try {
     const { productName, category, costFabric, costLabor, costAccessories, costBranding, fixedOverhead, profitStrategy } = req.body;
-    const ai = getGeminiClient();
 
     const sumCosts = Number(costFabric || 0) + Number(costLabor || 0) + Number(costAccessories || 0) + Number(costBranding || 0);
 
@@ -371,7 +408,7 @@ Sua resposta DEVE ser um relatório financeiro de consultoria profissional e mod
 
 Use formatação Markdown linda, profissional, tabelas limpas e com formatação de moeda em Real (R$). Seja preciso e direto.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
     });
@@ -379,7 +416,7 @@ Use formatação Markdown linda, profissional, tabelas limpas e com formatação
     res.json({ success: true, text: response.text });
   } catch (error: any) {
     console.error('Gemini analyze-pricing error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
   }
 });
 
