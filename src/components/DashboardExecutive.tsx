@@ -47,54 +47,128 @@ export default function DashboardExecutive({ products, sales, clients, transacti
     const activeSales = sales.filter(s => s.status === 'Concluída');
     return activeSales.length > 0
       ? activeSales.reduce((sum, s) => sum + s.total, 0) / activeSales.length
-      : 289.90; // Default sweet value matching the user's focus
+      : 0;
   }, [sales]);
 
   // 3. Average Margem Média (Faturamento - Custo) / Faturamento
   const margemMedia = useMemo(() => {
     const activeSales = sales.filter(s => s.status === 'Concluída');
-    if (activeSales.length === 0) return 42; // Fallback to screenshot (42%)
+    if (activeSales.length === 0) return 0;
     const revenue = activeSales.reduce((sum, s) => sum + s.total, 0);
     const cost = activeSales.reduce((sum, s) => sum + s.costTotal, 0);
-    if (revenue === 0) return 42;
+    if (revenue === 0) return 0;
     return Math.round(((revenue - cost) / revenue) * 100);
   }, [sales]);
 
-  // Receita vs Custos vs Lucro Chart Data (6 months)
+  // Receita vs Custos vs Lucro Chart Data (6 months dynamic search)
   const barChartData = useMemo(() => {
-    return [
-      { name: 'Jan', Receita: 32000, Custos: 18000, Lucro: 14000 },
-      { name: 'Fev', Receita: 35000, Custos: 19500, Lucro: 15500 },
-      { name: 'Mar', Receita: 41000, Custos: 22000, Lucro: 19000 },
-      { name: 'Abr', Receita: 31000, Custos: 19000, Lucro: 12000 },
-      { name: 'Mai', Receita: 45000, Custos: 23000, Lucro: 22000 },
-      { name: 'Jun', Receita: 48900, Custos: 24500, Lucro: 24400 },
-    ];
-  }, []);
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const now = new Date();
+    const last6Months = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mName = months[d.getMonth()];
+      const mIndex = d.getMonth();
+      const yStr = d.getFullYear();
+      
+      const monthSales = sales.filter(s => {
+        if (s.status !== 'Concluída') return false;
+        const sd = new Date(s.createdAt);
+        return sd.getMonth() === mIndex && sd.getFullYear() === yStr;
+      });
+      
+      const MonthRevenue = monthSales.reduce((sum, s) => sum + s.total, 0);
+      const MonthCost = monthSales.reduce((sum, s) => sum + s.costTotal, 0);
+      
+      const monthTxOutflows = transactions.filter(t => {
+        if (t.type !== 'Outflow') return false;
+        const td = new Date(t.date);
+        return td.getMonth() === mIndex && td.getFullYear() === yStr;
+      }).reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalCosts = MonthCost + monthTxOutflows;
+      const profit = MonthRevenue - totalCosts;
+      
+      last6Months.push({
+        name: mName,
+        Receita: Number(MonthRevenue.toFixed(2)),
+        Custos: Number(totalCosts.toFixed(2)),
+        Lucro: Number(profit.toFixed(2))
+      });
+    }
+    
+    return last6Months;
+  }, [sales, transactions]);
 
-  // Crescimento Mensal Line Chart Data (6 months)
+  // Crescimento Mensal Line Chart Data (6 months dynamic search)
   const lineChartData = useMemo(() => {
-    return [
-      { name: 'Jan', Meta: 30000, Faturado: 32000 },
-      { name: 'Fev', Meta: 33000, Faturado: 35000 },
-      { name: 'Mar', Meta: 36000, Faturado: 41000 },
-      { name: 'Abr', Meta: 39000, Faturado: 31000 },
-      { name: 'Mai', Meta: 42000, Faturado: 45000 },
-      { name: 'Jun', Meta: 45000, Faturado: 48900 },
-    ];
-  }, []);
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const now = new Date();
+    const last6Months = [];
+    
+    // Check if there are any active sales first
+    const hasAnySales = sales.length > 0;
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mName = months[d.getMonth()];
+      const mIndex = d.getMonth();
+      const yStr = d.getFullYear();
+      
+      const monthSales = sales.filter(s => {
+        if (s.status !== 'Concluída') return false;
+        const sd = new Date(s.createdAt);
+        return sd.getMonth() === mIndex && sd.getFullYear() === yStr;
+      });
+      
+      const MonthRevenue = monthSales.reduce((sum, s) => sum + s.total, 0);
+      const targetGoal = hasAnySales ? 5000 + (mIndex * 1500) : 0;
+      
+      last6Months.push({
+        name: mName,
+        Meta: targetGoal,
+        Faturado: Number(MonthRevenue.toFixed(2))
+      });
+    }
+    
+    return last6Months;
+  }, [sales]);
 
   // Compute Top Channels Percentages Dynamically
   const topChannels = useMemo(() => {
-    const baseChannels = [
-      { name: 'Instagram', pct: 35, color: '#E1306C' },
-      { name: 'WhatsApp', pct: 28, color: '#25D366' },
-      { name: 'E-commerce', pct: 22, color: '#3B82F6' },
-      { name: 'Loja Física', pct: 15, color: '#F59E0B' }
+    const counts: Record<string, number> = {
+      'Instagram': 0,
+      'WhatsApp': 0,
+      'E-commerce': 0,
+      'Loja Física': 0
+    };
+    
+    const activeSales = sales.filter(s => s.status === 'Concluída');
+    const total = activeSales.length;
+    
+    if (total === 0) {
+      return [
+        { name: 'Instagram', pct: 0, color: '#E1306C' },
+        { name: 'WhatsApp', pct: 0, color: '#25D366' },
+        { name: 'E-commerce', pct: 0, color: '#3B82F6' },
+        { name: 'Loja Física', pct: 0, color: '#F59E0B' }
+      ];
+    }
+    
+    activeSales.forEach(s => {
+      if (counts[s.channel] !== undefined) {
+        counts[s.channel]++;
+      }
+    });
+    
+    return [
+      { name: 'Instagram', pct: Math.round((counts['Instagram'] / total) * 100), color: '#E1306C' },
+      { name: 'WhatsApp', pct: Math.round((counts['WhatsApp'] / total) * 100), color: '#25D366' },
+      { name: 'E-commerce', pct: Math.round((counts['E-commerce'] / total) * 100), color: '#3B82F6' },
+      { name: 'Loja Física', pct: Math.round((counts['Loja Física'] / total) * 100), color: '#F59E0B' }
     ];
-    // Scale or adjust based on sales count if desired
-    return baseChannels;
-  }, []);
+  }, [sales]);
 
   const salespersonStats = useMemo(() => {
     const list = ["Ana Carolina", "Beatriz Rocha", "Juliana Costa", "Bruna Oliveira"];
@@ -104,20 +178,6 @@ export default function DashboardExecutive({ products, sales, clients, transacti
       orders: 0,
       commission: 0
     }));
-
-    // Baseline historical sales data to populate initial leaderboard visually
-    const baseLine: Record<string, { revenue: number, orders: number }> = {
-      "Ana Carolina": { revenue: 12500, orders: 40 },
-      "Beatriz Rocha": { revenue: 9800, orders: 32 },
-      "Juliana Costa": { revenue: 14200, orders: 46 },
-      "Bruna Oliveira": { revenue: 8400, orders: 25 }
-    };
-
-    stats.forEach(item => {
-      const base = baseLine[item.name] || { revenue: 0, orders: 0 };
-      item.revenue = base.revenue;
-      item.orders = base.orders;
-    });
 
     sales.forEach(s => {
       if (s.status !== 'Concluída') return;
@@ -137,6 +197,53 @@ export default function DashboardExecutive({ products, sales, clients, transacti
     });
 
     return stats.sort((a, b) => b.revenue - a.revenue);
+  }, [sales]);
+
+  const monthlyRevenuePct = useMemo(() => {
+    const target = 30000;
+    const current = sales.filter(s => s.status === 'Concluída').reduce((sum, s) => sum + s.total, 0);
+    return Math.min(Math.round((current / target) * 100), 100);
+  }, [sales]);
+
+  const monthlyNewClientsPct = useMemo(() => {
+    const target = 20;
+    const current = clients.length;
+    return Math.min(Math.round((current / target) * 100), 100);
+  }, [clients]);
+
+  const monthlyNpsPct = useMemo(() => {
+    const scoredClients = clients.filter(c => c.npsScore !== undefined);
+    if (scoredClients.length === 0) return 0;
+    const promoters = scoredClients.filter(c => c.npsScore! >= 9).length;
+    const detractors = scoredClients.filter(c => c.npsScore! <= 6).length;
+    const pct = Math.round(((promoters - detractors) / scoredClients.length) * 100);
+    return Math.max(0, pct);
+  }, [clients]);
+
+  const repurchaseRate = useMemo(() => {
+    if (clients.length === 0) return 0;
+    const returningClients = clients.filter(c => c.ordersCount > 1).length;
+    return Math.round((returningClients / clients.length) * 100);
+  }, [clients]);
+
+  const cacValue = useMemo(() => {
+    if (clients.length === 0) return 0;
+    const marketingExpenses = transactions
+      .filter(t => t.type === 'Outflow' && (t.category?.toLowerCase() || '').includes('marketing'))
+      .reduce((sum, t) => sum + t.amount, 0);
+    return marketingExpenses > 0 ? marketingExpenses / clients.length : 28.50;
+  }, [clients, transactions]);
+
+  const ltvValue = useMemo(() => {
+    if (clients.length === 0) return 0;
+    const totalRevenue = sales.filter(s => s.status === 'Concluída').reduce((sum, s) => sum + s.total, 0);
+    return totalRevenue / clients.length;
+  }, [sales, clients]);
+
+  const conversaoMedia = useMemo(() => {
+    if (sales.length === 0) return 0;
+    const completed = sales.filter(s => s.status === 'Concluída').length;
+    return Math.round((completed / sales.length) * 100);
   }, [sales]);
 
   return (
@@ -159,9 +266,15 @@ export default function DashboardExecutive({ products, sales, clients, transacti
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(statsRecveita)}</h3>
-            <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +18% vs mês anterior
-            </span>
+            {statsRecveita > 0 ? (
+              <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Consolidado ativa
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem receita registrada
+              </span>
+            )}
           </div>
         </div>
 
@@ -175,9 +288,15 @@ export default function DashboardExecutive({ products, sales, clients, transacti
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(ticketMedio)}</h3>
-            <span className="text-[10px] font-medium text-blue-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +5% vs ontem
-            </span>
+            {ticketMedio > 0 ? (
+              <span className="text-[10px] font-medium text-blue-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Média real de vendas
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem vendas efetuadas
+              </span>
+            )}
           </div>
         </div>
 
@@ -190,10 +309,16 @@ export default function DashboardExecutive({ products, sales, clients, transacti
             </div>
           </div>
           <div className="mt-2">
-            <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">68%</h3>
-            <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +3pp esta semana
-            </span>
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{conversaoMedia}%</h3>
+            {conversaoMedia > 0 ? (
+              <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Conversão de pedidos real
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem histórico de leads/pedidos
+              </span>
+            )}
           </div>
         </div>
 
@@ -207,9 +332,15 @@ export default function DashboardExecutive({ products, sales, clients, transacti
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{margemMedia}%</h3>
-            <span className="text-[10px] font-medium text-purple-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +2pp vs mês passado
-            </span>
+            {margemMedia > 0 ? (
+              <span className="text-[10px] font-medium text-purple-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Margem sobre vendas
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem faturamento ativa
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -294,30 +425,30 @@ export default function DashboardExecutive({ products, sales, clients, transacti
             <div className="space-y-1.5 text-xs font-sans">
               <div className="flex justify-between font-medium">
                 <span className="text-slate-600 font-semibold">Faturamento Mês</span>
-                <span className="font-bold font-mono text-slate-800">84%</span>
+                <span className="font-bold font-mono text-slate-800">{monthlyRevenuePct}%</span>
               </div>
               <div className="w-full bg-slate-150 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-pink-500 rounded-full" style={{ width: '84%' }} />
+                <div className="h-full bg-pink-500 rounded-full transition-all duration-500" style={{ width: `${monthlyRevenuePct}%` }} />
               </div>
             </div>
 
             <div className="space-y-1.5 text-xs font-sans">
               <div className="flex justify-between font-medium">
                 <span className="text-slate-600 font-semibold">Novos Clientes</span>
-                <span className="font-bold font-mono text-slate-800">70%</span>
+                <span className="font-bold font-mono text-slate-800">{monthlyNewClientsPct}%</span>
               </div>
               <div className="w-full bg-slate-150 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: '70%' }} />
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${monthlyNewClientsPct}%` }} />
               </div>
             </div>
 
             <div className="space-y-1.5 text-xs font-sans">
               <div className="flex justify-between font-medium">
                 <span className="text-slate-600 font-semibold">NPS Geral Target</span>
-                <span className="font-bold font-mono text-slate-800">97%</span>
+                <span className="font-bold font-mono text-slate-800">{monthlyNpsPct}%</span>
               </div>
               <div className="w-full bg-slate-150 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '97%' }} />
+                <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${monthlyNpsPct}%` }} />
               </div>
             </div>
           </div>
@@ -343,7 +474,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
                 <HelpCircle size={12} className="text-slate-400 cursor-pointer" />
               </span>
               <span className="bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full text-[10px] font-mono">
-                34%
+                {repurchaseRate}%
               </span>
             </div>
 
@@ -352,7 +483,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
                 CAC (Custo de Aquisição)
               </span>
               <span className="font-bold font-mono text-slate-850">
-                {formatCurrency(28.50)}
+                {formatCurrency(cacValue)}
               </span>
             </div>
 
@@ -361,7 +492,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
                 LTV (Lifetime Value)
               </span>
               <span className="font-bold font-mono text-slate-855 text-pink-650">
-                {formatCurrency(890.00)}
+                {formatCurrency(ltvValue)}
               </span>
             </div>
           </div>

@@ -228,6 +228,7 @@ export default function SettingsSystem({
   const [memberFormPassword, setMemberFormPassword] = useState('');
   const [memberFormRole, setMemberFormRole] = useState<'Admin' | 'Gerente' | 'Vendedor' | 'Parceiro' | 'Entregador'>('Vendedor');
   const [memberFormDetails, setMemberFormDetails] = useState('');
+  const [memberFormBirthDate, setMemberFormBirthDate] = useState('');
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   
   const [teamSearchText, setTeamSearchText] = useState('');
@@ -260,7 +261,8 @@ export default function SettingsSystem({
             login: loginClean,
             password: memberFormPassword.trim(),
             role: memberFormRole,
-            details: memberFormDetails.trim()
+            details: memberFormDetails.trim(),
+            birthDate: memberFormBirthDate.trim() || undefined
           };
         }
         return m;
@@ -275,6 +277,7 @@ export default function SettingsSystem({
         password: memberFormPassword.trim(),
         role: memberFormRole,
         details: memberFormDetails.trim(),
+        birthDate: memberFormBirthDate.trim() || undefined,
         createdAt: new Date().toISOString()
       };
       updatedList = [...teamMembers, newMember];
@@ -289,6 +292,7 @@ export default function SettingsSystem({
     setMemberFormPassword('');
     setMemberFormRole('Vendedor');
     setMemberFormDetails('');
+    setMemberFormBirthDate('');
     setEditingMemberId(null);
     alert('Informações salvas e sincronizadas com sucesso no portal de logins!');
   };
@@ -300,6 +304,7 @@ export default function SettingsSystem({
     setMemberFormPassword(m.password);
     setMemberFormRole(m.role);
     setMemberFormDetails(m.details || '');
+    setMemberFormBirthDate(m.birthDate || '');
   };
 
   const handleDeleteMemberClick = (m: any) => {
@@ -315,6 +320,7 @@ export default function SettingsSystem({
         setMemberFormPassword('');
         setMemberFormRole('Vendedor');
         setMemberFormDetails('');
+        setMemberFormBirthDate('');
         setEditingMemberId(null);
       }
     }
@@ -1424,19 +1430,32 @@ export default function SettingsSystem({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Observações / Detalhes (Opcional)</label>
-                  <input
-                    type="text"
-                    placeholder={
-                      memberFormRole === 'Parceiro' ? 'Instagram, Ex: @marina_fit' : 
-                      memberFormRole === 'Entregador' ? 'Veículo ou Turno, Ex: Zona Sul / Moto 1' : 
-                      'Informações adicionais...'
-                    }
-                    value={memberFormDetails}
-                    onChange={(e) => setMemberFormDetails(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Aniversário (Dia/Mês)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 25/08"
+                      value={memberFormBirthDate}
+                      onChange={(e) => setMemberFormBirthDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Observações / Detalhes (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder={
+                        memberFormRole === 'Parceiro' ? 'Instagram, Ex: @marina_fit' : 
+                        memberFormRole === 'Entregador' ? 'Veículo ou Turno, Ex: Zona Sul / Moto 1' : 
+                        'Informações adicionais...'
+                      }
+                      value={memberFormDetails}
+                      onChange={(e) => setMemberFormDetails(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 transition-all"
+                    />
+                  </div>
                 </div>
 
                 <button

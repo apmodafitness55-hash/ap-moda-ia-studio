@@ -39,9 +39,10 @@ interface DashboardOverviewProps {
   clients: Client[];
   transactions: Transaction[];
   setActiveTab: (tab: ActiveTab) => void;
+  isDemo?: boolean;
 }
 
-export default function DashboardOverview({ products, sales, clients, transactions, setActiveTab }: DashboardOverviewProps) {
+export default function DashboardOverview({ products, sales, clients, transactions, setActiveTab, isDemo = true }: DashboardOverviewProps) {
   // Chart configurations
   const [timeRange, setTimeRange] = useState<'7d' | '14d' | '30d'>('7d');
   const [chartType, setChartType] = useState<'area' | 'bar'>('bar');
@@ -73,6 +74,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
   const lowStockCount = useMemo(() => {
     return products.filter(p => p.stock < p.minStock).length;
   }, [products]);
+
+  const dynamicNpsScore = useMemo(() => {
+    const scoredClients = clients.filter(c => c.npsScore !== undefined);
+    if (scoredClients.length === 0) return 100;
+    const promoters = scoredClients.filter(c => c.npsScore! >= 9).length;
+    const detractors = scoredClients.filter(c => c.npsScore! <= 6).length;
+    const total = scoredClients.length;
+    return Math.round(((promoters - detractors) / total) * 100);
+  }, [clients]);
 
   // Compute Sales by Channel
   const channelData = useMemo(() => {
@@ -107,16 +117,8 @@ export default function DashboardOverview({ products, sales, clients, transactio
     })).filter(item => item.value > 0);
   }, [sales]);
 
-  // If no completed sales, put some initial percentage ratios for visual style
+  // If no completed sales, we return actual sales counts to prevent ghost data
   const donutData = useMemo(() => {
-    if (channelData.length === 0) {
-      return [
-        { name: 'Instagram', value: 350.00, count: 3, color: '#E1306C' },
-        { name: 'WhatsApp', value: 280.00, count: 2, color: '#25D366' },
-        { name: 'E-commerce', value: 220.00, count: 2, color: '#3B82F6' },
-        { name: 'Loja Física', value: 150.00, count: 1, color: '#F59E0B' }
-      ];
-    }
     return channelData;
   }, [channelData]);
 
@@ -159,17 +161,6 @@ export default function DashboardOverview({ products, sales, clients, transactio
       color: colors[index % colors.length]
     }));
 
-    // Fallback beautiful mockup categories if no real sales exist
-    if (entries.length === 0) {
-      return [
-        { name: 'Conjuntos Coordenados', value: 1250.00, count: 12, color: '#EC4899' },
-        { name: 'Calças Legging', value: 870.50, count: 10, color: '#3B82F6' },
-        { name: 'Tops Fitness', value: 540.00, count: 8, color: '#8B5CF6' },
-        { name: 'Shorts DryFit', value: 450.00, count: 6, color: '#10B981' },
-        { name: 'Acessórios', value: 210.00, count: 5, color: '#F59E0B' }
-      ];
-    }
-
     return entries;
   }, [sales, products]);
 
@@ -202,20 +193,6 @@ export default function DashboardOverview({ products, sales, clients, transactio
         name: label,
         Faturamento: Number(revenue.toFixed(2)),
         Vendas: count
-      });
-    }
-
-    // Fallback: if there are no sales in the system, load premium dummy progression curves
-    const totalRealRevenue = result.reduce((sum, r) => sum + r.Faturamento, 0);
-    if (totalRealRevenue === 0) {
-      return result.map((item, idx) => {
-        const baseValues = [320, 450, 210, 680, 410, 920, 1100];
-        const val = baseValues[idx % baseValues.length] * (timeRange === '14d' ? (idx < 7 ? 0.85 : 1.15) : 1);
-        return {
-          ...item,
-          Faturamento: Number(val.toFixed(2)),
-          Vendas: Math.ceil(val / 150)
-        };
       });
     }
 
@@ -277,9 +254,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(faturamentoTotal)}</h3>
-            <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +12% vs mês anterior
-            </span>
+            {totalVendasConcluidas > 0 ? (
+              <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Em crescimento real
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem faturamento ativa
+              </span>
+            )}
           </div>
         </div>
 
@@ -293,9 +276,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{totalVendasConcluidas}</h3>
-            <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +8 esta semana
-            </span>
+            {totalVendasConcluidas > 0 ? (
+              <span className="text-[10px] font-medium text-green-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> +{totalVendasConcluidas} concluídas
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Nenhum pedido efetuado
+              </span>
+            )}
           </div>
         </div>
 
@@ -309,9 +298,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(ticketMedio)}</h3>
-            <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +5% vs ontem
-            </span>
+            {totalVendasConcluidas > 0 ? (
+              <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Baseado em vendas reais
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem ticket médio ainda
+              </span>
+            )}
           </div>
         </div>
 
@@ -325,9 +320,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{totalClients}</h3>
-            <span className="text-[10px] font-medium text-violet-500 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +15 novos este mês
-            </span>
+            {totalClients > 0 ? (
+              <span className="text-[10px] font-medium text-violet-500 flex items-center gap-1 mt-1">
+                <TrendingUp size={10} /> Clientes cadastrados
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Nenhum cliente ativo
+              </span>
+            )}
           </div>
         </div>
 
@@ -341,9 +342,15 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
           <div className="mt-2">
             <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">{totalStockItems}</h3>
-            <span className={`text-[10px] font-medium flex items-center gap-1 mt-1 ${lowStockCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
-              {lowStockCount > 0 ? `⚠ ${lowStockCount} em baixo estoque` : '✓ Tudo em dia'}
-            </span>
+            {products.length > 0 ? (
+              <span className={`text-[10px] font-medium flex items-center gap-1 mt-1 ${lowStockCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                {lowStockCount > 0 ? `⚠ ${lowStockCount} em baixo estoque` : '✓ Estoque regularizado'}
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1 mt-1">
+                Sem produtos no catálogo
+              </span>
+            )}
           </div>
         </div>
 
@@ -356,9 +363,11 @@ export default function DashboardOverview({ products, sales, clients, transactio
             </div>
           </div>
           <div className="mt-2">
-            <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">87</h3>
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight">
+              {clients.filter(c => c.npsScore !== undefined).length > 0 ? dynamicNpsScore : 'N/A'}
+            </h3>
             <span className="text-[10px] font-medium text-amber-600 flex items-center gap-1 mt-1">
-              <TrendingUp size={10} /> +2pts esta semana
+              <TrendingUp size={10} /> {clients.filter(c => c.npsScore !== undefined).length} avaliações
             </span>
           </div>
         </div>
@@ -476,35 +485,44 @@ export default function DashboardOverview({ products, sales, clients, transactio
           </div>
 
           <div className="relative h-44 flex items-center justify-center mt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieMode === 'categoria' ? categorySalesData : donutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={75}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {(pieMode === 'categoria' ? categorySalesData : donutData).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value, name, props) => [
-                  `${formatCurrency(Number(value))} (${props.payload.count || 0} pçs)`, 
-                  'Faturamento'
-                ]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-1">
-              <span className="text-[9px] font-sans text-slate-400 font-bold uppercase tracking-wider">Total Filtrado</span>
-              <span className="text-xs font-bold text-slate-700 font-mono">
-                {formatCurrency(
-                  (pieMode === 'categoria' ? categorySalesData : donutData).reduce((sum, item) => sum + item.value, 0)
-                )}
-              </span>
-            </div>
+            {(pieMode === 'categoria' ? categorySalesData : donutData).length === 0 ? (
+              <div className="text-center p-4">
+                <p className="text-slate-400 text-xs font-medium">Nenhuma venda registrada</p>
+                <p className="text-[10px] text-slate-400/80 mt-1">Realize vendas no PDV ou no catálogo para alimentar este gráfico.</p>
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieMode === 'categoria' ? categorySalesData : donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {(pieMode === 'categoria' ? categorySalesData : donutData).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value, name, props) => [
+                      `${formatCurrency(Number(value))} (${props.payload.count || 0} pçs)`, 
+                      'Faturamento'
+                    ]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-1">
+                  <span className="text-[9px] font-sans text-slate-400 font-bold uppercase tracking-wider">Total Filtrado</span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">
+                    {formatCurrency(
+                      (pieMode === 'categoria' ? categorySalesData : donutData).reduce((sum, item) => sum + item.value, 0)
+                    )}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Animated labels */}

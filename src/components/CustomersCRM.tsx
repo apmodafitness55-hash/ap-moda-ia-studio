@@ -26,7 +26,10 @@ import {
   ClipboardList,
   Edit,
   Trash2,
-  Gift
+  Gift,
+  Zap,
+  Save,
+  Check
 } from 'lucide-react';
 import { Client, Sale, SalesChannel } from '../types';
 
@@ -38,6 +41,8 @@ interface CustomersCRMProps {
   currentUser?: any;
   activeSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade';
   setActiveSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade') => void;
+  teamMembers?: any[];
+  onUpdateTeamMembers?: (updatedList: any[]) => void;
 }
 
 interface Opportunity {
@@ -73,9 +78,12 @@ export default function CustomersCRM({
   clients, 
   sales, 
   onAddClient, 
+  onUpdateClients,
   currentUser,
   activeSubTab: propActiveSubTab,
-  setActiveSubTab: propSetActiveSubTab
+  setActiveSubTab: propSetActiveSubTab,
+  teamMembers = [],
+  onUpdateTeamMembers
 }: CustomersCRMProps) {
   const [internalActiveSubTab, setInternalActiveSubTab] = useState<'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade'>('diretorio');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
@@ -153,6 +161,207 @@ export default function CustomersCRM({
     }
     setAdjustingClient(null);
     setAdjustValue('');
+  };
+
+  // Birthday Automation States
+  const [fidelidadeSubSection, setFidelidadeSubSection] = useState<'cashback' | 'aniversarios'>(() => {
+    try {
+      const saved = localStorage.getItem('ap_fidelidade_subsection');
+      return (saved as any) || 'cashback';
+    } catch (e) {
+      return 'cashback';
+    }
+  });
+
+  const [birthdayCouponDiscount, setBirthdayCouponDiscount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birth_coupon_discount');
+      return saved ? parseInt(saved) : 15;
+    } catch (e) {
+      return 15;
+    }
+  });
+
+  const [birthdayCouponValidityDays, setBirthdayCouponValidityDays] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birth_coupon_validity_days');
+      return saved ? parseInt(saved) : 7;
+    } catch (e) {
+      return 7;
+    }
+  });
+
+  const [birthdayAutoSend, setBirthdayAutoSend] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birth_auto_send');
+      return saved !== 'false';
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [birthdayClientTemplate, setBirthdayClientTemplate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birth_client_template');
+      return saved || 'Olá, {NOME}! 🥳✨ Nós da AP Moda Fitness te desejamos um aniversário maravilhoso de muita luz! Para comemorar, aqui está um presente especial preparado com muito carinho: seu cupom exclusivo de {DESCONTO}% de desconto para usar nos próximos {VALIDADE} dias no site ou Loja Física:\n\n👉 Cupom: {CUPOM}\n\nQue seu dia seja repleto de energia e realizações! Parabéns! 🎂🎈';
+    } catch (e) {
+      return 'Olá, {NOME}! 🥳✨ Nós da AP Moda Fitness te desejamos um aniversário maravilhoso de muita luz! Para comemorar, aqui está um presente especial preparado com muito carinho: seu cupom exclusivo de {DESCONTO}% de desconto para usar nos próximos {VALIDADE} dias no site ou Loja Física:\n\n👉 Cupom: {CUPOM}\n\nQue seu dia seja repleto de energia e realizações! Parabéns! 🎂🎈';
+    }
+  });
+
+  const [birthdayStaffTemplate, setBirthdayStaffTemplate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birth_staff_template');
+      return saved || 'Querido(a) colaborador(a) {NOME}! 🎈✨ Toda a equipe da AP Moda Fitness está em festa hoje celebrando o seu aniversário! Agradecemos imensamente pela sua dedicação, energia contagiante e parceria de sucesso diária no nosso time. Que este novo ano seja marcante, cheio de saúde, conquistas e alegrias! Parabéns de toda a família AP! 🎂🎉';
+    } catch (e) {
+      return 'Querido(a) colaborador(a) {NOME}! 🎈✨ Toda a equipe da AP Moda Fitness está em festa hoje celebrando o seu aniversário! Agradecemos imensamente pela sua dedicação, energia contagiante e parceria de sucesso diária no nosso time. Que este novo ano seja marcante, cheio de saúde, conquistas e alegrias! Parabéns de toda a família AP! 🎂🎉';
+    }
+  });
+
+  // Tracking which automated birthday greetings have been "sent" this session
+  const [congratulationsLog, setCongratulationsLog] = useState<Record<string, { type: 'client' | 'staff', sentAt: string, couponCode?: string }>>(() => {
+    try {
+      const saved = localStorage.getItem('ap_birthday_congrats_log_sent');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const saveFidelidadeSubSection = (sub: 'cashback' | 'aniversarios') => {
+    setFidelidadeSubSection(sub);
+    try {
+      localStorage.setItem('ap_fidelidade_subsection', sub);
+    } catch (e) {}
+  };
+
+  const handleSaveBirthdayConfig = () => {
+    try {
+      localStorage.setItem('ap_birth_coupon_discount', birthdayCouponDiscount.toString());
+      localStorage.setItem('ap_birth_coupon_validity_days', birthdayCouponValidityDays.toString());
+      localStorage.setItem('ap_birth_auto_send', birthdayAutoSend ? 'true' : 'false');
+      localStorage.setItem('ap_birth_client_template', birthdayClientTemplate);
+      localStorage.setItem('ap_birth_staff_template', birthdayStaffTemplate);
+      alert('Configurações de automação de aniversário salvas com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar as configurações.');
+    }
+  };
+
+  const markCongratsAsSent = (id: string, type: 'client' | 'staff', couponCode?: string) => {
+    const updated = {
+      ...congratulationsLog,
+      [id]: { type, sentAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), couponCode }
+    };
+    setCongratulationsLog(updated);
+    try {
+      localStorage.setItem('ap_birthday_congrats_log_sent', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const parseBirthDayAndMonth = (dateStr?: string): { day: number; month: number } | null => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const clean = dateStr.trim();
+    if (!clean) return null;
+
+    // Case 1: YYYY-MM-DD
+    if (clean.includes('-')) {
+      const parts = clean.split('-');
+      if (parts.length >= 3) {
+        const month = parseInt(parts[1]);
+        const day = parseInt(parts[2]);
+        if (!isNaN(day) && !isNaN(month)) {
+          return { day, month };
+        }
+      } else if (parts.length === 2) {
+        // MM-DD
+        const month = parseInt(parts[0]);
+        const day = parseInt(parts[1]);
+        if (!isNaN(day) && !isNaN(month)) {
+          return { day, month };
+        }
+      }
+    }
+
+    // Case 2: DD/MM/YYYY or DD/MM
+    if (clean.includes('/')) {
+      const parts = clean.split('/');
+      if (parts.length >= 2) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        if (!isNaN(day) && !isNaN(month)) {
+          return { day, month };
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const getAnniversaryStatus = (day: number, month: number) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Birthday in current year
+    let bdate = new Date(today.getFullYear(), month - 1, day);
+    
+    // Calculate difference in days
+    const diffMs = bdate.getTime() - today.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return { isToday: true, isUpcoming: false, daysRemaining: 0, text: 'Hoje! 🎉' };
+    }
+    if (diffDays > 0 && diffDays <= 7) {
+      return { isToday: false, isUpcoming: true, daysRemaining: diffDays, text: `Em ${diffDays} dias ⏳` };
+    }
+    if (diffDays < 0 && diffDays >= -2) {
+      return { isToday: false, isUpcoming: true, daysRemaining: diffDays, text: `Passou há ${Math.abs(diffDays)} dias 💝` };
+    }
+    
+    return null;
+  };
+
+  // Generate dynamic coupon code
+  const getBirthdayCouponCode = (clientName: string) => {
+    const firstName = clientName.trim().split(' ')[0].toUpperCase().replace(/[^A-Z]/g, '');
+    return `NIVER-${firstName || 'VIP'}-${birthdayCouponDiscount}`;
+  };
+
+  // Get compiled message template
+  const getCompiledTemplate = (type: 'client' | 'staff', name: string, couponCode?: string) => {
+    const firstName = name.trim().split(' ')[0];
+    const template = type === 'client' ? birthdayClientTemplate : birthdayStaffTemplate;
+    
+    return template
+      .replace(/{NOME}/g, firstName)
+      .replace(/{CUPOM}/g, couponCode || '')
+      .replace(/{DESCONTO}/g, birthdayCouponDiscount.toString())
+      .replace(/{VALIDADE}/g, birthdayCouponValidityDays.toString());
+  };
+
+  // Trigger dispatch simulation
+  const handleTriggerDispatch = (id: string, type: 'client' | 'staff', name: string, phone: string, couponCode?: string) => {
+    const textMsg = getCompiledTemplate(type, name, couponCode);
+    const phoneClean = (phone || '').replace(/\D/g, '');
+    const encoded = encodeURIComponent(textMsg);
+    
+    // Mark as sent in local state log
+    markCongratsAsSent(id, type, couponCode);
+    
+    // Trigger window open for manual dispatch
+    const url = `https://api.whatsapp.com/send?${phoneClean ? `phone=55${phoneClean}&` : ''}text=${encoded}`;
+    window.open(url, '_blank');
+    
+    // Custom notification trigger event to App.tsx or general notification popup
+    const customEvent = new CustomEvent('ap-show-notification', {
+      detail: {
+        title: type === 'client' ? 'Cupom & Parabéns Enviado! 🎂' : 'Congratulações Colaborador! 💼',
+        desc: `Mensagem enviada com sucesso no canal WhatsApp para ${name}.`,
+        type: 'success'
+      }
+    });
+    window.dispatchEvent(customEvent);
   };
 
   const [partners, setPartners] = useState<Partner[]>(() => {
@@ -988,221 +1197,585 @@ export default function CustomersCRM({
       )}
 
       {/* Tab 5: Clube Fidelidade & Cashback */}
-      {activeSubTab === 'fidelidade' && (
-        <div className="space-y-6 font-sans">
-          
-          {/* Top Panel: Metrics & Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {activeSubTab === 'fidelidade' && (() => {
+        // Calculate celebrants list dynamically inside component execution
+        const celebrantsList: Array<{
+          id: string;
+          name: string;
+          role: 'client' | 'staff';
+          staffRole?: string;
+          phone: string;
+          birthDateStr: string;
+          statusText: string;
+          daysRemaining: number;
+          isToday: boolean;
+          isUpcoming: boolean;
+          couponCode?: string;
+        }> = [];
+
+        clients.forEach(c => {
+          const parsed = parseBirthDayAndMonth(c.birthDate);
+          if (parsed) {
+            const s = getAnniversaryStatus(parsed.day, parsed.month);
+            if (s) {
+              celebrantsList.push({
+                id: c.id,
+                name: c.name,
+                role: 'client',
+                phone: c.phone || '',
+                birthDateStr: c.birthDate || '',
+                statusText: s.text,
+                daysRemaining: s.daysRemaining,
+                isToday: s.isToday,
+                isUpcoming: s.isUpcoming,
+                couponCode: getBirthdayCouponCode(c.name)
+              });
+            }
+          }
+        });
+
+        teamMembers.forEach(m => {
+          const parsed = parseBirthDayAndMonth(m.birthDate);
+          if (parsed) {
+            const s = getAnniversaryStatus(parsed.day, parsed.month);
+            if (s) {
+              celebrantsList.push({
+                id: m.id,
+                name: m.name,
+                role: 'staff',
+                staffRole: m.role,
+                phone: m.phone || '11 99999-9999',
+                birthDateStr: m.birthDate || '',
+                statusText: s.text,
+                daysRemaining: s.daysRemaining,
+                isToday: s.isToday,
+                isUpcoming: s.isUpcoming
+              });
+            }
+          }
+        });
+
+        celebrantsList.sort((a, b) => {
+          if (a.isToday && !b.isToday) return -1;
+          if (!a.isToday && b.isToday) return 1;
+          return a.daysRemaining - b.daysRemaining;
+        });
+
+        return (
+          <div className="space-y-6 font-sans">
             
-            {/* KPI Card 1: Total de Membros */}
-            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
-              <div className="p-3 bg-pink-100 text-pink-600 rounded-2xl">
-                <Users size={20} />
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Membros no Clube</span>
-                <span className="font-mono font-black text-xl text-slate-800">{clients.length}</span>
-              </div>
+            {/* Elegant Sub-navigation */}
+            <div className="flex border-b border-slate-100 gap-3 pb-0">
+              <button
+                type="button"
+                onClick={() => saveFidelidadeSubSection('cashback')}
+                className={`pb-3 px-4 font-bold text-xs uppercase tracking-wider transition duration-150 border-b-2 flex items-center gap-2 cursor-pointer border-none bg-transparent ${
+                  fidelidadeSubSection === 'cashback'
+                    ? 'border-pink-500 text-pink-650 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-slate-650'
+                }`}
+              >
+                <Coins size={14} />
+                <span>Programa Cashback & Saldo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => saveFidelidadeSubSection('aniversarios')}
+                className={`pb-3 px-4 font-bold text-xs uppercase tracking-wider transition duration-150 border-b-2 flex items-center gap-2 cursor-pointer border-none bg-transparent ${
+                  fidelidadeSubSection === 'aniversarios'
+                    ? 'border-pink-500 text-pink-650 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-slate-650'
+                }`}
+              >
+                <Gift size={15} />
+                <span>Automação de Aniversários 🎁</span>
+                {celebrantsList.filter(cel => cel.isToday).length > 0 && (
+                  <span className="bg-rose-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                    {celebrantsList.filter(cel => cel.isToday).length}
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* KPI Card 2: Saldo Total Acumulado */}
-            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
-              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
-                <Coins size={20} />
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Cashback Acumulado</span>
-                <span className="font-mono font-black text-xl text-slate-800">
-                  {formatCurrency(clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0))}
-                </span>
-              </div>
-            </div>
-
-            {/* KPI Card 3: Reserva de Segurança / Cashback Médio */}
-            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
-              <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
-                <Award size={20} />
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Média por Cliente</span>
-                <span className="font-mono font-black text-xl text-slate-800">
-                  {formatCurrency(clients.length > 0 ? (clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0) / clients.length) : 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* KPI Card 4: Regra de Acúmulo de Cashback (Configurável) */}
-            <div className="bg-gradient-to-br from-pink-600 to-rose-600 text-white rounded-2xl p-4 shadow-md shadow-pink-500/10 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-80">Porcentagem Padrão</span>
-                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">VIP AP Fitness</span>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono">{cashbackRateConfig}%</span>
-                <span className="text-[10px] opacity-90 font-medium">de volta</span>
-              </div>
-              <div className="mt-2.5 flex items-center gap-1.5 bg-white/10 p-1 rounded-lg">
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="30" 
-                  value={cashbackRateConfig}
-                  onChange={(e) => handleSaveCashbackRateConfig(Number(e.target.value))}
-                  className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
-                />
-                <span className="text-[10px] font-black font-mono w-6 text-center">{cashbackRateConfig}%</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Core Table Section of Loyalty Members */}
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-150 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
-              <div>
-                <h4 className="font-bold text-sm text-slate-800">Diretório do Clube de Fidelidade</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Veja quem acumula cashback, históricos de resgate e faça ajustes manuais de bônus.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text"
-                  placeholder="Buscar cliente no clube..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 text-xs w-48 font-semibold transition"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-450 text-[9px] font-extrabold uppercase tracking-widest">
-                    <th className="px-4 py-3">Cliente</th>
-                    <th className="px-4 py-3">Compras</th>
-                    <th className="px-4 py-3">Total Gasto</th>
-                    <th className="px-4 py-3">Cashback Acumulado</th>
-                    <th className="px-4 py-3 text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-[11px] text-slate-650">
-                  {clients
-                    .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((client) => {
-                      const clientHistory = sales.filter(s => s.clientName.toLowerCase() === client.name.toLowerCase());
-                      const totalPurchases = clientHistory.length || client.ordersCount || 0;
-                      const totalSpentSum = clientHistory.reduce((sum, s) => sum + s.total, 0) || client.totalSpent || 0;
-                      const cBalance = client.cashbackBalance || 0;
-                      
-                      return (
-                        <tr key={client.id} className="hover:bg-slate-50/50 transition duration-150">
-                          <td className="px-4 py-3 flex items-center gap-3.5">
-                            <div className="w-8 h-8 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-xs shadow-xs uppercase">
-                              {client.name[0]}
-                            </div>
-                            <div>
-                              <span className="font-bold text-slate-800 block text-[11.5px]">{client.name}</span>
-                              <span className="text-[9.5px] text-slate-400 font-sans block">{client.email}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-semibold text-slate-500">
-                            {totalPurchases}
-                          </td>
-                          <td className="px-4 py-3 font-mono font-bold text-slate-700">
-                            {formatCurrency(totalSpentSum)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                              <span className="font-mono font-black text-emerald-700 text-[12px]">
-                                {formatCurrency(cBalance)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAdjustingClient(client);
-                                setAdjustValue((client.cashbackBalance || 0).toString());
-                              }}
-                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-pink-50 hover:text-pink-600 text-slate-600 rounded-lg font-bold text-[10px] transition cursor-pointer border-none"
-                            >
-                              Ajustar Saldo
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Manual Adjust Modal */}
-          {adjustingClient && (
-            <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
-              <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden font-sans">
-                <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-none">
-                  <h3 className="font-bold text-xs uppercase tracking-wider">Ajustar Saldo de Cashback</h3>
-                  <button 
-                    type="button"
-                    onClick={() => setAdjustingClient(null)}
-                    className="text-slate-400 hover:text-white transition-colors text-xs bg-transparent border-none font-bold"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-sm mx-auto shadow-sm mb-2 uppercase">
-                      {adjustingClient.name[0]}
+            {fidelidadeSubSection === 'cashback' ? (
+              <>
+                {/* Top Panel: Metrics & Configuration */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  
+                  {/* KPI Card 1: Total de Membros */}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+                    <div className="p-3 bg-pink-100 text-pink-600 rounded-2xl">
+                      <Users size={20} />
                     </div>
-                    <span className="block font-black text-slate-800 text-[13px]">{adjustingClient.name}</span>
-                    <span className="block text-[10px] text-slate-400">Saldo Atual: {formatCurrency(adjustingClient.cashbackBalance || 0)}</span>
+                    <div>
+                      <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Membros no Clube</span>
+                      <span className="font-mono font-black text-xl text-slate-800">{clients.length}</span>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">Novo Saldo (BRL)</label>
-                    <div className="relative">
+                  {/* KPI Card 2: Saldo Total Acumulado */}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
+                      <Coins size={20} />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Cashback Acumulado</span>
+                      <span className="font-mono font-black text-xl text-slate-800">
+                        {formatCurrency(clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* KPI Card 3: Reserva de Segurança / Cashback Médio */}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center gap-4">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+                      <Award size={20} />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">Média por Cliente</span>
+                      <span className="font-mono font-black text-xl text-slate-800">
+                        {formatCurrency(clients.length > 0 ? (clients.reduce((sum, c) => sum + (c.cashbackBalance || 0), 0) / clients.length) : 0)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* KPI Card 4: Regra de Acúmulo de Cashback (Configurável) */}
+                  <div className="bg-gradient-to-br from-pink-600 to-rose-600 text-white rounded-2xl p-4 shadow-md shadow-pink-500/10 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-80">Porcentagem Padrão</span>
+                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">VIP AP Fitness</span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-2xl font-black font-mono">{cashbackRateConfig}%</span>
+                      <span className="text-[10px] opacity-90 font-medium">de volta</span>
+                    </div>
+                    <div className="mt-2.5 flex items-center gap-1.5 bg-white/10 p-1 rounded-lg">
                       <input 
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={adjustValue}
-                        onChange={(e) => setAdjustValue(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono font-bold text-sm"
-                        placeholder="0.00"
-                        required
-                        autoFocus
+                        type="range" 
+                        min="1" 
+                        max="30" 
+                        value={cashbackRateConfig}
+                        onChange={(e) => handleSaveCashbackRateConfig(Number(e.target.value))}
+                        className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
                       />
-                      <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold font-sans">R$</span>
+                      <span className="text-[10px] font-black font-mono w-6 text-center">{cashbackRateConfig}%</span>
                     </div>
                   </div>
 
-                  <div className="flex gap-2.5 pt-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setAdjustingClient(null)}
-                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none"
-                    >
-                      Cancelar
-                    </button>
+                </div>
+
+                {/* Core Table Section of Loyalty Members */}
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden">
+                  <div className="p-4 border-b border-slate-150 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-800 animate-fade-in">Diretório do Clube de Fidelidade</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Veja quem acumula cashback, históricos de resgate e faça ajustes manuais de bônus.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Buscar cliente no clube..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-pink-500 text-xs w-48 font-semibold transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-450 text-[9px] font-extrabold uppercase tracking-widest">
+                          <th className="px-4 py-3">Cliente</th>
+                          <th className="px-4 py-3">Compras</th>
+                          <th className="px-4 py-3">Total Gasto</th>
+                          <th className="px-4 py-3">Cashback Acumulado</th>
+                          <th className="px-4 py-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-[11px] text-slate-650">
+                        {clients
+                          .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((client) => {
+                            const clientHistory = sales.filter(s => s.clientName.toLowerCase() === client.name.toLowerCase());
+                            const totalPurchases = clientHistory.length || client.ordersCount || 0;
+                            const totalSpentSum = clientHistory.reduce((sum, s) => sum + s.total, 0) || client.totalSpent || 0;
+                            const cBalance = client.cashbackBalance || 0;
+                            
+                            return (
+                              <tr key={client.id} className="hover:bg-slate-50/50 transition duration-150">
+                                <td className="px-4 py-3 flex items-center gap-3.5">
+                                  <div className="w-8 h-8 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-xs shadow-xs uppercase">
+                                    {client.name[0]}
+                                  </div>
+                                  <div>
+                                    <span className="font-bold text-slate-800 block text-[11.5px]">{client.name}</span>
+                                    <span className="text-[9.5px] text-slate-400 font-sans block">{client.email}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 font-mono font-semibold text-slate-500">
+                                  {totalPurchases}
+                                </td>
+                                <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                                  {formatCurrency(totalSpentSum)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span className="font-mono font-black text-emerald-700 text-[12px]">
+                                      {formatCurrency(cBalance)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAdjustingClient(client);
+                                      setAdjustValue((client.cashbackBalance || 0).toString());
+                                    }}
+                                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-pink-50 hover:text-pink-600 text-slate-600 rounded-lg font-bold text-[10px] transition cursor-pointer border-none"
+                                  >
+                                    Ajustar Saldo
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* ANNIVERSARIES AUTOMATION VIEW */
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in animate-duration-300">
+                
+                {/* LEFT CONIFG PANEL: 5 columns */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
+                    <div className="flex items-center gap-2 pb-3 border-b border-slate-100 mb-4">
+                      <div className="p-2 bg-pink-100 text-pink-600 rounded-xl">
+                        <Gift size={16} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-xs text-slate-805 uppercase tracking-wider">Regras de Aniversário</h4>
+                        <p className="text-[9.5px] text-slate-400">Configure descontos automáticos e textos base.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Coupon Discount */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <label className="text-[10px] font-extrabold text-slate-550 uppercase">Valor do Cupom Especial</label>
+                          <span className="font-mono font-bold text-xs text-pink-600">{birthdayCouponDiscount}% OFF</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="5"
+                          max="40"
+                          step="5"
+                          value={birthdayCouponDiscount}
+                          onChange={(e) => setBirthdayCouponDiscount(Number(e.target.value))}
+                          className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-pink-600"
+                        />
+                      </div>
+
+                      {/* Coupon Validity */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-slate-550 uppercase block">Dias de Validade do Cupom</label>
+                        <select
+                          value={birthdayCouponValidityDays}
+                          onChange={(e) => setBirthdayCouponValidityDays(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 cursor-pointer font-sans"
+                        >
+                          <option value="3">3 dias (Super Exclusivo)</option>
+                          <option value="5">5 dias (Venda Rápida)</option>
+                          <option value="7">7 dias (Semana do Aniversário)</option>
+                          <option value="15">15 dias (Campanha Estendida)</option>
+                        </select>
+                      </div>
+
+                      {/* Auto pilot WhatsApp trigger */}
+                      <div className="p-3 bg-pink-50/50 border border-pink-100/40 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-black text-pink-850 uppercase flex items-center gap-1.5">
+                            <Zap size={13} className="text-pink-650 animate-bounce" />
+                            Gatilho Automático
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={birthdayAutoSend}
+                              onChange={(e) => setBirthdayAutoSend(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-8 h-4.5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-pink-600"></div>
+                          </label>
+                        </div>
+                        <p className="text-[9.5px] text-slate-500 leading-relaxed font-sans mt-1">
+                          Se ativado, ao abrir o painel em cada novo dia de trabalho, o sistema automatiza o diagnóstico dos aniversariantes e enfileira os relatórios e códigos de cupons prontos em background.
+                        </p>
+                        {birthdayAutoSend && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] font-mono font-bold text-emerald-600 uppercase">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                            Diagnóstico Ativo & Cupom Sincronizado
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Template Client Copywriter */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-slate-550 uppercase flex justify-between items-center">
+                          <span>Texto p/ Clientes 👤</span>
+                          <span className="text-[8px] text-slate-400 normal-case">Use: &#123;NOME&#124;, &#123;CUPOM&#124;, &#123;DESCONTO&#124;, &#123;VALIDADE&#124;</span>
+                        </label>
+                        <textarea 
+                          rows={4}
+                          value={birthdayClientTemplate}
+                          onChange={(e) => setBirthdayClientTemplate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-[10.5px] text-slate-700 focus:outline-hidden focus:border-pink-500 font-sans leading-relaxed"
+                        />
+                      </div>
+
+                      {/* Template Staff Copywriter */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-slate-550 uppercase flex justify-between items-center">
+                          <span>Texto p/ Colaboradores 💼</span>
+                          <span className="text-[8px] text-slate-400 normal-case">Use: &#123;NOME&#124;</span>
+                        </label>
+                        <textarea 
+                          rows={4}
+                          value={birthdayStaffTemplate}
+                          onChange={(e) => setBirthdayStaffTemplate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-[10.5px] text-slate-700 focus:outline-hidden focus:border-pink-500 font-sans leading-relaxed"
+                        />
+                      </div>
+
+                      {/* Saving config button */}
+                      <button
+                        type="button"
+                        onClick={handleSaveBirthdayConfig}
+                        className="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold font-sans uppercase hover:bg-slate-800 transition cursor-pointer border-none flex items-center justify-center gap-2"
+                      >
+                        <Save size={13} className="text-pink-405" />
+                        <span>Salvar Automações & Templates</span>
+                      </button>
+
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT CELEBRANTS BOARD: 7 columns */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs min-h-[460px] flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 h-[35px]">
+                      <div>
+                        <h4 className="font-black text-xs text-slate-805 uppercase tracking-wider">Mural dos Aniversariantes</h4>
+                        <p className="text-[9.5px] text-slate-400">Hoje, ontem ou nos próximos 7 dias no calendário de contatos.</p>
+                      </div>
+                      <span className="text-[9.5px] bg-slate-50 border border-slate-100 px-2 py-1 rounded-full font-mono text-slate-550">
+                        {celebrantsList.length} celebrando
+                      </span>
+                    </div>
+
+                    {/* Celebrants Grid / List */}
+                    {celebrantsList.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-3">
+                        <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+                          <Gift size={32} />
+                        </div>
+                        <div>
+                          <span className="block text-slate-700 font-extrabold text-xs">Nenhum Aniversariante Próximo</span>
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed max-w-xs mx-auto">
+                            O calendário está tranquilo! Sem registros de aniversário para clientes ou equipe hoje ou nos próximos 7 dias. 👍
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3.5 divide-y divide-slate-100 max-h-[500px] overflow-y-auto pr-1">
+                        {celebrantsList.map((item, index) => {
+                          const log = congratulationsLog[item.id];
+                          const isSent = !!log;
+                          const dynamicCoupon = item.couponCode;
+
+                          return (
+                            <div 
+                              key={item.id} 
+                              className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3.5 first:pt-0 ${
+                                item.isToday ? 'bg-pink-500/[0.02] border border-pink-500/10 p-3 rounded-xl' : ''
+                              }`}
+                            >
+                              
+                              {/* Left: Avatar & Metadata */}
+                              <div className="flex items-start gap-3">
+                                <div className={`w-9 h-9 rounded-full font-black flex items-center justify-center text-xs shrink-0 shadow-xs uppercase ${
+                                  item.role === 'client' 
+                                    ? 'bg-pink-100 text-pink-650' 
+                                    : 'bg-indigo-100 text-indigo-650'
+                                }`}>
+                                  {item.name[0]}
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-extrabold text-[12px] text-slate-800 leading-none">{item.name}</span>
+                                    {item.role === 'client' ? (
+                                      <span className="text-[8.5px] border border-pink-100 bg-pink-50 text-pink-600 px-1.5 py-0.2 rounded-md font-bold uppercase shrink-0">Cliente 👤</span>
+                                    ) : (
+                                      <span className="text-[8.5px] border border-indigo-100 bg-indigo-50 text-indigo-600 px-1.5 py-0.2 rounded-md font-bold uppercase shrink-0" title="Colaborador da Loja">
+                                        {item.staffRole || 'Equipe'} 💼
+                                      </span>
+                                    )}
+                                    {item.isToday && (
+                                      <span className="text-[8.5px] bg-red-550 bg-red-650 bg-rose-600 text-white px-2 py-0.2 rounded-full font-black uppercase tracking-wider animate-pulse inline-block shrink-0">ANIVERSÁRIO HOJE 🎂</span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-450 font-mono">
+                                    <span>Nascimento: <strong>{item.birthDateStr}</strong></span>
+                                    <span>•</span>
+                                    <span>{item.statusText}</span>
+                                  </div>
+
+                                  {/* Coupon copy button if client */}
+                                  {item.role === 'client' && dynamicCoupon && (
+                                    <div className="flex items-center gap-1.5 pt-1">
+                                      <span className="text-[9.5px] text-slate-400">Cupom Especial:</span>
+                                      <span 
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(dynamicCoupon);
+                                          alert(`Cupom "${dynamicCoupon}" copiado para a área de transferência!`);
+                                        }}
+                                        className="font-mono text-[10px] font-black bg-slate-100 hover:bg-pink-100 hover:text-pink-700 text-slate-700 px-2 py-0.5 rounded cursor-pointer transition border border-slate-200/50 flex items-center gap-1"
+                                        title="Clique para copiar cupom"
+                                      >
+                                        {dynamicCoupon}
+                                        <Award size={10} className="opacity-70" />
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Actions */}
+                              <div className="flex items-center justify-end gap-2 shrink-0">
+                                {isSent ? (
+                                  <div className="text-right space-y-0.5">
+                                    <span className="text-emerald-600 font-extrabold text-[10.5px] flex items-center gap-1">
+                                      <Check size={12} strokeWidth={3} />
+                                      Enviado às {log.sentAt}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTriggerDispatch(item.id, item.role, item.name, item.phone, dynamicCoupon)}
+                                      className="text-[9.5px] text-slate-400 hover:text-pink-650 bg-transparent border-none underline cursor-pointer hover:font-bold"
+                                    >
+                                      Reenviar Parabéns
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const text = getCompiledTemplate(item.role, item.name, dynamicCoupon);
+                                        navigator.clipboard.writeText(text);
+                                        alert('Mensagem personalizada copiada com sucesso para você disparar onde quiser!');
+                                      }}
+                                      className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200/50 transition-all flex items-center gap-1"
+                                      title="Copiar texto do template substituído"
+                                    >
+                                      Copiar Texto
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTriggerDispatch(item.id, item.role, item.name, item.phone, dynamicCoupon)}
+                                      className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-black cursor-pointer border-none shadow-md shadow-green-500/10 flex items-center gap-1 hover:-translate-y-0.5 transition"
+                                      title="Abrir WhatsApp Web com texto preenchido"
+                                    >
+                                      <span className="font-mono">💬</span> Parabenizar
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Manual Adjust Modal (Kept unchanged and working) */}
+            {adjustingClient && (
+              <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
+                <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden font-sans">
+                  <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-none">
+                    <h3 className="font-bold text-xs uppercase tracking-wider">Ajustar Saldo de Cashback</h3>
                     <button 
                       type="button"
-                      onClick={handleSaveCashbackAdjustment}
-                      className="flex-1 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none shadow-md shadow-pink-500/10"
+                      onClick={() => setAdjustingClient(null)}
+                      className="text-slate-400 hover:text-white transition-colors text-xs bg-transparent border-none font-bold"
                     >
-                      Confirmar
+                      ✕
                     </button>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-pink-100 text-pink-600 font-bold rounded-full flex items-center justify-center text-sm mx-auto shadow-sm mb-2 uppercase">
+                        {adjustingClient.name[0]}
+                      </div>
+                      <span className="block font-black text-slate-800 text-[13px]">{adjustingClient.name}</span>
+                      <span className="block text-[10px] text-slate-400">Saldo Atual: {formatCurrency(adjustingClient.cashbackBalance || 0)}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold text-slate-550 uppercase block tracking-wider">Novo Saldo (BRL)</label>
+                      <div className="relative">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={adjustValue}
+                          onChange={(e) => setAdjustValue(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:border-pink-500 font-mono font-bold text-sm"
+                          placeholder="0.00"
+                          required
+                          autoFocus
+                        />
+                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold font-sans">R$</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5 pt-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setAdjustingClient(null)}
+                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={handleSaveCashbackAdjustment}
+                        className="flex-1 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none shadow-md shadow-pink-500/10"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Customer profile detail drawer */}
       {selectedClientDetail && (

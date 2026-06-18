@@ -765,6 +765,8 @@ export default function App() {
             currentUser={currentUser}
             activeSubTab={customersCRMSubTab}
             setActiveSubTab={setCustomersCRMSubTab}
+            teamMembers={teamMembers}
+            onUpdateTeamMembers={setTeamMembers}
           />
         );
       case ActiveTab.FINANCEIRO:
