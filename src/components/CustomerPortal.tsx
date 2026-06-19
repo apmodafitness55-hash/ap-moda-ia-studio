@@ -26,7 +26,11 @@ import {
   Check, 
   ArrowRight,
   TrendingUp,
-  FileText
+  FileText,
+  Activity,
+  Flame,
+  Trophy,
+  CheckSquare
 } from 'lucide-react';
 import { Client, Sale, Product } from '../types';
 
@@ -67,7 +71,93 @@ export default function CustomerPortal({
 
   const [savingMeasurements, setSavingMeasurements] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<'vip' | 'compras' | 'medidas' | 'regras'>('vip');
+  const [activeTab, setActiveTab] = useState<'vip' | 'compras' | 'medidas' | 'desafios' | 'regras'>('vip');
+
+  // Gamification: Desafios Saudáveis
+  const [challengeProgress, setChallengeProgress] = useState<{ [key: string]: number }>(() => {
+    const saved = localStorage.getItem(`ap_moda_chal_prog_${clientData.id}`);
+    return saved ? JSON.parse(saved) : { t1: 2, t2: 0, t3: 0 };
+  });
+
+  const [challengeClaimed, setChallengeClaimed] = useState<{ [key: string]: boolean }>(() => {
+    const saved = localStorage.getItem(`ap_moda_chal_claim_${clientData.id}`);
+    return saved ? JSON.parse(saved) : { t1: false, t2: false, t3: false };
+  });
+
+  // Gamification: Raspadinha da Sorte
+  const [scratchState, setScratchState] = useState<'unscratched' | 'scratching' | 'scratched'>(() => {
+    const saved = localStorage.getItem(`ap_moda_scratch_state_${clientData.id}`);
+    return (saved as 'unscratched' | 'scratching' | 'scratched') || 'unscratched';
+  });
+
+  const [scratchReward, setScratchReward] = useState<string>(() => {
+    const saved = localStorage.getItem(`ap_moda_scratch_reward_${clientData.id}`);
+    return saved || '';
+  });
+
+  // Handle challenge progress registration
+  const handleRegisterProgress = (id: 't1' | 't2' | 't3', maxProgress: number) => {
+    const current = challengeProgress[id] || 0;
+    if (current >= maxProgress) return;
+    
+    const nextVal = current + 1;
+    const nextProgress = { ...challengeProgress, [id]: nextVal };
+    setChallengeProgress(nextProgress);
+    localStorage.setItem(`ap_moda_chal_prog_${clientData.id}`, JSON.stringify(nextProgress));
+  };
+
+  // Handle challenge reward claim (Increases actual live cashback Balance in CRM database)
+  const handleClaimReward = (id: 't1' | 't2' | 't3', rewardValue: number) => {
+    if (challengeClaimed[id]) return;
+
+    // Update locally in CRM
+    const updatedClient: Client = {
+      ...clientData,
+      cashbackBalance: (clientData.cashbackBalance || 0) + rewardValue,
+    };
+
+    const nextClients = clients.map(c => c.id === clientData.id ? updatedClient : c);
+    onUpdateClients(nextClients);
+
+    // Save claim state
+    const nextClaimed = { ...challengeClaimed, [id]: true };
+    setChallengeClaimed(nextClaimed);
+    localStorage.setItem(`ap_moda_chal_claim_${clientData.id}`, JSON.stringify(nextClaimed));
+  };
+
+  // Handle Scratch logic
+  const handleScratch = () => {
+    if (scratchState !== 'unscratched') return;
+    setScratchState('scratching');
+    localStorage.setItem(`ap_moda_scratch_state_${clientData.id}`, 'scratching');
+
+    // Simulate scratching reveal
+    setTimeout(() => {
+      const rewards = [
+        { text: 'R$ 15,00 de Cashback Extra!', value: 15 },
+        { text: 'Cupom de R$ 25,00 de Desconto! [FITBRILHO25]', value: 0 },
+        { text: 'R$ 10,00 de Cashback Extra!', value: 10 },
+        { text: 'Frete Grátis na Próxima Compra! [VIPFRETE]', value: 0 },
+        { text: 'R$ 20,00 de Cashback Extra!', value: 20 },
+      ];
+      
+      const selected = rewards[Math.floor(Math.random() * rewards.length)];
+      setScratchReward(selected.text);
+      localStorage.setItem(`ap_moda_scratch_reward_${clientData.id}`, selected.text);
+      setScratchState('scratched');
+      localStorage.setItem(`ap_moda_scratch_state_${clientData.id}`, 'scratched');
+
+      // If reward has instant cashback value, wire it in CRM
+      if (selected.value > 0) {
+        const updatedClient: Client = {
+          ...clientData,
+          cashbackBalance: (clientData.cashbackBalance || 0) + selected.value,
+        };
+        const nextClients = clients.map(c => c.id === clientData.id ? updatedClient : c);
+        onUpdateClients(nextClients);
+      }
+    }, 1500);
+  };
 
   // Filter sales for this client
   const clientSales = useMemo(() => {
@@ -219,11 +309,11 @@ export default function CustomerPortal({
         </div>
 
         {/* Dynamic Navigation Tabs inside VIP Dashboard */}
-        <div className="flex bg-slate-950 border border-slate-850 p-1.5 rounded-xl gap-1">
+        <div className="flex overflow-x-auto whitespace-nowrap scrollbar-none bg-slate-950 border border-slate-850 p-1.5 rounded-xl gap-1">
           <button
             id="tab-vip"
             onClick={() => setActiveTab('vip')}
-            className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
+            className={`shrink-0 sm:flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
               ${activeTab === 'vip' 
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-900/40'}`}
@@ -234,7 +324,7 @@ export default function CustomerPortal({
           <button
             id="tab-compras"
             onClick={() => setActiveTab('compras')}
-            className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
+            className={`shrink-0 sm:flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
               ${activeTab === 'compras' 
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-900/40'}`}
@@ -245,7 +335,7 @@ export default function CustomerPortal({
           <button
             id="tab-medidas"
             onClick={() => setActiveTab('medidas')}
-            className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
+            className={`shrink-0 sm:flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
               ${activeTab === 'medidas' 
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-900/40'}`}
@@ -254,9 +344,20 @@ export default function CustomerPortal({
             Biometria (Meu Tamanho)
           </button>
           <button
+            id="tab-desafios"
+            onClick={() => setActiveTab('desafios')}
+            className={`shrink-0 sm:flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
+              ${activeTab === 'desafios' 
+                ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-900/40'}`}
+          >
+            <Activity size={14} />
+            Desafios & Prêmios
+          </button>
+          <button
             id="tab-regras"
             onClick={() => setActiveTab('regras')}
-            className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
+            className={`shrink-0 sm:flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer border-0 outline-none
               ${activeTab === 'regras' 
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-900/40'}`}
@@ -675,6 +776,361 @@ export default function CustomerPortal({
               </div>
 
             </form>
+
+            {/* Provador Virtual Inteligente Panel */}
+            <div className="border-t border-slate-850 mt-8 pt-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-pink-500/10 text-pink-400 rounded-xl">
+                  <Sparkles size={16} className="animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">Provador Virtual Inteligente</h4>
+                  <p className="text-[10px] text-slate-400">Análise biométrica computada em tempo real com base no tecido e elasticidade.</p>
+                </div>
+              </div>
+
+              {!cintura || !quadril ? (
+                <div className="p-5 bg-slate-950/40 border border-slate-850 text-center rounded-2xl">
+                  <p className="text-xs text-slate-500">Insira sua Cintura e Quadril no formulário de Biometria acima para ativar a previsão biométrica de caimento.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Size calculation report */}
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <span className="text-[9px] font-mono uppercase bg-pink-950/40 text-pink-300 border border-pink-900/35 px-2 py-0.5 rounded-md font-bold">
+                        Diagnóstio de Shape
+                      </span>
+                      
+                      <div className="flex items-center gap-5">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-600 to-rose-600 flex flex-col items-center justify-center text-white border border-pink-450/20 shadow-lg shadow-pink-600/15 shrink-0">
+                          <span className="text-[10px] font-bold leading-none">TAMANHO</span>
+                          <span className="text-lg font-black leading-none mt-0.5">
+                            {Number(quadril) < 94 ? 'PP' : Number(quadril) < 100 ? 'P' : Number(quadril) < 108 ? 'M' : Number(quadril) < 116 ? 'G' : 'GG'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-left">
+                          <p className="text-xs font-bold text-slate-200">Previsão de Caimento: Ajuste Perfeito ({Number(quadril) < 94 ? 'PP' : Number(quadril) < 100 ? 'P' : Number(quadril) < 108 ? 'M' : Number(quadril) < 116 ? 'G' : 'GG'})</p>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Sua relação cintura-quadril ({((Number(cintura) / Number(quadril)) || 0).toFixed(2)}) indica um excelente fit corporal. Ideal para focar em peças com {Number(cintura)/Number(quadril) < 0.75 ? 'alta compressão nas pernas e cós anatômico largo' : 'conforto respirável de toque frio e elastano Lycra inteligente de alta densidade'}.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t border-slate-850/65 pt-3 flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-slate-500">Precisão da Previsão do Caimento</span>
+                      <span className="text-emerald-400 font-bold">98.4% (Mapeamento Premium de Alta Fidelidade)</span>
+                    </div>
+                  </div>
+
+                  {/* Elasticity advisory */}
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl space-y-3 text-left">
+                    <span className="text-[9px] font-mono uppercase bg-indigo-950/40 text-indigo-300 border border-indigo-900/35 px-2 py-0.5 rounded-md font-bold">
+                      Recomendação Detalhada por Tipo de Tecido
+                    </span>
+
+                    <div className="space-y-2">
+                      {/* Legging Cirrê */}
+                      <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-900/30">
+                        <div>
+                          <p className="font-bold text-slate-200">Leggings Cirrê Brilhantes</p>
+                          <p className="text-[9.5px] text-slate-450">Estrutura mais firme, efeito modelador</p>
+                        </div>
+                        <span className="bg-pink-950 text-pink-300 px-1.5 py-0.5 rounded text-[9.5px] font-extrabold font-mono border border-pink-900/40">
+                          Recomendado: {Number(quadril) < 94 ? 'PP' : Number(quadril) < 100 ? 'P' : Number(quadril) < 108 ? 'M' : Number(quadril) < 116 ? 'G' : 'GG'}
+                        </span>
+                      </div>
+
+                      {/* Poliamida Emana */}
+                      <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-900/30">
+                        <div>
+                          <p className="font-bold text-slate-200">Tecidos Bioativos (Fio Emana/Poliamida)</p>
+                          <p className="text-[9.5px] text-slate-450">Toque gelado com ótima tolerância de stretch</p>
+                        </div>
+                        <span className="bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded text-[9.5px] font-extrabold font-mono border border-sky-900/40">
+                          Recomendado: {Number(quadril) < 100 ? 'P' : Number(quadril) < 108 ? 'M' : 'G'}
+                        </span>
+                      </div>
+
+                      {/* Tops de Alta Compressão */}
+                      <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-900/30">
+                        <div>
+                          <p className="font-bold text-slate-300">Tops e Croppeds Ativos</p>
+                          <p className="text-[9.5px] text-slate-450">Elasticidade segura com bojo removível integrado</p>
+                        </div>
+                        <span className="bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded text-[9.5px] font-extrabold font-mono border border-amber-900/40">
+                          Recomendado: {Number(busto) < 86 ? 'P' : Number(busto) < 94 ? 'M' : 'G'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Desafios & Prêmios */}
+        {activeTab === 'desafios' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Left Col: Desafios de Bem-Estar */}
+            <div className="lg:col-span-12 xl:col-span-7 lg:space-y-6 space-y-6 lg:col-span-7">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-4">
+                <div className="border-b border-slate-850 pb-3 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Desafios Saudáveis de Fidelidade</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Complete hábitos de bem-estar ou engajamento e resgate bônus em dinheiro real direto no seu saldo de cashback!</p>
+                  </div>
+                  <span className="bg-pink-950 text-pink-300 border border-pink-900/35 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono">
+                    Extra Cash
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  
+                  {/* Challenge 1 */}
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl space-y-3 text-left">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                          <Flame size={14} className="text-orange-500 animate-pulse animate-bounce" />
+                          Desafio 1: Foco no Treino da Semana
+                        </h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal">
+                          Conclua 4 treinos esportivos e registre-os no botão de progresso semanal.
+                        </p>
+                      </div>
+                      <span className="font-mono text-[10px] text-pink-400 bg-pink-950/20 border border-pink-900/30 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                        + R$ 15,00 Cashback
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-slate-500">Progresso do Treino</span>
+                        <span className="text-slate-300 font-bold">{challengeProgress.t1 || 0}/4 treinos</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-910 rounded-full overflow-hidden border border-slate-850">
+                        <div 
+                          className="h-full bg-gradient-to-r from-orange-550 to-pink-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, ((challengeProgress.t1 || 0) / 4) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1.5 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => handleRegisterProgress('t1', 4)}
+                        disabled={(challengeProgress.t1 || 0) >= 4}
+                        className="text-[10px] font-bold text-slate-300 bg-slate-900 hover:bg-slate-850 disabled:opacity-40 px-3 py-1.5 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+                      >
+                        {(challengeProgress.t1 || 0) >= 4 ? 'Metas batidas!' : 'Registrar Conclusão de Treino'}
+                      </button>
+
+                      {challengeClaimed.t1 ? (
+                        <span className="text-[10.5px] font-bold text-green-400 flex items-center gap-1 self-end sm:self-auto">
+                          <Check size={13} /> Recompensa Recebida!
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleClaimReward('t1', 15)}
+                          disabled={(challengeProgress.t1 || 0) < 4}
+                          className="text-[10px] font-black text-slate-950 bg-gradient-to-r from-green-450 to-emerald-500 hover:opacity-90 disabled:opacity-40 disabled:bg-slate-800 disabled:text-slate-500 px-4 py-1.5 rounded-lg transition-colors cursor-pointer border-0 shadow-sm"
+                        >
+                          Resgatar R$ 15,00
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Challenge 2 */}
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl space-y-3 text-left">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                          <Activity size={14} className="text-pink-500 animate-pulse" />
+                          Desafio 2: Divulgar Look Fit AP Moda
+                        </h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal">
+                          Poste um Story no Instagram vestindo nosso look esportivo, marque a nossa loja `@apmodafitness` e registre aqui.
+                        </p>
+                      </div>
+                      <span className="font-mono text-[10px] text-pink-400 bg-pink-950/20 border border-pink-900/30 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                        + R$ 20,00 Cashback
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-slate-500">Postagem e Marcação</span>
+                        <span className="text-slate-300 font-bold">{challengeProgress.t2 || 0}/1 story</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-910 rounded-full overflow-hidden border border-slate-850">
+                        <div 
+                          className="h-full bg-gradient-to-r from-pink-500 to-rose-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, ((challengeProgress.t2 || 0) / 1) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1.5 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => handleRegisterProgress('t2', 1)}
+                        disabled={(challengeProgress.t2 || 0) >= 1}
+                        className="text-[10px] font-bold text-slate-300 bg-slate-900 hover:bg-slate-850 disabled:opacity-40 px-3 py-1.5 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+                      >
+                        {(challengeProgress.t2 || 0) >= 1 ? 'Foto Sincronizada!' : 'Já postei o Look! Validar'}
+                      </button>
+
+                      {challengeClaimed.t2 ? (
+                        <span className="text-[10.5px] font-bold text-green-400 flex items-center gap-1 self-end sm:self-auto">
+                          <Check size={13} /> Recompensa Recebida!
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleClaimReward('t2', 20)}
+                          disabled={(challengeProgress.t2 || 0) < 1}
+                          className="text-[10px] font-black text-slate-950 bg-gradient-to-r from-green-450 to-emerald-500 hover:opacity-90 disabled:opacity-40 disabled:bg-slate-800 disabled:text-slate-500 px-4 py-1.5 rounded-lg transition-colors cursor-pointer border-0 shadow-sm"
+                        >
+                          Resgatar R$ 20,00
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Challenge 3 */}
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl space-y-3 text-left">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                          <Trophy size={14} className="text-yellow-555" />
+                          Desafio 3: Madrinha Fitness
+                        </h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal">
+                          Indique 1 amiga para se inscrever e fazer a primeira compra ativa no portal VIP.
+                        </p>
+                      </div>
+                      <span className="font-mono text-[10px] text-pink-400 bg-pink-950/20 border border-pink-900/30 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                        + R$ 10,00 Cashback
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-slate-500">Inscrições Concluídas</span>
+                        <span className="text-slate-300 font-bold">{challengeProgress.t3 || 0}/1 amiga</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-910 rounded-full overflow-hidden border border-slate-850">
+                        <div 
+                          className="h-full bg-gradient-to-r from-pink-500 to-rose-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, ((challengeProgress.t3 || 0) / 1) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1.5 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => handleRegisterProgress('t3', 1)}
+                        disabled={(challengeProgress.t3 || 0) >= 1}
+                        className="text-[10px] font-bold text-slate-300 bg-slate-900 hover:bg-slate-850 disabled:opacity-40 px-3 py-1.5 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+                      >
+                        {(challengeProgress.t3 || 0) >= 1 ? 'Concluído!' : 'Simular Indicação Ativa'}
+                      </button>
+
+                      {challengeClaimed.t3 ? (
+                        <span className="text-[10.5px] font-bold text-green-400 flex items-center gap-1 self-end sm:self-auto">
+                          <Check size={13} /> Recompensa Recebida!
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleClaimReward('t3', 10)}
+                          disabled={(challengeProgress.t3 || 0) < 1}
+                          className="text-[10px] font-black text-slate-950 bg-gradient-to-r from-green-450 to-emerald-500 hover:opacity-90 disabled:opacity-40 disabled:bg-slate-800 disabled:text-slate-500 px-4 py-1.5 rounded-lg transition-colors cursor-pointer border-0 shadow-sm"
+                        >
+                          Resgatar R$ 10,00
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Right Col: Raspadinha */}
+            <div className="lg:col-span-12 xl:col-span-5 lg:col-span-5 space-y-6">
+              <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-center text-center space-y-4">
+                <div className="mx-auto w-12 h-12 bg-pink-100/10 rounded-full flex items-center justify-center text-pink-400">
+                  <Gift size={22} className="animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-white">Raspadinha da Sorte AP Fitness</h4>
+                  <p className="text-[10px] text-slate-400 max-w-xs mt-0.5 leading-normal">Experimente sua sorte hoje! Clique para raspar e revelar seu bônus surpresa.</p>
+                </div>
+
+                {scratchState === 'unscratched' && (
+                  <div 
+                    onClick={handleScratch}
+                    className="w-full max-w-[260px] aspect-[4/3] bg-gradient-to-tr from-amber-500 via-yellow-400 to-orange-500 border border-amber-300 rounded-2xl flex flex-col items-center justify-center cursor-pointer shadow-xl relative overflow-hidden group active:scale-95 transition-transform"
+                  >
+                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity animate-pulse duration-2000" />
+                    {/* Golden design accent lines */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.4),transparent_65%)]" />
+                    
+                    <Sparkles size={36} className="text-white drop-shadow-md animate-bounce" />
+                    <p className="text-slate-950 text-xs font-black uppercase tracking-widest mt-2 border-t border-slate-950/20 pt-1.5">RASPE AQUI</p>
+                    <p className="text-slate-950/70 text-[8px] font-bold uppercase tracking-wider font-mono mt-0.5 animate-pulse">Clique para raspar</p>
+                  </div>
+                )}
+
+                {scratchState === 'scratching' && (
+                  <div className="w-full max-w-[260px] aspect-[4/3] bg-slate-950 border border-slate-850 rounded-2xl flex flex-col items-center justify-center shadow-xl">
+                    <RefreshCw size={24} className="text-pink-500 animate-spin" />
+                    <p className="text-slate-400 text-[10px] font-bold font-mono mt-2">Raspando & Validando cashback...</p>
+                  </div>
+                )}
+
+                {scratchState === 'scratched' && (
+                  <div className="w-full max-w-[260px] aspect-[4/3] bg-gradient-to-tr from-pink-950/30 to-indigo-950/30 border-2 border-green-500/50 rounded-2xl flex flex-col items-center justify-center p-4 shadow-xl relative animate-fade-in text-center">
+                    <div className="absolute -top-3 bg-green-500 text-slate-950 text-[8.5px] font-black px-2.5 py-0.5 rounded-full tracking-widest uppercase">
+                      REVELADO!
+                    </div>
+                    
+                    <Trophy size={32} className="text-green-400 drop-shadow-md animate-bounce" />
+                    <p className="text-white text-xs font-bold uppercase tracking-wider mt-2.5">VOCÊ CONQUISTOU:</p>
+                    <p className="text-green-300 text-sm font-black font-mono tracking-wide mt-1 underline decoration-pink-500 decoration-2 decoration-wavy">
+                      {scratchReward}
+                    </p>
+                    <p className="text-slate-500 text-[8px] font-mono leading-relaxed max-w-[190px] mt-3">
+                      Bônus ou cupons já foram devidamente sincronizados com a carteira de fidelidade do seu CRM!
+                    </p>
+                  </div>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScratchState('unscratched');
+                    setScratchReward('');
+                    localStorage.removeItem(`ap_moda_scratch_state_${clientData.id}`);
+                    localStorage.removeItem(`ap_moda_scratch_reward_${clientData.id}`);
+                  }}
+                  className="text-[9px] font-semibold text-slate-500 hover:text-slate-450 font-mono underline cursor-pointer"
+                >
+                  Sorteiro de Amanhã (Limpar Ticket)
+                </button>
+              </div>
+            </div>
+
           </div>
         )}
 
