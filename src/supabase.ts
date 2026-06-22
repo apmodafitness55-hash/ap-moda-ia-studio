@@ -34,11 +34,16 @@ export function getSupabaseClient() {
   }
 }
 
-// SQL Script template to configure the table in Supabase
-export const SUPABASE_SQL_SETUP = `-- Script de Configuração para AP Moda Fitness
--- COPIE E COLE ESTE SCRIPT NO CONSOLE SQL DO SUPABASE (SQL Editor)
+// Check if Supabase keys are configured
+export function isSupabaseConfigured(): boolean {
+  return getSupabaseConfig() !== null;
+}
 
--- 1. Criação do Diretório de Funcionários / Equipe & Credenciais
+// Updated SQL Script template containing ALL tables of the AP Moda Fitness ecosystem
+export const SUPABASE_SQL_SETUP = `-- Script de Configuração Completo para AP Moda Fitness
+-- COPIE E COLE ESTE SCRIPT INTEIRO NO CONSOLE SQL (SQL Editor) DO SEU SUPABASE PARA HABILITAR A SINCRONIZAÇÃO EM TODOS OS APARELHOS
+
+-- 1. Criação da Tabela de Funcionários / Equipe & Credenciais
 CREATE TABLE IF NOT EXISTS ap_team_members (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -51,13 +56,132 @@ CREATE TABLE IF NOT EXISTS ap_team_members (
   createdAt TEXT
 );
 
--- Habilitar acesso público / RLS para testes rápidos ou regras flexíveis
+-- 2. Criação da Tabela de Catálogo de Produtos
+CREATE TABLE IF NOT EXISTS ap_products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sku TEXT UNIQUE NOT NULL,
+  category TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  cost NUMERIC NOT NULL,
+  stock INTEGER NOT NULL,
+  minStock INTEGER NOT NULL,
+  image TEXT NOT NULL,
+  images JSONB,
+  salesCount INTEGER DEFAULT 0,
+  description TEXT,
+  videoUrl TEXT,
+  colors JSONB,
+  sizes JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Criação da Tabela de Cadastro de Clientes
+CREATE TABLE IF NOT EXISTS ap_clients (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  cpf TEXT,
+  birthDate TEXT,
+  whatsapp TEXT,
+  addressStreet TEXT,
+  addressNum TEXT,
+  addressComp TEXT,
+  addressBairro TEXT,
+  addressCidade TEXT,
+  addressEstado TEXT,
+  addressCep TEXT,
+  channel TEXT NOT NULL,
+  npsScore INTEGER,
+  totalSpent NUMERIC DEFAULT 0,
+  ordersCount INTEGER DEFAULT 0,
+  cashbackBalance NUMERIC DEFAULT 0,
+  busto NUMERIC,
+  cintura NUMERIC,
+  quadril NUMERIC,
+  coxa NUMERIC,
+  altura NUMERIC,
+  peso NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Criação da Tabela de Vendas Realizadas (PDV e Canais)
+CREATE TABLE IF NOT EXISTS ap_sales (
+  id TEXT PRIMARY KEY,
+  clientName TEXT NOT NULL,
+  clientDoc TEXT,
+  channel TEXT NOT NULL,
+  items JSONB NOT NULL,
+  total NUMERIC NOT NULL,
+  costTotal NUMERIC NOT NULL,
+  status TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  payments JSONB,
+  salesperson TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro)
+CREATE TABLE IF NOT EXISTS ap_transactions (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('Inflow', 'Outflow')),
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  date TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Criação da Tabela de Pedidos Online / Encomendas da Vitrine
+CREATE TABLE IF NOT EXISTS ap_online_orders (
+  id TEXT PRIMARY KEY,
+  clientName TEXT NOT NULL,
+  total NUMERIC NOT NULL,
+  status TEXT NOT NULL,
+  items JSONB NOT NULL,
+  createdAt TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  paymentMethod TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Criação da Tabela de Configurações do Sistema Geral (Google Workspace, Dados da Loja, Logo, etc.)
+CREATE TABLE IF NOT EXISTS ap_system_configs (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Habilitar Row Level Security (RLS) para todas as tabelas
 ALTER TABLE ap_team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_sales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_online_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_system_configs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Acesso Total para AP Moda" ON ap_team_members 
-  FOR ALL USING (true) WITH CHECK (true);
+-- Apagar políticas antigas para evitar sobreposições
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_team_members;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_products;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_clients;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_sales;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_transactions;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_online_orders;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_system_configs;
 
--- 2. Inserir Administrador Inicial Administrador Padrão (Ana Paula Admin / Ap01695*)
+-- Criar políticas flexíveis para sincronismo multi-dispositivo sem barreira de token anonimo
+CREATE POLICY "Acesso Total para AP Moda" ON ap_team_members FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_clients FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_sales FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_online_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso Total para AP Moda" ON ap_system_configs FOR ALL USING (true) WITH CHECK (true);
+
+-- Inserir Administrador Padrão Inicial (Ana Paula Admin / Ap01695*) caso já não exista
 INSERT INTO ap_team_members (id, name, login, password, role, details, createdAt)
 VALUES 
   ('usr-1', 'Ana Paula Admin', 'admin', 'Ap01695*', 'Admin', 'Administradora Geral', NOW()::text)
@@ -66,110 +190,60 @@ SET password = EXCLUDED.password;
 `;
 
 /**
- * Downloads all team members from Supabase.
- * Returns null if Supabase is offline or the table is not found.
+ * Sync helper indicating whether a warning alert about missing tables was shown in the session.
+ * Prevents repeating annoying error modals if client hasn't run the SQL scripts in their Supabase yet.
+ */
+let hasShownTableWarning = false;
+
+// Graceful handler for missing tables or query errors in Supabase
+function handleSchemaError(err: any, tableName: string) {
+  console.warn(`[Supabase Sync Warning] Falha na tabela "${tableName}". Certifique-se de que rodou o Script de Configuração SQL no console do Supabase. Detalhe:`, err);
+  
+  if (!hasShownTableWarning && err?.message && (err.message.includes('not found') || err.message.includes('relation') || err.code === '42P01')) {
+    hasShownTableWarning = true;
+    const msg = `⚠️ Sincronização em Nuvem: A tabela "${tableName}" não foi encontrada no seu Supabase!\n\nPor favor, vá em Painel Ajustes > Console de Banco de Dados, copie o Script SQL de Configuração e cole no SQL Editor do seu Supabase para ativar o compartilhamento de dados entre múltiplos aparelhos (celulares, tablets e notebooks). O sistema continuará salvando os dados provisoriamente neste aparelho.`;
+    console.log('[Supabase Setup Required]', msg);
+    // Dynamically emit an event to the document so the UI can exhibit a notification
+    const event = new CustomEvent('supabase-schema-warning', { detail: { message: msg } });
+    window.dispatchEvent(event);
+  }
+}
+
+/**
+ * ------------------- 1. TEAM MEMBERS SYNC -------------------
  */
 export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
-  
   try {
     const { data, error } = await client
       .from('ap_team_members')
       .select('*')
       .order('id', { ascending: true });
-      
     if (error) {
-      console.warn('Error downloading from Supabase table "ap_team_members":', error);
+      handleSchemaError(error, 'ap_team_members');
       return null;
     }
-    
-    if (data) {
-      return data.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        login: item.login,
-        password: item.password,
-        role: item.role as any,
-        details: item.details || '',
-        birthDate: item.birthDate || '',
-        createdAt: item.createdAt || item.created_at || (new Date().toISOString())
-      }));
-    }
-    return [];
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      login: item.login,
+      password: item.password,
+      role: item.role as any,
+      details: item.details || '',
+      birthDate: item.birthDate || '',
+      createdAt: item.createdAt || item.created_at || (new Date().toISOString())
+    }));
   } catch (err) {
-    console.error('Failed to download from Supabase:', err);
+    console.error('Failed to download members:', err);
     return null;
   }
 }
 
-/**
- * Upserts a single user/credential to Supabase.
- */
-export async function upsertTeamMemberToSupabase(member: TeamMember): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  
-  try {
-    const payload = {
-      id: member.id,
-      name: member.name,
-      login: member.login.toLowerCase().trim().replace(/\s+/g, ''),
-      password: member.password || '123',
-      role: member.role,
-      details: member.details || '',
-      birthDate: member.birthDate || '',
-      createdAt: member.createdAt || new Date().toISOString()
-    };
-    
-    const { error } = await client
-      .from('ap_team_members')
-      .upsert(payload, { onConflict: 'id' });
-      
-    if (error) {
-      console.error('Error upserting member to Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed to upsert to Supabase:', err);
-    return false;
-  }
-}
-
-/**
- * Deletes a team member in Supabase
- */
-export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  
-  try {
-    const { error } = await client
-      .from('ap_team_members')
-      .delete()
-      .eq('id', id);
-      
-    if (error) {
-      console.error('Error deleting member from Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed to delete to Supabase:', err);
-    return false;
-  }
-}
-
-/**
- * Perform full bulk synchronization of all team members.
- */
 export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
-  
   try {
-    // Upsert multiple
     const payloads = members.map(m => ({
       id: m.id,
       name: m.name,
@@ -180,18 +254,493 @@ export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Prom
       birthDate: m.birthDate || '',
       createdAt: m.createdAt || new Date().toISOString()
     }));
-    
     const { error } = await client
       .from('ap_team_members')
       .upsert(payloads, { onConflict: 'id' });
-      
     if (error) {
-      console.error('Bulk sync to Supabase failed:', error);
+      handleSchemaError(error, 'ap_team_members');
       return false;
     }
     return true;
   } catch (err) {
-    console.error('Failed bulk sync to Supabase:', err);
+    console.error('Failed bulk team sync:', err);
+    return false;
+  }
+}
+
+export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { error } = await client
+      .from('ap_team_members')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      handleSchemaError(error, 'ap_team_members');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed deleting member:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 2. PRODUCTS SYNC -------------------
+ */
+export async function fetchProductsFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_products').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_products');
+      return null;
+    }
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      category: p.category,
+      price: Number(p.price),
+      cost: Number(p.cost),
+      stock: p.stock,
+      minStock: p.minStock,
+      image: p.image,
+      images: Array.isArray(p.images) ? p.images : [],
+      salesCount: p.salesCount || 0,
+      description: p.description || '',
+      videoUrl: p.videoUrl || '',
+      colors: Array.isArray(p.colors) ? p.colors : [],
+      sizes: Array.isArray(p.sizes) ? p.sizes : []
+    }));
+  } catch (err) {
+    console.error('Failed fetching products:', err);
+    return null;
+  }
+}
+
+export async function syncBulkProductsToSupabase(products: any[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || products.length === 0) return false;
+  try {
+    const payloads = products.map(p => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      category: p.category,
+      price: p.price,
+      cost: p.cost,
+      stock: p.stock,
+      minStock: p.minStock,
+      image: p.image,
+      images: p.images || [],
+      salesCount: p.salesCount || 0,
+      description: p.description || '',
+      videoUrl: p.videoUrl || '',
+      colors: p.colors || [],
+      sizes: p.sizes || []
+    }));
+    const { error } = await client.from('ap_products').upsert(payloads, { onConflict: 'id' });
+    if (error) {
+      handleSchemaError(error, 'ap_products');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed bulk products sync:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 3. CLIENTS SYNC -------------------
+ */
+export async function fetchClientsFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_clients').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_clients');
+      return null;
+    }
+    return (data || []).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email || '',
+      phone: c.phone || '',
+      cpf: c.cpf || '',
+      birthDate: c.birthDate || '',
+      whatsapp: c.whatsapp || '',
+      addressStreet: c.addressStreet || '',
+      addressNum: c.addressNum || '',
+      addressComp: c.addressComp || '',
+      addressBairro: c.addressBairro || '',
+      addressCidade: c.addressCidade || '',
+      addressEstado: c.addressEstado || '',
+      addressCep: c.addressCep || '',
+      channel: c.channel || 'Balcão',
+      npsScore: c.npsScore || 0,
+      totalSpent: Number(c.totalSpent || 0),
+      ordersCount: c.ordersCount || 0,
+      createdAt: c.created_at || new Date().toISOString(),
+      cashbackBalance: Number(c.cashbackBalance || 0),
+      busto: c.busto ? Number(c.busto) : undefined,
+      cintura: c.cintura ? Number(c.cintura) : undefined,
+      quadril: c.quadril ? Number(c.quadril) : undefined,
+      coxa: c.coxa ? Number(c.coxa) : undefined,
+      altura: c.altura ? Number(c.altura) : undefined,
+      peso: c.peso ? Number(c.peso) : undefined
+    }));
+  } catch (err) {
+    console.error('Failed fetching clients:', err);
+    return null;
+  }
+}
+
+export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || clientsList.length === 0) return false;
+  try {
+    const payloads = clientsList.map(c => ({
+      id: c.id,
+      name: c.name,
+      email: c.email || '',
+      phone: c.phone || '',
+      cpf: c.cpf || '',
+      birthDate: c.birthDate || '',
+      whatsapp: c.whatsapp || '',
+      addressStreet: c.addressStreet || '',
+      addressNum: c.addressNum || '',
+      addressComp: c.addressComp || '',
+      addressBairro: c.addressBairro || '',
+      addressCidade: c.addressCidade || '',
+      addressEstado: c.addressEstado || '',
+      addressCep: c.addressCep || '',
+      channel: c.channel || 'Balcão',
+      npsScore: c.npsScore || 0,
+      totalSpent: c.totalSpent || 0,
+      ordersCount: c.ordersCount || 0,
+      cashbackBalance: c.cashbackBalance || 0,
+      busto: c.busto || null,
+      cintura: c.cintura || null,
+      quadril: c.quadril || null,
+      coxa: c.coxa || null,
+      altura: c.altura || null,
+      peso: c.peso || null
+    }));
+    const { error } = await client.from('ap_clients').upsert(payloads, { onConflict: 'id' });
+    if (error) {
+      handleSchemaError(error, 'ap_clients');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed bulk clients sync:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 4. SALES SYNC -------------------
+ */
+export async function fetchSalesFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_sales').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_sales');
+      return null;
+    }
+    return (data || []).map((s: any) => ({
+      id: s.id,
+      clientName: s.clientName,
+      clientDoc: s.clientDoc || '',
+      channel: s.channel,
+      items: Array.isArray(s.items) ? s.items : [],
+      total: Number(s.total),
+      costTotal: Number(s.costTotal || 0),
+      status: s.status,
+      createdAt: s.createdAt,
+      payments: Array.isArray(s.payments) ? s.payments : [],
+      salesperson: s.salesperson || ''
+    }));
+  } catch (err) {
+    console.error('Failed fetching sales:', err);
+    return null;
+  }
+}
+
+export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || salesList.length === 0) return false;
+  try {
+    const payloads = salesList.map(s => ({
+      id: s.id,
+      clientName: s.clientName,
+      clientDoc: s.clientDoc || '',
+      channel: s.channel,
+      items: s.items || [],
+      total: s.total,
+      costTotal: s.costTotal || 0,
+      status: s.status,
+      createdAt: s.createdAt,
+      payments: s.payments || [],
+      salesperson: s.salesperson || ''
+    }));
+    const { error } = await client.from('ap_sales').upsert(payloads, { onConflict: 'id' });
+    if (error) {
+      handleSchemaError(error, 'ap_sales');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed bulk sales sync:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 5. TRANSACTIONS SYNC -------------------
+ */
+export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_transactions').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_transactions');
+      return null;
+    }
+    return (data || []).map((t: any) => ({
+      id: t.id,
+      type: t.type,
+      category: t.category,
+      description: t.description,
+      amount: Number(t.amount),
+      date: t.date
+    }));
+  } catch (err) {
+    console.error('Failed fetching transactions:', err);
+    return null;
+  }
+}
+
+export async function syncBulkTransactionsToSupabase(transactionsList: any[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || transactionsList.length === 0) return false;
+  try {
+    const payloads = transactionsList.map(t => ({
+      id: t.id,
+      type: t.type,
+      category: t.category,
+      description: t.description,
+      amount: t.amount,
+      date: t.date
+    }));
+    const { error } = await client.from('ap_transactions').upsert(payloads, { onConflict: 'id' });
+    if (error) {
+      handleSchemaError(error, 'ap_transactions');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed bulk transactions sync:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 6. ONLINE ORDERS SYNC -------------------
+ */
+export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_online_orders').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_online_orders');
+      return null;
+    }
+    return (data || []).map((o: any) => ({
+      id: o.id,
+      clientName: o.clientName,
+      total: Number(o.total),
+      status: o.status,
+      items: Array.isArray(o.items) ? o.items : [],
+      createdAt: o.createdAt,
+      phone: o.phone || '',
+      address: o.address || '',
+      paymentMethod: o.paymentMethod || ''
+    }));
+  } catch (err) {
+    console.error('Failed fetching online orders:', err);
+    return null;
+  }
+}
+
+export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || ordersList.length === 0) return false;
+  try {
+    const payloads = ordersList.map(o => ({
+      id: o.id,
+      clientName: o.clientName,
+      total: o.total,
+      status: o.status,
+      items: o.items || [],
+      createdAt: o.createdAt,
+      phone: o.phone || '',
+      address: o.address || '',
+      paymentMethod: o.paymentMethod || ''
+    }));
+    const { error } = await client.from('ap_online_orders').upsert(payloads, { onConflict: 'id' });
+    if (error) {
+      handleSchemaError(error, 'ap_online_orders');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed bulk online orders sync:', err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- 7. SYSTEM CONFIGS SYNC (Google Workspace keys, Store specs, logo, slide assets, rates etc.) -------------------
+ */
+const CRITICAL_CONFIG_KEYS = [
+  'ap_store_name',
+  'ap_store_cnpj',
+  'ap_store_address',
+  'ap_store_phone',
+  'ap_store_footer',
+  'ap_store_logo',
+  'ap_whatsapp_token',
+  'ap_whatsapp_phone_id',
+  'ap_whatsapp_recipient',
+  'ap_whatsapp_enabled',
+  'ap_imgbb_key',
+  'ap_discord_webhook',
+  'ap_vitrine_slides',
+  'ap_vitrine_announcement',
+  'ap_vitrine_category_banners',
+  'ap_vitrine_floating_banner',
+  'ap_moda_payment_config',
+  'ap_moda_card_terminals',
+  'ap_card_machines_rates'
+];
+
+/**
+ * Downloads and synchronizes critical configuration key-values with Supabase bilateral table.
+ * Resolves local/remote conflicts by merging newer values back into local storage dynamically.
+ */
+export async function syncSystemConfigsWithSupabase(): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    // 1. Fetch current remote configs
+    const { data, error } = await client.from('ap_system_configs').select('key, value');
+    if (error) {
+      handleSchemaError(error, 'ap_system_configs');
+      return false;
+    }
+
+    const remoteConfigs = new Map<string, string>();
+    if (data) {
+      data.forEach((row: any) => remoteConfigs.set(row.key, row.value));
+    }
+
+    const updatesToPush: { key: string; value: string }[] = [];
+    let localModified = false;
+
+    // 2. Iterate keys we care about
+    for (const key of CRITICAL_CONFIG_KEYS) {
+      const localVal = localStorage.getItem(key);
+      const remoteVal = remoteConfigs.get(key);
+
+      if (localVal !== null && remoteVal === undefined) {
+        // Exists locally but not remotely -> Push to cloud
+        updatesToPush.push({ key, value: localVal });
+      } else if (localVal === null && remoteVal !== undefined && remoteVal !== null) {
+        // Exists remotely but not locally -> Download to machine
+        localStorage.setItem(key, remoteVal);
+        localModified = true;
+      } else if (localVal !== null && remoteVal !== undefined && localVal !== remoteVal) {
+        // Both exist but differ: For active settings slots, prefer the remote value to pull edits across tablets/devices, 
+        // OR let the latest local interaction overwrite it when saved.
+        // Let's safe-sync by saving remote state to this local instance so tablets gather what anaerobic changes were done.
+        localStorage.setItem(key, remoteVal);
+        localModified = true;
+      }
+    }
+
+    // 3. If there are local additions to push
+    if (updatesToPush.length > 0) {
+      console.log(`[Supabase Config Sync] Uploading ${updatesToPush.length} system parameters back to cloud...`);
+      const { error: upsertErr } = await client.from('ap_system_configs').upsert(updatesToPush, { onConflict: 'key' });
+      if (upsertErr) {
+        console.warn('Failed to upsert configurations to Supabase:', upsertErr);
+      }
+    }
+
+    // Return whether browser state reload is required
+    return localModified;
+  } catch (err) {
+    console.error('Failed system config sync:', err);
+    return false;
+  }
+}
+
+/**
+ * Force pushes a single system config key immediately to Supabase on UI Save operations
+ */
+export async function pushSystemConfigToSupabase(key: string, value: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { error } = await client.from('ap_system_configs').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) {
+      handleSchemaError(error, 'ap_system_configs');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`Failed pushing config key ${key}:`, err);
+    return false;
+  }
+}
+
+
+/**
+ * ------------------- REAL-TIME PING / KEEP-ALIVE -------------------
+ */
+export async function pingSupabaseOnLogin(userName: string, userRole: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) {
+    console.log('[Supabase Ping] Sem chaves instaladas no momento para ping automático.');
+    return false;
+  }
+  try {
+    console.log(`[Supabase Keep-Alive] Enviando sinal de uso na nuvem para o login de: ${userName} (${userRole})...`);
+    const { error } = await client.from('ap_team_members').select('id').limit(1);
+    if (!error) {
+      console.log('[Supabase Keep-Alive] Sucesso! Sinal enviado e banco de dados respondendo perfeitamente.');
+      return true;
+    }
+    return false;
+  } catch (err: any) {
+    console.warn('[Supabase Keep-Alive Connection Refused] Falha ao acordar o servidor na nuvem:', err.message || err);
     return false;
   }
 }

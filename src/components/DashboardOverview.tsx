@@ -96,8 +96,9 @@ export default function DashboardOverview({ products, sales, clients, transactio
 
     sales.forEach(sale => {
       if (sale.status === 'Concluída') {
-        counts[sale.channel].value += 1;
-        counts[sale.channel].revenue += sale.total;
+        const chan = sale.channel && counts[sale.channel] ? sale.channel : 'Outros';
+        counts[chan].value += 1;
+        counts[chan].revenue += sale.total;
       }
     });
 

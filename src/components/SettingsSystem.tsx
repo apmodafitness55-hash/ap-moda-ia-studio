@@ -38,11 +38,14 @@ import {
   Search,
   Award,
   Truck,
-  User
+  User,
+  CreditCard,
+  Percent
 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
-import { SUPABASE_SQL_SETUP } from '../supabase';
+import { SUPABASE_SQL_SETUP, pushSystemConfigToSupabase } from '../supabase';
 import { Product, Sale, Client, Transaction } from '../types';
+import { getCardMachinesConfig, saveCardMachinesConfig, CardMachineConfig, DEFAULT_CARD_MACHINES } from '../lib/cardMachines';
 
 interface SettingsSystemProps {
   onResetData?: () => void;
@@ -191,6 +194,31 @@ export default function SettingsSystem({
   const [storeFooter, setStoreFooter] = useState(() => localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
   const [storeLogoUrl, setStoreLogoUrl] = useState(() => localStorage.getItem('ap_store_logo') || 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=120&q=80');
 
+  useEffect(() => {
+    const handleStorageSynced = () => {
+      console.log('[SettingsSystem] Cloud-sync change detected! Sincronizando dados locais do localStorage com a interface.');
+      setStoreName(localStorage.getItem('ap_store_name') || 'AP Moda Fitness');
+      setStoreCnpj(localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
+      setStoreAddress(localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
+      setStorePhone(localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
+      setStoreFooter(localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
+      setStoreLogoUrl(localStorage.getItem('ap_store_logo') || 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=120&q=80');
+      setWhatsappToken(localStorage.getItem('ap_whatsapp_token') || '');
+      setWhatsappPhoneId(localStorage.getItem('ap_whatsapp_phone_id') || '');
+      setWhatsappRecipient(localStorage.getItem('ap_whatsapp_recipient') || '');
+      setWhatsappEnabled(localStorage.getItem('ap_whatsapp_enabled') !== 'false');
+      
+      const savedImgbb = localStorage.getItem('ap_imgbb_key');
+      if (savedImgbb && savedImgbb !== 'imgbb_live_tok_9821379128') {
+        setImgbbKey(savedImgbb);
+      }
+      setDiscordWebhook(localStorage.getItem('ap_discord_webhook') || '');
+    };
+
+    window.addEventListener('ap-storage-synced', handleStorageSynced);
+    return () => window.removeEventListener('ap-storage-synced', handleStorageSynced);
+  }, []);
+
   // Integrations states
   const [supabaseStatus, setSupabaseStatus] = useState<'connected' | 'offline_sync'>('connected');
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);
@@ -216,6 +244,10 @@ export default function SettingsSystem({
   const [isTestingWhatsapp, setIsTestingWhatsapp] = useState(false);
   const [testType, setTestType] = useState<'sale_completed' | 'stock_alert'>('sale_completed');
   const [whatsappLog, setWhatsappLog] = useState<any>(null);
+
+  // Estados dos leitores de cartão (maquininhas) e suas taxas
+  const [cardMachines, setCardMachines] = useState<CardMachineConfig[]>(() => getCardMachinesConfig());
+  const [editingMachineId, setEditingMachineId] = useState<string>('infinitepay');
 
   // Safety & Audit logs state
   const [userRole, setUserRole] = useState<'Admin' | 'Gerente' | 'Vendedor'>(() => {
@@ -337,7 +369,7 @@ export default function SettingsSystem({
   ]);
 
   // Synchronize Settings to LocalStorage
-  const handleSaveStoreSettings = (e: React.FormEvent) => {
+  const handleSaveStoreSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ap_store_name', storeName);
     localStorage.setItem('ap_store_cnpj', storeCnpj);
@@ -348,17 +380,33 @@ export default function SettingsSystem({
 
     // Register log
     registerAuditLog('Configuração Alterada', 'Dados da empresa editados e salvos');
-    alert('Dados da empresa atualizados com sucesso no sistema e sincronizados com os cupons de venda!');
+    
+    // Immediate push to cloud
+    await pushSystemConfigToSupabase('ap_store_name', storeName);
+    await pushSystemConfigToSupabase('ap_store_cnpj', storeCnpj);
+    await pushSystemConfigToSupabase('ap_store_address', storeAddress);
+    await pushSystemConfigToSupabase('ap_store_phone', storePhone);
+    await pushSystemConfigToSupabase('ap_store_footer', storeFooter);
+    await pushSystemConfigToSupabase('ap_store_logo', storeLogoUrl);
+
+    alert('Dados da empresa atualizados com sucesso no sistema e sincronizados em nuvem!');
   };
 
-  const handleSaveWhatsappSettings = (e: React.FormEvent) => {
+  const handleSaveWhatsappSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ap_whatsapp_token', whatsappToken);
     localStorage.setItem('ap_whatsapp_phone_id', whatsappPhoneId);
     localStorage.setItem('ap_whatsapp_recipient', whatsappRecipient);
     localStorage.setItem('ap_whatsapp_enabled', String(whatsappEnabled));
     registerAuditLog('Configuração WhatsApp', 'Credenciais do WhatsApp Cloud API atualizadas');
-    alert('Configurações do WhatsApp salvas com sucesso! Alertas automáticos sincronizados.');
+
+    // Immediate push to cloud
+    await pushSystemConfigToSupabase('ap_whatsapp_token', whatsappToken);
+    await pushSystemConfigToSupabase('ap_whatsapp_phone_id', whatsappPhoneId);
+    await pushSystemConfigToSupabase('ap_whatsapp_recipient', whatsappRecipient);
+    await pushSystemConfigToSupabase('ap_whatsapp_enabled', String(whatsappEnabled));
+
+    alert('Configurações do WhatsApp salvas com sucesso e sincronizadas em nuvem!');
   };
 
   const handleTestWhatsapp = async () => {
@@ -1374,6 +1422,327 @@ export default function SettingsSystem({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Configuração de Taxas das Maquininhas de Cartão */}
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5 space-y-5 col-span-1 lg:col-span-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-pink-50 text-pink-600 rounded-xl">
+                  <CreditCard size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                    ⚙️ Taxas de Juros das Maquininhas de Cartão (PDV)
+                  </h3>
+                  <p className="text-[10px] text-zinc-500">Cadastre e personalizar os descontos operacionais que você paga por venda parcelada nas maquininhas reais.</p>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Deseja restaurar as taxas padrão de fábrica de todas as maquininhas (InfinitePay, Saipay, PagSeguro, Mercado Pago, Ton, Stone)? Isso irá sobrepor suas edições atuais.")) {
+                    setCardMachines(DEFAULT_CARD_MACHINES);
+                    saveCardMachinesConfig(DEFAULT_CARD_MACHINES);
+                    pushSystemConfigToSupabase('ap_card_machines_rates', JSON.stringify(DEFAULT_CARD_MACHINES));
+                    alert("✅ Todas as taxas padrão foram limpas e restauradas com sucesso!");
+                  }
+                }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] transition cursor-pointer self-start sm:self-center font-sans border-none"
+              >
+                Restaurar Padrão de Fábrica
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 font-sans">
+              {/* Left Column: Machine Selection & Basic Specs */}
+              <div className="md:col-span-4 space-y-4">
+                <div>
+                  <label className="block text-slate-500 font-bold uppercase tracking-wider text-[9px] mb-2 select-none">Ativar ou Editar Maquininha</label>
+                  <div className="space-y-1.5">
+                    {cardMachines.map((machine) => (
+                      <button
+                        key={machine.id}
+                        type="button"
+                        onClick={() => setEditingMachineId(machine.id)}
+                        className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between cursor-pointer font-sans ${
+                          editingMachineId === machine.id
+                            ? 'bg-pink-50/70 border-pink-200 text-pink-700 font-bold'
+                            : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-700 font-medium'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">{machine.name}</span>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            editingMachineId === machine.id ? 'bg-pink-600 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            Débito: {machine.debitFee.toFixed(2)}%
+                          </span>
+                          {((machine.debitDiscount || 0) > 0 || (machine.creditDiscount || 0) > 0) && (
+                            <span className="text-[8px] text-emerald-600 font-extrabold font-mono">
+                              Desc: D({machine.debitDiscount || 0}%) C({machine.creditDiscount || 0}%)
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Live Calculator Sandbox for Rate Testing */}
+                <div className="bg-slate-900 text-zinc-300 rounded-xl p-4 space-y-3 shadow-sm">
+                  <h4 className="text-[10px] font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1 font-sans">
+                    <Percent size={11} />
+                    <span>Simulador de Taxas (Cálculo Rápido)</span>
+                  </h4>
+                  <p className="text-[9px] text-zinc-400 leading-relaxed font-sans">Simule uma venda para verificar o valor líquido recebido na conta de sua boutique de acordo com a configuração ativa.</p>
+                  
+                  <div className="space-y-2 font-sans">
+                    <div>
+                      <span className="text-[9px] text-zinc-500 block">Valor Bruto da Venda (R$)</span>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1.5 text-[10px] text-zinc-505">R$</span>
+                        <input
+                          type="number"
+                          id="calc-bruto-input2"
+                          defaultValue="100.00"
+                          className="w-full bg-slate-800 text-zinc-150 pl-7 pr-2 py-1 text-xs rounded-lg focus:outline-hidden font-bold"
+                          onChange={() => {}} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[9px] text-zinc-500 block">Tipo</span>
+                        <select
+                          id="calc-type-select2"
+                          defaultValue="credit"
+                          className="w-full bg-slate-800 text-zinc-150 text-xs rounded-lg p-1 focus:outline-hidden font-bold"
+                          onChange={() => {}}
+                        >
+                          <option value="credit">Crédito</option>
+                          <option value="debit">Débito</option>
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-550 block">Parcelas</span>
+                        <select
+                          id="calc-installments-select2"
+                          defaultValue="3"
+                          className="w-full bg-slate-800 text-zinc-150 text-xs rounded-lg p-1 focus:outline-hidden font-bold"
+                        >
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(p => (
+                            <option key={p} value={p}>{p}x</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-800 pt-2 space-y-1 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bruteAmountStr = (document.getElementById('calc-bruto-input2') as HTMLInputElement)?.value || '100';
+                          const bruto = parseFloat(bruteAmountStr) || 0;
+                          const method = (document.getElementById('calc-type-select2') as HTMLSelectElement)?.value || 'credit';
+                          const parts = parseInt((document.getElementById('calc-installments-select2') as HTMLSelectElement)?.value || '3');
+                          const activeM = cardMachines.find(m => m.id === editingMachineId);
+                          
+                          if (activeM) {
+                            const feeRate = method === 'debit' ? activeM.debitFee : (activeM.creditInstallments[parts] || 0);
+                            const feeValue = (bruto * feeRate) / 100;
+                            const net = bruto - feeValue;
+                            
+                            const resEl = document.getElementById('calc-results2') as HTMLDivElement;
+                            if (resEl) {
+                              resEl.innerHTML = `
+                                <div class="flex justify-between text-zinc-400 font-sans"><span>Taxa Aplicada:</span><span class="text-zinc-100 font-bold">${feeRate.toFixed(2)}%</span></div>
+                                <div class="flex justify-between text-zinc-400 font-sans"><span>Custo de Tarifa:</span><span class="text-rose-400 font-bold">R$ ${feeValue.toFixed(2)}</span></div>
+                                <div class="flex justify-between text-emerald-400 font-bold mt-1 font-sans"><span>Líquido a Receber:</span><span>R$ ${net.toFixed(2)}</span></div>
+                              `;
+                            }
+                          }
+                        }}
+                        className="w-full py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-[9px] transition-all cursor-pointer font-sans border-none"
+                      >
+                        Calcular Margem Estimada
+                      </button>
+
+                      <div id="calc-results2" className="mt-2 text-[9px] space-y-1.5 bg-slate-850 p-2 rounded-lg font-mono">
+                        <div className="flex justify-between text-zinc-400">
+                          <span>Taxa Aplicada:</span>
+                          <span className="text-zinc-100 font-bold">
+                            {(cardMachines.find(m => m.id === editingMachineId)?.creditInstallments[3] || 0).toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-zinc-400">
+                          <span>Custo de Tarifa:</span>
+                          <span className="text-rose-400 font-bold">R$ {(100 * (cardMachines.find(m => m.id === editingMachineId)?.creditInstallments[3] || 0) / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-400 font-bold mt-1">
+                          <span>Líquido a Receber:</span>
+                          <span>R$ {(100 - (100 * (cardMachines.find(m => m.id === editingMachineId)?.creditInstallments[3] || 0) / 100)).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Installment Customization Form */}
+              <div className="md:col-span-8 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+                {(() => {
+                  const activeMachine = cardMachines.find(m => m.id === editingMachineId);
+                  if (!activeMachine) return null;
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-200 font-sans">
+                        <span className="text-xs font-bold text-slate-800">
+                          Editando taxas de: <span className="text-pink-600 underline">{activeMachine.name}</span>
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-bold font-mono">Todas as taxas em %</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-sans">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-650 mb-1">Taxa de Débito (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={activeMachine.debitFee}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = cardMachines.map(m => {
+                                  if (m.id === activeMachine.id) {
+                                    return { ...m, debitFee: val };
+                                  }
+                                  return m;
+                                });
+                                setCardMachines(updated);
+                              }}
+                              className="w-full bg-white border border-slate-250 rounded-lg p-2 font-mono font-bold text-xs focus:outline-hidden focus:border-pink-500"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[9px] text-slate-450 mt-1">Custo retido pela maquininha na compra em débito.</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-650 mb-1">Desconto no Débito (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={activeMachine.debitDiscount || 0}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = cardMachines.map(m => {
+                                  if (m.id === activeMachine.id) {
+                                    return { ...m, debitDiscount: val };
+                                  }
+                                  return m;
+                                });
+                                setCardMachines(updated);
+                              }}
+                              className="w-full bg-white border border-slate-250 rounded-lg p-2 font-mono font-bold text-xs focus:outline-hidden focus:border-pink-500"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[9px] text-slate-450 mt-1">Desconto concedido da venda ao pagar no débito.</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-650 mb-1">Desconto no Crédito (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={activeMachine.creditDiscount || 0}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = cardMachines.map(m => {
+                                  if (m.id === activeMachine.id) {
+                                    return { ...m, creditDiscount: val };
+                                  }
+                                  return m;
+                                });
+                                setCardMachines(updated);
+                              }}
+                              className="w-full bg-white border border-slate-250 rounded-lg p-2 font-mono font-bold text-xs focus:outline-hidden focus:border-pink-500"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[9px] text-slate-450 mt-1">Desconto concedido da venda ao pagar no crédito.</p>
+                        </div>
+                      </div>
+
+                      <div className="font-sans">
+                        <span className="block text-[10px] font-bold text-slate-605 mb-2.5 uppercase tracking-wider text-slate-500">Tabela de Crédito e Parcelamento (1x a 12x)</span>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map((p) => {
+                            const val = activeMachine.creditInstallments[p] !== undefined ? activeMachine.creditInstallments[p] : 0;
+                            return (
+                              <div key={p} className="bg-white p-2 border border-slate-200 rounded-lg flex items-center justify-between gap-1 shadow-2xs font-sans">
+                                <span className="text-[11px] font-bold text-slate-600 shrink-0 font-mono">{p}x:</span>
+                                <div className="relative flex-1">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    value={val}
+                                    onChange={(e) => {
+                                      const inputVal = parseFloat(e.target.value) || 0;
+                                      const updated = cardMachines.map(m => {
+                                        if (m.id === activeMachine.id) {
+                                          const newInstallments = { ...m.creditInstallments, [p]: inputVal };
+                                          return { ...m, creditInstallments: newInstallments };
+                                        }
+                                        return m;
+                                      });
+                                      setCardMachines(updated);
+                                    }}
+                                    className="w-full text-right bg-slate-50 focus:bg-white border border-slate-200 focus:border-pink-500 rounded-md p-1 pr-4 font-mono font-bold text-[11px] focus:outline-hidden"
+                                  />
+                                  <span className="absolute right-1.5 top-1 text-[9px] text-slate-400 font-bold">%</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1 font-sans">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveCardMachinesConfig(cardMachines);
+                            pushSystemConfigToSupabase('ap_card_machines_rates', JSON.stringify(cardMachines));
+                            alert(`✅ Configuração salva!\n\nAs taxas para a maquininha "${activeMachine.name}" foram salvas com sucesso localmente e enviadas ao Supabase para atualizar todos os aparelhos conectados (tablets, celulares)!`);
+                          }}
+                          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-[10.5px] border-none font-sans"
+                        >
+                          Salvar Todas as Taxas Atuais
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 

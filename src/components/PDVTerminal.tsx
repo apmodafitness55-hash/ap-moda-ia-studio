@@ -25,6 +25,7 @@ import {
   Printer
 } from 'lucide-react';
 import { Product, SaleItem, Sale, Client, SalesChannel, ActiveTab } from '../types';
+import { getCardMachinesConfig, CardMachineConfig } from '../lib/cardMachines';
 import ThermalReceipt from './ThermalReceipt';
 
 interface PDVTerminalProps {
@@ -114,7 +115,18 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
   };
 
   // Combination of payment methods states
-  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([
+  const [payments, setPayments] = useState<{ 
+    method: string; 
+    amount: number;
+    installments?: number;
+    cardMachine?: string;
+    cardFeePercent?: number;
+    cardDiscountPercent?: number;
+    netAmount?: number;
+    receivedCash?: number;
+    changeAmount?: number;
+    changeMethod?: 'Espécie' | 'Pix';
+  }[]>([
     { method: 'PIX', amount: 0 }
   ]);
 
@@ -211,8 +223,117 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     setPayments(filtered);
   };
 
-  const updatePaymentRow = (index: number, fields: Partial<{ method: string; amount: number }>) => {
-    setPayments(prev => prev.map((p, idx) => idx === index ? { ...p, ...fields } : p));
+  const updatePaymentRow = (
+    index: number, 
+    fields: Partial<{ 
+      method: string; 
+      amount: number; 
+      installments: number; 
+      cardMachine: string; 
+      cardFeePercent: number; 
+      cardDiscountPercent: number;
+      netAmount: number; 
+      receivedCash: number;
+      changeAmount: number;
+      changeMethod: 'Espécie' | 'Pix';
+    }>
+  ) => {
+    setPayments(prev => prev.map((p, idx) => {
+      if (idx === index) {
+        const updated = { ...p, ...fields };
+        
+        // Se mudou o método de pagamento
+        if (fields.method !== undefined) {
+          if (fields.method === 'Cartão de Crédito' || fields.method === 'Cartão de Débito') {
+            const mConfigs = getCardMachinesConfig();
+            const defaultMach = mConfigs[0] || { id: 'infinitepay', debitFee: 1.38, debitDiscount: 0, creditDiscount: 0, creditInstallments: { 3: 4.98 } };
+            updated.cardMachine = defaultMach.id;
+            updated.installments = fields.method === 'Cartão de Crédito' ? 3 : 1;
+            
+            const isCredit = fields.method === 'Cartão de Crédito';
+            const feePercent = isCredit
+              ? (defaultMach.creditInstallments[updated.installments] || 0)
+              : defaultMach.debitFee;
+
+            const discPercent = isCredit
+              ? (defaultMach.creditDiscount || 0)
+              : (defaultMach.debitDiscount || 0);
+            
+            updated.cardFeePercent = feePercent;
+            updated.cardDiscountPercent = discPercent;
+            
+            const billedAmount = updated.amount - (updated.amount * discPercent / 100);
+            updated.netAmount = Number((billedAmount - (billedAmount * feePercent / 100)).toFixed(2));
+            
+            // Clean up Cash fields if changing from cash to card
+            delete updated.receivedCash;
+            delete updated.changeAmount;
+            delete updated.changeMethod;
+          } else {
+            // Remove os dados do cartão se mudou para PIX, Dinheiro, etc.
+            delete updated.cardMachine;
+            delete updated.installments;
+            delete updated.cardFeePercent;
+            delete updated.cardDiscountPercent;
+            delete updated.netAmount;
+            
+            if (fields.method === 'Dinheiro') {
+              updated.receivedCash = updated.amount;
+              updated.changeAmount = 0;
+              updated.changeMethod = 'Espécie';
+            } else {
+              delete updated.receivedCash;
+              delete updated.changeAmount;
+              delete updated.changeMethod;
+            }
+          }
+        } else {
+          // Se mudou algum parâmetro do cartão
+          const isCard = updated.method === 'Cartão de Crédito' || updated.method === 'Cartão de Débito';
+          if (isCard) {
+            const isCredit = updated.method === 'Cartão de Crédito';
+            const mConfigs = getCardMachinesConfig();
+            const activeMach = mConfigs.find(m => m.id === updated.cardMachine) || mConfigs[0];
+            
+            let rate = updated.cardFeePercent;
+            let discountRate = updated.cardDiscountPercent !== undefined ? updated.cardDiscountPercent : (isCredit ? (activeMach.creditDiscount || 0) : (activeMach.debitDiscount || 0));
+
+            if (fields.cardMachine !== undefined) {
+              // Mudou de maquininha: recarrega taxas e desconto padrão
+              discountRate = isCredit ? (activeMach.creditDiscount || 0) : (activeMach.debitDiscount || 0);
+              rate = isCredit 
+                ? (activeMach.creditInstallments[updated.installments || 3] || 0)
+                : activeMach.debitFee;
+              
+              updated.cardFeePercent = rate;
+              updated.cardDiscountPercent = discountRate;
+            } else if (fields.installments !== undefined) {
+              rate = activeMach.creditInstallments[updated.installments || 3] || 0;
+              updated.cardFeePercent = rate;
+            } else if (fields.cardFeePercent !== undefined) {
+              rate = fields.cardFeePercent;
+            } else if (fields.cardDiscountPercent !== undefined) {
+              discountRate = fields.cardDiscountPercent;
+            }
+            
+            const activeRate = rate !== undefined ? rate : 0;
+            const activeDiscountRate = discountRate !== undefined ? discountRate : 0;
+            
+            const billedAmount = updated.amount - (updated.amount * activeDiscountRate / 100);
+            updated.netAmount = Number((billedAmount - (billedAmount * activeRate / 100)).toFixed(2));
+          } else if (updated.method === 'Dinheiro') {
+            const recv = updated.receivedCash !== undefined ? updated.receivedCash : updated.amount;
+            updated.receivedCash = recv;
+            updated.changeAmount = Math.max(0, Number((recv - updated.amount).toFixed(2)));
+            if (!updated.changeMethod) {
+              updated.changeMethod = 'Espécie';
+            }
+          }
+        }
+        return updated;
+      }
+      return p;
+    }));
   };
 
   const autoBalancePayments = () => {
@@ -820,44 +941,197 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-3.5 max-h-64 overflow-y-auto pr-1">
                 {payments.map((p, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <select
-                      value={p.method}
-                      onChange={(e) => updatePaymentRow(idx, { method: e.target.value })}
-                      className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-700 focus:outline-hidden focus:border-pink-500 font-medium"
-                    >
-                      <option value="PIX">PIX</option>
-                      <option value="Dinheiro">Dinheiro</option>
-                      <option value="Cartão de Crédito">Cartão de Crédito</option>
-                      <option value="Cartão de Débito">Cartão de Débito</option>
-                      <option value="Boleto Bancário">Boleto Bancário</option>
-                      <option value="Crediário">Crediário</option>
-                    </select>
+                  <div key={idx} className="p-2.5 bg-slate-50/65 rounded-xl border border-slate-200/50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={p.method}
+                        onChange={(e) => updatePaymentRow(idx, { method: e.target.value })}
+                        className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-sans text-slate-700 focus:outline-hidden focus:border-pink-500 font-medium"
+                      >
+                        <option value="PIX">PIX</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                        <option value="Cartão de Débito">Cartão de Débito</option>
+                        <option value="Boleto Bancário">Boleto Bancário</option>
+                        <option value="Crediário">Crediário</option>
+                      </select>
 
-                    <div className="relative w-28 shrink-0">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-mono">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={p.amount || ''}
-                        placeholder="0.00"
-                        onChange={(e) => updatePaymentRow(idx, { amount: parseFloat(e.target.value) || 0 })}
-                        className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-750 font-bold focus:outline-hidden focus:border-pink-500"
-                      />
+                      <div className="relative w-28 shrink-0">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-mono">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={p.amount || ''}
+                          placeholder="0.00"
+                          onChange={(e) => updatePaymentRow(idx, { amount: parseFloat(e.target.value) || 0 })}
+                          className="w-full pl-7 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-750 font-bold focus:outline-hidden focus:border-pink-500"
+                        />
+                      </div>
+
+                      {payments.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePaymentRow(idx)}
+                          className="p-1 px-2 text-rose-500 hover:bg-rose-55 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                          title="Remover forma de pagamento"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
 
-                    {payments.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removePaymentRow(idx)}
-                        className="p-1 px-2 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                        title="Remover forma de pagamento"
-                      >
-                        ✕
-                      </button>
+                    {/* Opções de Maquininha e Parcelamento para Cartões */}
+                    {(p.method === 'Cartão de Crédito' || p.method === 'Cartão de Débito') && (
+                      <div className="bg-white border border-slate-200/60 p-2.5 rounded-lg text-[10px] space-y-2.5">
+                        <div className="flex flex-wrap gap-2 items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 font-medium font-sans">Maquininha:</span>
+                            <select
+                              value={p.cardMachine || 'infinitepay'}
+                              onChange={(e) => updatePaymentRow(idx, { cardMachine: e.target.value })}
+                              className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-700 focus:outline-hidden font-medium font-sans"
+                            >
+                              {getCardMachinesConfig().map(mach => (
+                                <option key={mach.id} value={mach.id}>{mach.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {p.method === 'Cartão de Crédito' && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-400 font-medium font-sans">Parcelas:</span>
+                              <select
+                                value={p.installments || 3}
+                                onChange={(e) => updatePaymentRow(idx, { installments: parseInt(e.target.value) })}
+                                className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-700 focus:outline-hidden font-medium font-sans"
+                              >
+                                {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                                  <option key={n} value={n}>{n}x</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 font-medium font-sans">Desconto Máq:</span>
+                            <div className="relative w-12">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={p.cardDiscountPercent !== undefined ? p.cardDiscountPercent : 0}
+                                onChange={(e) => updatePaymentRow(idx, { cardDiscountPercent: parseFloat(e.target.value) || 0 })}
+                                className="w-full text-right bg-slate-50 border border-slate-200 rounded px-1 pr-3 py-0.5 text-[10px] font-mono text-emerald-755 font-bold focus:outline-hidden"
+                              />
+                              <span className="absolute right-0.5 top-0.5 text-slate-400 text-[8.5px] font-bold">%</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 font-medium font-sans">Taxa:</span>
+                            <div className="relative w-12">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={p.cardFeePercent !== undefined ? p.cardFeePercent : 0}
+                                onChange={(e) => updatePaymentRow(idx, { cardFeePercent: parseFloat(e.target.value) || 0 })}
+                                className="w-full text-right bg-slate-50 border border-slate-200 rounded px-1 pr-3 py-0.5 text-[10px] font-mono text-slate-750 focus:outline-hidden"
+                              />
+                              <span className="absolute right-0.5 top-0.5 text-slate-400 text-[8.5px] font-bold">%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Valor Líquido/Taxas formatado */}
+                        <div className="flex items-center justify-between text-[9px] border-t border-slate-100 pt-1.5 text-slate-500 font-mono">
+                          {((p.cardDiscountPercent || 0) > 0) ? (
+                            <span>
+                              Desc ({p.cardDiscountPercent}%):{' '}
+                              <strong className="text-emerald-600 font-mono">
+                                -R$ {((p.amount * (p.cardDiscountPercent || 0)) / 100).toFixed(2)}
+                              </strong>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Sem desconto</span>
+                          )}
+                          <span>
+                            Tarifa ({p.cardFeePercent}%):{' '}
+                            <strong className="text-rose-500 font-mono">
+                              R$ {(((p.amount - (p.amount * (p.cardDiscountPercent || 0)) / 100) * (p.cardFeePercent || 0)) / 105).toFixed(2)}
+                            </strong>
+                          </span>
+                          <span>
+                            Líquido:{' '}
+                            <strong className="text-emerald-600 font-extrabold font-mono">
+                              R$ {
+                                (
+                                  (p.amount - (p.amount * (p.cardDiscountPercent || 0)) / 100) -
+                                  ((p.amount - (p.amount * (p.cardDiscountPercent || 0)) / 100) * (p.cardFeePercent || 0)) / 100
+                                ).toFixed(2)
+                              }
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Dinheiro (Calcular Troco) */}
+                    {p.method === 'Dinheiro' && (
+                      <div className="bg-emerald-50/40 border border-emerald-100/70 p-2.5 rounded-lg text-[10px] space-y-2 font-sans">
+                        <div className="flex flex-wrap gap-2.5 items-center justify-between">
+                          <div className="flex items-center gap-1 flex-1 min-w-[120px]">
+                            <span className="text-slate-500 font-medium">Valor Recebido:</span>
+                            <div className="relative flex-1 max-w-[100px]">
+                              <span className="absolute left-1.5 top-0.5 font-mono text-slate-400 text-[9px]">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={p.receivedCash !== undefined ? p.receivedCash : ''}
+                                placeholder={p.amount.toFixed(2)}
+                                onChange={(e) => {
+                                  const received = parseFloat(e.target.value) || 0;
+                                  const change = Math.max(0, received - p.amount);
+                                  updatePaymentRow(idx, {
+                                    receivedCash: received,
+                                    changeAmount: Number(change.toFixed(2)),
+                                    changeMethod: p.changeMethod || 'Espécie'
+                                  });
+                                }}
+                                className="w-full text-right bg-white border border-slate-200 rounded px-1 pl-4.5 py-0.5 text-[10px] font-mono text-slate-750 font-bold focus:outline-hidden"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-500 font-medium">Forma do Troco:</span>
+                            <select
+                              value={p.changeMethod || 'Espécie'}
+                              onChange={(e) => {
+                                updatePaymentRow(idx, { changeMethod: e.target.value as 'Espécie' | 'Pix' });
+                              }}
+                              className="bg-white border border-slate-200 rounded px-1 py-0.5 text-[9.5px] text-slate-705 font-medium font-sans focus:outline-hidden"
+                            >
+                              <option value="Espécie">Em Espécie (Dinheiro)</option>
+                              <option value="Pix">Via PIX (Transferência)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {((p.receivedCash || 0) > p.amount) && (
+                          <div className="flex items-center justify-between text-[10px] border-t border-dashed border-emerald-100 pt-1.5 mt-0.5 font-sans">
+                            <span className="text-slate-600 font-semibold">Troco Devolvido:</span>
+                            <span className="text-emerald-700 font-extrabold font-mono text-xs bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                              R$ {((p.receivedCash || 0) - p.amount).toFixed(2)} ({p.changeMethod === 'Pix' ? 'Via PIX' : 'Em Dinheiro'})
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}

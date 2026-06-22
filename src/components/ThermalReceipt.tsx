@@ -908,12 +908,49 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
               
               {sale.payments && sale.payments.length > 0 && (
                 <div className="space-y-0.5 pl-2 font-sans text-[10px]">
-                  {sale.payments.map((p, idx) => (
-                    <div key={idx} className="flex justify-between text-slate-600 font-medium">
-                      <span>• {p.method}</span>
-                      <span className="font-mono font-bold text-slate-755">{formatCurrency(p.amount)}</span>
-                    </div>
-                  ))}
+                  {sale.payments.map((p, idx) => {
+                    const extra = (p as any).installments 
+                      ? ` (${(p as any).installments}x na ${((p as any).cardMachine || '').toUpperCase()})`
+                      : '';
+                    const discountRate = (p as any).cardDiscountPercent || 0;
+                    const feeRate = (p as any).cardFeePercent || 0;
+                    const receivedAmount = (p as any).receivedCash || 0;
+                    const changeVal = (p as any).changeAmount || 0;
+                    const cMethod = (p as any).changeMethod || 'Espécie';
+
+                    return (
+                      <div key={idx} className="border-b border-dashed border-slate-100 last:border-0 pb-1 mb-1">
+                        <div className="flex justify-between text-slate-600 font-medium">
+                          <span>• {p.method}{extra}</span>
+                          <span className="font-mono font-bold text-slate-755">{formatCurrency(p.amount)}</span>
+                        </div>
+                        {discountRate > 0 && (
+                          <div className="text-[8.5px] text-emerald-600 ml-3 flex justify-between">
+                            <span>↳ Desc. Maquininha ({discountRate}%)</span>
+                            <span>-{formatCurrency(p.amount * discountRate / 100)}</span>
+                          </div>
+                        )}
+                        {feeRate > 0 && (
+                          <div className="text-[8.5px] text-rose-500 ml-3 flex justify-between">
+                            <span>↳ Tarifa Máquina ({feeRate}%)</span>
+                            <span>{formatCurrency(p.amount * feeRate / 100)}</span>
+                          </div>
+                        )}
+                        {p.method === 'Dinheiro' && receivedAmount > p.amount && (
+                          <div className="ml-3 text-[8.5px] text-slate-500 space-y-0.5">
+                            <div className="flex justify-between">
+                              <span>↳ Recebido em Dinheiro:</span>
+                              <span>{formatCurrency(receivedAmount)}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-600 font-semibold">
+                              <span>↳ Troco Devolvido ({cMethod === 'Pix' ? 'Via PIX' : 'Em Dinheiro'}):</span>
+                              <span>{formatCurrency(changeVal || (receivedAmount - p.amount))}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
