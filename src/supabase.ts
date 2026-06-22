@@ -11,10 +11,10 @@ export interface TeamMember {
   createdAt?: string;
 }
 
-// Retrieves configuration dynamically from localStorage
+// Retrieves configuration dynamically from localStorage, falling back to default shared credentials
 export function getSupabaseConfig() {
-  const url = localStorage.getItem('ap_supabase_url') || '';
-  const key = localStorage.getItem('ap_supabase_key') || '';
+  const url = localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co';
+  const key = localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI';
   
   if (!url || !key || url.includes('suachave') || key.includes('suachave')) {
     return null;
