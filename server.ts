@@ -111,6 +111,46 @@ async function generateContentWithRetry(params: { model: string; contents: any }
 
 // API Routes
 
+const CONFIG_FILE_PATH = path.join(process.cwd(), 'supabase_config.json');
+
+// GET unified Supabase configuration for all devices
+app.get('/api/supabase-config', (req, res) => {
+  try {
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      const data = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+      const config = JSON.parse(data);
+      return res.json(config);
+    }
+  } catch (err) {
+    console.error('[Config Server] Erro ao ler arquivo de configuração do Supabase:', err);
+  }
+
+  // Fallback to environment variables or defaults
+  const fallbackUrl = process.env.SUPABASE_URL || 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+  const fallbackKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
+  
+  res.json({ url: fallbackUrl, key: fallbackKey });
+});
+
+// POST unified Supabase configuration from any admin device
+app.post('/api/supabase-config', (req, res) => {
+  try {
+    const { url, key } = req.body;
+    if (!url || !key) {
+      return res.status(400).json({ error: 'Parâmetros url e key são obrigatórios.' });
+    }
+
+    const config = { url: url.trim(), key: key.trim() };
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
+    
+    console.log('[Supabase Central Config] Configuração unificada salva com sucesso pelo painel do usuário:', url);
+    res.json({ success: true, url });
+  } catch (err: any) {
+    console.error('[Config Server] Erro ao gravar arquivo de configuração unificado:', err);
+    res.status(500).json({ error: 'Erro ao gravar persistência central das chaves.' });
+  }
+});
+
 // 1. Product Description Generator Agent
 app.post('/api/gemini/generate-description', async (req, res) => {
   try {

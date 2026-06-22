@@ -16,8 +16,8 @@ export function getSupabaseConfig() {
   let url = localStorage.getItem('ap_supabase_url');
   let key = localStorage.getItem('ap_supabase_key');
   
-  const defaultUrl = 'https://xkbryirdcjgjrrqnvmme.supabase.co';
-  const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI';
+  const defaultUrl = 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+  const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
   
   if (!url || url.includes('suachave') || url.includes('sua-url') || url.trim() === '') {
     url = defaultUrl;
@@ -30,6 +30,43 @@ export function getSupabaseConfig() {
   }
   
   return { url, key };
+}
+
+// Sincroniza as credenciais do Supabase do servidor central para o localStorage local
+export async function initializeSupabaseConfig() {
+  try {
+    const response = await fetch('/api/supabase-config');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.url && data.key) {
+        localStorage.setItem('ap_supabase_url', data.url);
+        localStorage.setItem('ap_supabase_key', data.key);
+        console.log('[Supabase Config] Credenciais de sincronização unificadas recebidas do servidor central:', data.url);
+        return { url: data.url, key: data.key };
+      }
+    }
+  } catch (err) {
+    console.error('[Supabase Config] Erro ao sincronizar chaves do Supabase com o servidor central:', err);
+  }
+  return getSupabaseConfig();
+}
+
+// Salva as credenciais do Supabase local no backend central para compartilhar com todos os aparelhos
+export async function saveSupabaseConfigToServer(url: string, key: string) {
+  try {
+    const response = await fetch('/api/supabase-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, key })
+    });
+    if (response.ok) {
+      console.log('[Supabase Config] Credenciais salvas com sucesso no servidor central e replicadas para novos aparelhos!');
+      return true;
+    }
+  } catch (err) {
+    console.error('[Supabase Config] Falha ao sincronizar credenciais no servidor central:', err);
+  }
+  return false;
 }
 
 // Instantiates a fresh Supabase Client

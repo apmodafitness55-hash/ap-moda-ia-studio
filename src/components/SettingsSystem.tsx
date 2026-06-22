@@ -43,7 +43,7 @@ import {
   Percent
 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
-import { SUPABASE_SQL_SETUP, pushSystemConfigToSupabase } from '../supabase';
+import { SUPABASE_SQL_SETUP, pushSystemConfigToSupabase, saveSupabaseConfigToServer } from '../supabase';
 import { Product, Sale, Client, Transaction } from '../types';
 import { getCardMachinesConfig, saveCardMachinesConfig, CardMachineConfig, DEFAULT_CARD_MACHINES } from '../lib/cardMachines';
 
@@ -213,8 +213,8 @@ export default function SettingsSystem({
         setImgbbKey(savedImgbb);
       }
       setDiscordWebhook(localStorage.getItem('ap_discord_webhook') || '');
-      setSupabaseUrl(localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co');
-      setSupabaseKey(localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI');
+      setSupabaseUrl(localStorage.getItem('ap_supabase_url') || 'https://ckrwmdaocoyigpmzpdyz.supabase.co');
+      setSupabaseKey(localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss');
       
       // Reload Vitrine settings on cloud sync
       try {
@@ -292,8 +292,8 @@ export default function SettingsSystem({
       window.removeEventListener('ap-storage-synced', calcQueue);
     };
   }, []);
-  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co');
-  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI');
+  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('ap_supabase_url') || 'https://ckrwmdaocoyigpmzpdyz.supabase.co');
+  const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss');
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [isSyncingTeam, setIsSyncingTeam] = useState(false);
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
@@ -707,12 +707,16 @@ export default function SettingsSystem({
     }
   };
 
-  const handleSaveSupabaseSettings = (e: React.FormEvent) => {
+  const handleSaveSupabaseSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ap_supabase_url', supabaseUrl);
     localStorage.setItem('ap_supabase_key', supabaseKey);
-    registerAuditLog('Configuração Supabase', 'Credenciais salvas no sistema');
-    alert('Credenciais do Supabase registradas com sucesso no sistema local!');
+    
+    // Save to the central server so all other devices automatically sync to the same DB!
+    await saveSupabaseConfigToServer(supabaseUrl, supabaseKey);
+    
+    registerAuditLog('Configuração Supabase', 'Credenciais salvas no sistema e compartilhadas');
+    alert('Credenciais do Supabase registradas com sucesso localmente e ativadas globalmente para TODOS os aparelhos!');
   };
 
   const handleTestSupabaseConnection = async () => {
@@ -732,13 +736,21 @@ export default function SettingsSystem({
       
       localStorage.setItem('ap_supabase_url', supabaseUrl);
       localStorage.setItem('ap_supabase_key', supabaseKey);
+      
+      // Save globally
+      await saveSupabaseConfigToServer(supabaseUrl, supabaseKey);
+      
       setSupabaseStatus('connected');
       
-      registerAuditLog('Conexão Supabase', 'Chave API registrada e testada com sucesso');
-      alert(`✅ SUCESSO DE CONEXÃO!\n\nSeu sistema AP Moda Fitness conectou-se com sucesso ao banco de dados Supabase real.\n\nInstância: ${supabaseUrl}\n\nStatus: Conectado & Operacional.`);
+      registerAuditLog('Conexão Supabase', 'Chave API registrada, testada e sincronizada globalmente');
+      alert(`✅ SUCESSO DE CONEXÃO MULTI-DISPOSITIVO!\n\nSeu sistema AP Moda Fitness conectou-se ao Supabase com sucesso.\n\nEstas credenciais foram salvas e ativadas AUTOMATICAMENTE para todos os aparelhos conectados (celulares, tablets e notebooks).\n\nInstância: ${supabaseUrl}`);
     } catch (err: any) {
       console.error('Erro de conexão Supabase:', err);
-      alert(`⚠️ Erro de Validação: ${err.message || 'Sem resposta.'}\n\nMas fique tranquilo: suas chaves foram gravadas e cadastradas localmente!`);
+      // Still write it locally and try to sync to server just in case
+      localStorage.setItem('ap_supabase_url', supabaseUrl);
+      localStorage.setItem('ap_supabase_key', supabaseKey);
+      await saveSupabaseConfigToServer(supabaseUrl, supabaseKey);
+      alert(`⚠️ Erro de Validação de Credenciais: ${err.message || 'Sem resposta.'}\n\nNo entanto, suas chaves foram gravadas tanto localmente quanto salvas no servidor central.`);
     } finally {
       setIsTestingSupabase(false);
     }

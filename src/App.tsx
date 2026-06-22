@@ -49,6 +49,7 @@ import SuppliersManagement from './components/SuppliersManagement';
 import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
 import { 
   getSupabaseConfig, 
+  initializeSupabaseConfig,
   fetchTeamMembersFromSupabase, 
   syncBulkTeamMembersToSupabase,
   pingSupabaseOnLogin,
@@ -66,6 +67,9 @@ import {
 } from './supabase';
 
 export default function App() {
+  // Reference to force instant background custom pushes on changes
+  const performSyncRef = useRef<(() => Promise<void>) | null>(null);
+
   // Sidebar toggler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(ActiveTab.DASHBOARD);
@@ -330,7 +334,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_products', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_products', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevProductsRef.current = products;
   }, [products, getDirtyIds, saveDirtyIds]);
@@ -352,7 +359,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_clients', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_clients', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevClientsRef.current = clients;
   }, [clients, getDirtyIds, saveDirtyIds]);
@@ -374,7 +384,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_sales', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_sales', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevSalesRef.current = sales;
   }, [sales, getDirtyIds, saveDirtyIds]);
@@ -396,7 +409,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_transactions', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_transactions', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevTransactionsRef.current = transactions;
   }, [transactions, getDirtyIds, saveDirtyIds]);
@@ -418,7 +434,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_online_orders', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_online_orders', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevOnlineOrdersRef.current = onlineOrders;
   }, [onlineOrders, getDirtyIds, saveDirtyIds]);
@@ -439,7 +458,10 @@ export default function App() {
           }
         }
       }
-      if (changed) saveDirtyIds('ap_dirty_team_members', dirtyIds);
+      if (changed) {
+        saveDirtyIds('ap_dirty_team_members', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
     }
     prevTeamMembersRef.current = teamMembers;
   }, [teamMembers, getDirtyIds, saveDirtyIds]);
@@ -618,6 +640,9 @@ export default function App() {
   // Carregar usuários e credenciais do Supabase na inicialização, se houver
   useEffect(() => {
     async function initSupabaseSync() {
+      // Primeiro sincroniza as credenciais do banco com o servidor central, garantindo que TODOS usem o mesmo banco de dados
+      await initializeSupabaseConfig();
+
       const config = getSupabaseConfig();
       if (config) {
         console.log('Supabase configurado! Baixando logins e senhas em tempo real...');
@@ -1035,7 +1060,11 @@ export default function App() {
     }
   }, [systemOffline, getDirtyIds, saveDirtyIds]);
 
-  // Agenda um loop a cada 15 segundos e escuta o foco da janela para sincronizar em tempo real no segundo plano ao trocar de aparelho
+  // Agenda um loop a cada 7 segundos e escuta o foco da janela para sincronizar em tempo real no segundo plano ao trocar de aparelho
+  useEffect(() => {
+    performSyncRef.current = performSync;
+  }, [performSync]);
+
   useEffect(() => {
     const config = getSupabaseConfig();
     if (!config) return;
@@ -1048,7 +1077,7 @@ export default function App() {
       if (!systemOffline) {
         performSync();
       }
-    }, 15000);
+    }, 7000);
 
     const handleFocus = () => {
       console.log('[Supabase Sync] Janela focada! Sincronizando alterações em segundo plano...');
