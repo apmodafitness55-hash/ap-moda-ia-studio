@@ -167,6 +167,10 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     return payments.some(p => p.method === 'PIX');
   }, [payments]);
 
+  const paymentsTotalSum = useMemo(() => {
+    return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }, [payments]);
+
   const totalDiscounts = useMemo(() => {
     let sumDiscounts = 0;
     if (discountPercent > 0) {
@@ -184,8 +188,23 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     if (useCashback && clientCashbackAvailable > 0) {
       sumDiscounts += clientCashbackAvailable;
     }
+
+    const baseForCard = Math.max(0, cartTotal - sumDiscounts);
+    let cardDiscounts = 0;
+    payments.forEach(p => {
+      if ((p.method === 'Cartão de Crédito' || p.method === 'Cartão de Débito') && p.cardDiscountPercent && p.cardDiscountPercent > 0) {
+        if (payments.length === 1) {
+          cardDiscounts += baseForCard * (p.cardDiscountPercent / 100);
+        } else {
+          const ratio = paymentsTotalSum > 0 ? (p.amount / paymentsTotalSum) : 0;
+          cardDiscounts += (baseForCard * ratio) * (p.cardDiscountPercent / 100);
+        }
+      }
+    });
+
+    sumDiscounts += cardDiscounts;
     return Math.min(sumDiscounts, cartTotal);
-  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount, pixDiscountPercent, useCashback, clientCashbackAvailable]);
+  }, [cartTotal, discountPercent, discountValue, appliedCoupon, hasPixDiscount, pixDiscountPercent, useCashback, clientCashbackAvailable, payments, paymentsTotalSum]);
 
   const finalCartTotal = useMemo(() => {
     return Math.max(0, cartTotal - totalDiscounts);
@@ -196,10 +215,6 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       setPayments([{ method: payments[0].method, amount: Number(finalCartTotal.toFixed(2)) }]);
     }
   }, [finalCartTotal, payments.length]);
-
-  const paymentsTotalSum = useMemo(() => {
-    return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  }, [payments]);
 
   const isPaymentValid = useMemo(() => {
     return Math.abs(paymentsTotalSum - finalCartTotal) < 0.02;

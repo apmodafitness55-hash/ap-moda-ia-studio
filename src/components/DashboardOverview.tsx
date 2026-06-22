@@ -485,9 +485,9 @@ export default function DashboardOverview({ products, sales, clients, transactio
             </div>
           </div>
 
-          <div className="relative h-44 flex items-center justify-center mt-3">
+          <div className="relative h-44 mt-3 w-full">
             {(pieMode === 'categoria' ? categorySalesData : donutData).length === 0 ? (
-              <div className="text-center p-4">
+              <div className="text-center p-4 flex flex-col items-center justify-center h-full">
                 <p className="text-slate-400 text-xs font-medium">Nenhuma venda registrada</p>
                 <p className="text-[10px] text-slate-400/80 mt-1">Realize vendas no PDV ou no catálogo para alimentar este gráfico.</p>
               </div>
