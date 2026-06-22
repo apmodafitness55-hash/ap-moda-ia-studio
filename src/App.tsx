@@ -1724,7 +1724,9 @@ export default function App() {
     );
   }
 
-  if (isCloudSyncingOnLogin) {
+  const showBlockingLoader = isCloudSyncingOnLogin && products.length === 0;
+
+  if (showBlockingLoader) {
     const stepsList = [
       'Conectando...',
       'Sincronizando Login...',
@@ -2053,6 +2055,55 @@ export default function App() {
           {renderCurrentView()}
         </main>
       </div>
+
+      {/* Modern, non-blocking floating cloud synchronization widget in the bottom-right corner */}
+      {isCloudSyncingOnLogin && products.length > 0 && (
+        <div 
+          style={{ transition: 'all 0.4s ease' }}
+          className="fixed bottom-4 right-4 z-[9999] w-80 bg-slate-900 text-white font-sans rounded-2xl p-4 shadow-2xl border border-slate-800 flex flex-col gap-3 animate-fade-in"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <span className="w-2.5 h-2.5 rounded-full bg-pink-500 block animate-ping absolute inset-0" />
+                <span className="w-2.5 h-2.5 rounded-full bg-pink-500 block relative" />
+              </div>
+              <span className="text-[10px] font-bold tracking-wide uppercase text-slate-400">
+                Sincronização Ativa ☁️
+              </span>
+            </div>
+            <button 
+              onClick={() => setIsCloudSyncingOnLogin(false)}
+              className="text-slate-400 hover:text-white hover:bg-slate-800 p-1 rounded-lg transition-colors border-none bg-transparent cursor-pointer text-xs"
+              title="Ocultar painel"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-1.5 text-left">
+            <p className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-slate-700 border-t-pink-500 animate-spin" />
+              {syncProgress.step}
+            </p>
+            <p className="text-[10px] text-slate-400 leading-relaxed italic">
+              "{syncProgress.details}"
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 justify-between border-t border-slate-800/80 pt-2.5">
+            <div className="text-[9px] text-slate-500 font-mono">
+              Processado: {syncProgress.stepsCompleted.length}/8 tabelas
+            </div>
+            <div className="flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[9px] text-emerald-400 font-mono font-bold uppercase animate-pulse">
+                Segundo Plano
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
