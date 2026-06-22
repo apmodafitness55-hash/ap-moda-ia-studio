@@ -2094,6 +2094,82 @@ export default function SettingsSystem({
               </div>
             </div>
 
+            {/* NEW: IMAGE DIMENSION CHEAT SHEET GUIDE */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-5 space-y-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 pb-2 border-b border-slate-50">
+                <HelpCircle size={15} className="text-pink-600" />
+                <span>Guia de Dimensões de Imagem</span>
+              </h3>
+              <p className="text-[10px] text-slate-500 leading-normal -mt-1">
+                Para que sua vitrine carregue de forma rápida e com as imagens perfeitamente alinhadas (sem distorções), utilize as seguintes especificações recomendadas:
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                {/* 1. Carrossel Lookbook */}
+                <div className="p-2.5 bg-pink-50/40 rounded-xl border border-pink-100/50 flex flex-col gap-1 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-[10.5px] text-pink-900">Carrossel Lookbook</span>
+                    <span className="bg-pink-600 text-white font-mono font-bold text-[8.5px] px-2 py-0.5 rounded uppercase">1200 × 480 px</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-550 leading-relaxed font-sans">
+                    Proporção horizontal larga (2.5:1). Banner principal que aparece no início da vitrine para campanhas e coleções em destaque.
+                  </p>
+                </div>
+
+                {/* 2. Produtos do Catálogo */}
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 flex flex-col gap-1 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-[10.5px] text-slate-800">Fotos de Produtos</span>
+                    <div className="flex gap-1">
+                      <span className="bg-slate-700 text-white font-mono font-bold text-[8.5px] px-1.5 py-0.5 rounded">800 × 1000 px</span>
+                      <span className="bg-slate-500 text-white font-mono font-bold text-[8.5px] px-1.5 py-0.5 rounded">Vertical 4:5</span>
+                    </div>
+                  </div>
+                  <p className="text-[9.5px] text-slate-550 leading-relaxed font-sans">
+                    Proporção vertical (4:5) ou quadrada (800x800). O padrão vertical valoriza o caimento das roupas esportivas (leggings, tops, shorts, conjuntos).
+                  </p>
+                </div>
+
+                {/* 3. Banners de Categoria */}
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 flex flex-col gap-1 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-[10.5px] text-slate-800">Banners de Categoria</span>
+                    <span className="bg-slate-700 text-white font-mono font-bold text-[8.5px] px-2 py-0.5 rounded uppercase">600 × 300 px</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-550 leading-relaxed font-sans">
+                    Proporção horizontal (2:1). Usados nos cards de chamada rápida da coleção Slim Fit e Plus Size.
+                  </p>
+                </div>
+
+                {/* 4. Banner Flutuante Popup */}
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 flex flex-col gap-1 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-[10.5px] text-slate-800">Popup Flutuante</span>
+                    <span className="bg-slate-700 text-white font-mono font-bold text-[8.5px] px-2 py-0.5 rounded uppercase">600 × 600 px</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-550 leading-relaxed font-sans">
+                    Proporção quadrada (1:1). Banner que surge na tela para atrair atenção para cupons ativos ou anúncios imediatos.
+                  </p>
+                </div>
+
+                {/* 5. Logo Emissora */}
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 flex flex-col gap-1 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-[10.5px] text-slate-800">Logo e Ícones</span>
+                    <span className="bg-slate-700 text-white font-mono font-bold text-[8.5px] px-2 py-0.5 rounded uppercase">250 × 250 px</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-550 leading-relaxed font-sans">
+                    Proporção quadrada com fundo transparente (.PNG) de preferência, mantendo o visual limpo no cabeçalho e nos comprovantes térmicos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 text-yellow-800 p-2.5 rounded-xl border border-yellow-250 select-none text-[9px] leading-snug flex items-start gap-1.5">
+                <span>💡</span>
+                <span className="font-sans font-medium text-left"><strong>Dica de Carregamento:</strong> Procure otimizar as imagens comprimindo-as em formato <strong>WebP</strong> antes de fazer o envio. Isso acelera o carregamento em redes 3G/4G das suas clientes!</span>
+              </div>
+            </div>
+
             {/* Bloco 5: Botão de Ação para Salvar tudo na Vitrine */}
             <div className="bg-gradient-to-tr from-pink-500 to-rose-600 rounded-3xl p-5 text-white shadow-lg shadow-pink-600/10 space-y-4">
               <div className="text-left font-sans space-y-1">

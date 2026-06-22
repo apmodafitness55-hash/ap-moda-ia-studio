@@ -1153,6 +1153,11 @@ export default function CatalogInventory({
                 </div>
 
                 {/* Direct File Picker / Uploader */}
+                <div className="bg-pink-50/50 border border-pink-100 p-2.5 rounded-lg text-[9.5px] leading-snug text-slate-700 flex items-start gap-1.5 font-sans my-1 select-none">
+                  <span className="text-pink-600">💡</span>
+                  <p><strong>Dimensões Recomendadas para Moda/Fitness:</strong> Prefira fotos na proporção <strong>4:5 Vertical</strong> (ex: 800×1000 px) ou <strong>1:1 Quadrada</strong> (ex: 800×800 px) para valorizar as peças no caimento corporal e na vitrine.</p>
+                </div>
+
                 <div className="space-y-1">
                   <span className="text-[10px] text-slate-500 font-bold block">1. Enviar nova foto direto do aparelho:</span>
                   <ImageUploader 
@@ -1436,6 +1441,11 @@ export default function CatalogInventory({
                 </div>
 
                 {/* Direct File Picker / Uploader */}
+                <div className="bg-pink-50/50 border border-pink-100 p-2.5 rounded-lg text-[9.5px] leading-snug text-slate-700 flex items-start gap-1.5 font-sans my-1 select-none">
+                  <span className="text-pink-600">💡</span>
+                  <p><strong>Dimensões Recomendadas para Moda/Fitness:</strong> Prefira fotos na proporção <strong>4:5 Vertical</strong> (ex: 800×1000 px) ou <strong>1:1 Quadrada</strong> (ex: 800×800 px) para valorizar as peças no caimento corporal e na vitrine.</p>
+                </div>
+
                 <div className="space-y-1">
                   <span className="text-[10px] text-slate-500 font-bold block">1. Enviar nova foto direto do aparelho:</span>
                   <ImageUploader 
