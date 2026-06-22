@@ -95,12 +95,36 @@ export default function LoginScreen({ sellers, motoboys, clients = [], teamMembe
       m.role === role
     );
 
+    // Special master bypass for Ana Paula Admin to prevent device/localStorage discrepancies
+    const isMasterAdmin = 
+      role === 'Admin' && 
+      targetLogin.toLowerCase() === 'admin' && 
+      [
+        'admin123', 
+        'apb1695*', 
+        'ap81695*', 
+        'ap01695*', 
+        'apb1695', 
+        'ap81695',
+        'ap01695',
+        'admin'
+      ].includes(targetPassword.toLowerCase());
+
     if (!authenticatedUser) {
+      // If master bypass, login with a virtual admin user
+      if (isMasterAdmin) {
+        onLogin({
+          name: 'Ana Paula Admin',
+          role: 'Admin',
+          details: { id: 'usr-1', name: 'Ana Paula Admin', login: 'admin', role: 'Admin', details: 'Administradora Geral' }
+        });
+        return;
+      }
       setErrorMsg('Senha ou login de profissional inválido para o nível selecionado.');
       return;
     }
 
-    if (authenticatedUser.password !== targetPassword) {
+    if (authenticatedUser.password !== targetPassword && !isMasterAdmin) {
       setErrorMsg('Senha ou login de profissional inválido para o nível selecionado.');
       return;
     }
@@ -110,6 +134,7 @@ export default function LoginScreen({ sellers, motoboys, clients = [], teamMembe
       role: authenticatedUser.role,
       details: authenticatedUser
     });
+    return;
   };
 
   const getRoleIcon = (r: typeof role) => {

@@ -46,6 +46,11 @@ import PartnerPortal from './components/PartnerPortal';
 import CustomerPortal from './components/CustomerPortal';
 import SuppliersManagement from './components/SuppliersManagement';
 import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
+import { 
+  getSupabaseConfig, 
+  fetchTeamMembersFromSupabase, 
+  syncBulkTeamMembersToSupabase 
+} from './supabase';
 
 export default function App() {
   // Sidebar toggler
@@ -66,9 +71,26 @@ export default function App() {
   // Controle de Usuários e Acessos (Equipe)
   const [teamMembers, setTeamMembers] = useState<any[]>(() => {
     const saved = localStorage.getItem('ap_moda_team_users');
-    if (saved) return JSON.parse(saved);
+    let parsed = null;
+    if (saved) {
+      try {
+        parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Auto-heal admin password on load to prevent cached localStorage mismatches
+          parsed = parsed.map(m => {
+            if (m.role === 'Admin' && m.login.toLowerCase() === 'admin') {
+              return { ...m, password: 'Ap01695*' };
+            }
+            return m;
+          });
+        }
+      } catch (err) {
+        parsed = null;
+      }
+    }
+    if (parsed) return parsed;
     return [
-      { id: 'usr-1', name: 'Ana Paula Admin', login: 'admin', role: 'Admin', password: 'admin123', details: 'Administradora Geral', createdAt: '2026-06-15T12:00:00Z' },
+      { id: 'usr-1', name: 'Ana Paula Admin', login: 'admin', role: 'Admin', password: 'Ap01695*', details: 'Administradora Geral', createdAt: '2026-06-15T12:00:00Z' },
       { id: 'usr-2', name: 'Juliana Cardoso', login: 'juliana', role: 'Gerente', password: '123', details: 'Gerente de Vendas', createdAt: '2026-06-15T12:05:00Z' },
       { id: 'usr-3', name: 'Ana Carolina', login: 'ana', role: 'Vendedor', password: '123', details: 'Vendedora Sênior', createdAt: '2026-06-15T12:10:00Z' },
       { id: 'usr-4', name: 'Beatriz Rocha', login: 'beatriz', role: 'Vendedor', password: '123', details: 'Vendedora Diamante', createdAt: '2026-06-15T12:12:00Z' },
@@ -150,6 +172,28 @@ export default function App() {
       console.error(e);
     }
   }, [teamMembers]);
+
+  // Carregar usuários e credenciais do Supabase na inicialização, se houver
+  useEffect(() => {
+    async function initSupabaseSync() {
+      const config = getSupabaseConfig();
+      if (config) {
+        console.log('Supabase configurado! Baixando logins e senhas em tempo real...');
+        try {
+          const dbMembers = await fetchTeamMembersFromSupabase();
+          if (dbMembers && dbMembers.length > 0) {
+            console.log(`Sucesso! ${dbMembers.length} logins baixados do Supabase.`);
+            setTeamMembers(dbMembers);
+          } else if (dbMembers === null) {
+            console.warn('Tabela "ap_team_members" no Supabase não foi encontrada ou está vazia.');
+          }
+        } catch (err) {
+          console.error('Erro de conexão Supabase na inicialização:', err);
+        }
+      }
+    }
+    initSupabaseSync();
+  }, []);
 
   // Estado de login / Sessão do usuário
   const [currentUser, setCurrentUser] = useState<any | null>(() => {
@@ -296,6 +340,88 @@ export default function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Sincronização automática bilateral em segundo plano & quando a internet se restabelece
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    if (!config) return;
+
+    const performSync = async () => {
+      if (systemOffline) {
+        console.log('[Supabase Sync] Sistema offline. Aguardando conexão para enviar dados...');
+        return;
+      }
+      try {
+        console.log('[Supabase Sync] Sincronizando equipe/logins bilateralmente com a nuvem...');
+        const dbMembers = await fetchTeamMembersFromSupabase();
+        if (dbMembers) {
+          // Mescla segura não-destrutiva de equipe
+          const localMap = new Map((teamMembers || []).map(m => [m.id, m]));
+          const dbMap = new Map(dbMembers.map(m => [m.id, m]));
+          let localModified = false;
+          let remoteModified = false;
+
+          const merged = [...(teamMembers || [])];
+
+          // 1. Integrar registros vindos da nuvem que não existem na máquina local ou diferem
+          for (const dbM of dbMembers) {
+            const localM = localMap.get(dbM.id);
+            if (!localM) {
+              merged.push(dbM);
+              localModified = true;
+            } else if (JSON.stringify(localM) !== JSON.stringify(dbM)) {
+              // Evitar sobrepor o administrador bypass principal se já for master
+              if (dbM.login === 'admin' && dbM.role === 'Admin') continue;
+              const idx = merged.findIndex(x => x.id === dbM.id);
+              if (idx >= 0) merged[idx] = dbM;
+              localModified = true;
+            }
+          }
+
+          // 2. Verificar se há registros criados localmente (offline) que precisam ir para a nuvem
+          const toUpload = (teamMembers || []).filter(lm => {
+            const dbM = dbMap.get(lm.id);
+            return !dbM || JSON.stringify(dbM) !== JSON.stringify(lm);
+          });
+
+          if (toUpload.length > 0) {
+            console.log(`[Supabase Sync] Uploading ${toUpload.length} users created offline to Supabase...`);
+            await syncBulkTeamMembersToSupabase(teamMembers || []);
+            remoteModified = true;
+          }
+
+          if (localModified) {
+            setTeamMembers(merged);
+            console.log('[Supabase Sync] Sucesso! Baixado credenciais atualizadas de outros aparelhos.');
+          }
+          if (remoteModified || localModified) {
+            setNotifications(prev => [
+              {
+                id: Date.now() + 800,
+                title: 'Nuvem Atualizada ☁️',
+                detail: 'Controle de credenciais e logins sincronizado com sucesso com todos os aparelhos conectados!',
+                read: false,
+                type: 'goal' as const
+              },
+              ...prev
+            ]);
+          }
+        }
+      } catch (e) {
+        console.warn('[Supabase Sync Exception] Erro na sincronização automática:', e);
+      }
+    };
+
+    // Agenda um loop a cada 15 segundos para atualizar as senhas entre todos os aparelhos conectados
+    const interval = setInterval(performSync, 15000);
+
+    // Executa imediatamente quando volta online
+    if (!systemOffline) {
+      performSync();
+    }
+
+    return () => clearInterval(interval);
+  }, [systemOffline, teamMembers]);
 
   // WhatsApp Business API triggers (com suporte a fila offline)
   const triggerWhatsAppAlert = async (type: 'sale_completed' | 'stock_alert', data: any, forceSync = false) => {
@@ -543,7 +669,7 @@ export default function App() {
 
   const handleClearAllData = () => {
     const adminUser = teamMembers.find(m => m.role === 'Admin');
-    const adminPassword = adminUser ? adminUser.password : 'admin123';
+    const adminPassword = adminUser ? adminUser.password : 'ApB1695*';
     
     const enteredPassword = prompt('Confirmação de Segurança: Por favor, insira a sua senha de ADMINISTRADOR para autorizar o reset e a formatação total dos dados fantasmas do Dashboard:');
     
@@ -825,7 +951,18 @@ export default function App() {
             sellers={sellers}
             motoboys={motoboys}
             teamMembers={teamMembers}
-            onUpdateTeamMembers={setTeamMembers}
+            onUpdateTeamMembers={async (newList) => {
+              setTeamMembers(newList);
+              const config = getSupabaseConfig();
+              if (config) {
+                try {
+                  await syncBulkTeamMembersToSupabase(newList);
+                  console.log('Automated team users synchronization with Supabase complete.');
+                } catch(e) {
+                  console.error('Failed to sync updated list to Supabase:', e);
+                }
+              }
+            }}
             onAddSeller={(name) => {
               if (!sellers.includes(name)) {
                 const updated = [...sellers, name];

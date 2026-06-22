@@ -41,6 +41,7 @@ import {
   User
 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
+import { SUPABASE_SQL_SETUP } from '../supabase';
 import { Product, Sale, Client, Transaction } from '../types';
 
 interface SettingsSystemProps {
@@ -196,6 +197,7 @@ export default function SettingsSystem({
   const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co');
   const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI');
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [isSyncingTeam, setIsSyncingTeam] = useState(false);
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
   const [imgbbKey, setImgbbKey] = useState(() => {
     const saved = localStorage.getItem('ap_imgbb_key');
@@ -621,6 +623,53 @@ export default function SettingsSystem({
       alert(`⚠️ Erro de Validação: ${err.message || 'Sem resposta.'}\n\nMas fique tranquilo: suas chaves foram gravadas e cadastradas localmente!`);
     } finally {
       setIsTestingSupabase(false);
+    }
+  };
+
+  const handleManualSyncTeam = async () => {
+    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
+      alert('⚠️ Por favor, valide e salve a configuração do Supabase antes de sincronizar.');
+      return;
+    }
+    setIsSyncingTeam(true);
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      const payloads = teamMembers.map(m => ({
+        id: m.id,
+        name: m.name,
+        login: m.login.toLowerCase().trim().replace(/\s+/g, ''),
+        password: m.password || '123',
+        role: m.role,
+        details: m.details || '',
+        birthDate: m.birthDate || '',
+        createdAt: m.createdAt || new Date().toISOString()
+      }));
+
+      const { error } = await client
+        .from('ap_team_members')
+        .upsert(payloads, { onConflict: 'id' });
+
+      if (error) {
+        throw error;
+      }
+
+      registerAuditLog('Sincronização Supabase', 'Logins sincronizados com sucesso');
+      alert('✅ SINCRONIZAÇÃO BEM-SUCEDIDA!\n\nTodas as credenciais e logins foram persistidos com sucesso na tabela "ap_team_members" em sua nuvem Supabase!');
+    } catch (err: any) {
+      console.error('Erro de Sync Supabase:', err);
+      alert(`⚠️ Erro de Sincronização:\n${err.message || 'Erro desconhecido.'}\n\n👉 Certifique-se de que a tabela "ap_team_members" foi criada em seu Supabase SQL Editor usando o botão de cópia de script abaixo.`);
+    } finally {
+      setIsSyncingTeam(false);
+    }
+  };
+
+  const handleCopySQLScript = () => {
+    try {
+      navigator.clipboard.writeText(SUPABASE_SQL_SETUP);
+      registerAuditLog('Cópia Script SQL', 'Script de configuração Supabase copiado');
+      alert('📋 Script SQL copiado com sucesso!\n\nCole no "SQL Editor" do seu painel do Supabase e clique em "Run" para automatizar a criação da tabela.');
+    } catch(err) {
+      alert('Seu navegador bloqueou a cópia direta. Selecione o SQL abaixo ou use outro navegador.');
     }
   };
 
@@ -1074,6 +1123,35 @@ export default function SettingsSystem({
                 <WifiOff size={11} className="text-slate-500" />
                 <span>{supabaseStatus === 'connected' ? 'Simular Modo Offline (Desconectar)' : 'Restaurar Conexão Supabase'}</span>
               </button>
+
+              {/* Sincronização de Credenciais / Usuários */}
+              <div className="bg-pink-50/35 border border-pink-100/50 p-2.5 rounded-xl space-y-1.5 mt-2">
+                <span className="font-bold text-pink-700 block text-[10px]">🔒 Sincronia de Credenciais (Logins/Senhas)</span>
+                <p className="text-[9px] text-slate-500 leading-normal">
+                  Transmita ou guarde os acessos dos funcionários e as senhas cadastradas para que fiquem replicados dinamicamente na nuvem do seu Supabase.
+                </p>
+                <div className="flex gap-1.5 mt-1">
+                  <button
+                    type="button"
+                    disabled={isSyncingTeam}
+                    onClick={handleManualSyncTeam}
+                    className="flex-1 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[9px] disabled:opacity-55"
+                  >
+                    <RefreshCw size={10} className={isSyncingTeam ? 'animate-spin' : ''} />
+                    <span>{isSyncingTeam ? 'Enviando...' : 'Replicar Logins na Nuvem'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopySQLScript}
+                    className="py-1.5 px-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[9px]"
+                    title="Copiar Código de Criação da Tabela"
+                  >
+                    <FileCheck2 size={10} />
+                    <span>Copiar SQL</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
