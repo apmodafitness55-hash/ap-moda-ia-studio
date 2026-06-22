@@ -267,6 +267,21 @@ export default function App() {
   });
 
   const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const isSyncingRef = useRef(false);
+
+  // Helper functions for tracking unsynced/dirty local changes
+  const getDirtyIds = useCallback((key: string): string[] => {
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const saveDirtyIds = useCallback((key: string, ids: string[]) => {
+    localStorage.setItem(key, JSON.stringify(ids));
+  }, []);
 
   // States with persistent localStorage fallback
   const [products, setProducts] = useState<Product[]>(() => {
@@ -303,26 +318,145 @@ export default function App() {
     { id: 3, title: 'Meta Coletiva Quase Lá!', detail: 'Parabéns, você atingiu 84% de sua meta mensal de vendas! 🌟', read: false, type: 'goal' }
   ]);
 
-  // Sync to localStorage
+  // Previous state refs for delta comparisons
+  const prevProductsRef = useRef<Product[]>(products);
+  const prevClientsRef = useRef<Client[]>(clients);
+  const prevSalesRef = useRef<Sale[]>(sales);
+  const prevTransactionsRef = useRef<Transaction[]>(transactions);
+  const prevOnlineOrdersRef = useRef<any[]>(onlineOrders);
+  const prevTeamMembersRef = useRef<any[]>(teamMembers);
+
+  // Sync to localStorage & automatically track local mutations as dirty
   useEffect(() => {
     localStorage.setItem('ap_moda_products', JSON.stringify(products));
-  }, [products]);
+    if (!isSyncingRef.current) {
+      const prevList = prevProductsRef.current || [];
+      const prevMap = new Map(prevList.map(p => [p.id, p]));
+      const dirtyIds = getDirtyIds('ap_dirty_products');
+      let changed = false;
+
+      for (const p of products) {
+        const prevP = prevMap.get(p.id);
+        if (!prevP || JSON.stringify(prevP) !== JSON.stringify(p)) {
+          if (!dirtyIds.includes(p.id)) {
+            dirtyIds.push(p.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_products', dirtyIds);
+    }
+    prevProductsRef.current = products;
+  }, [products, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
     localStorage.setItem('ap_moda_clients', JSON.stringify(clients));
-  }, [clients]);
+    if (!isSyncingRef.current) {
+      const prevList = prevClientsRef.current || [];
+      const prevMap = new Map(prevList.map(c => [c.id, c]));
+      const dirtyIds = getDirtyIds('ap_dirty_clients');
+      let changed = false;
+
+      for (const c of clients) {
+        const prevC = prevMap.get(c.id);
+        if (!prevC || JSON.stringify(prevC) !== JSON.stringify(c)) {
+          if (!dirtyIds.includes(c.id)) {
+            dirtyIds.push(c.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_clients', dirtyIds);
+    }
+    prevClientsRef.current = clients;
+  }, [clients, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
     localStorage.setItem('ap_moda_sales', JSON.stringify(sales));
-  }, [sales]);
+    if (!isSyncingRef.current) {
+      const prevList = prevSalesRef.current || [];
+      const prevMap = new Map(prevList.map(s => [s.id, s]));
+      const dirtyIds = getDirtyIds('ap_dirty_sales');
+      let changed = false;
+
+      for (const s of sales) {
+        const prevS = prevMap.get(s.id);
+        if (!prevS || JSON.stringify(prevS) !== JSON.stringify(s)) {
+          if (!dirtyIds.includes(s.id)) {
+            dirtyIds.push(s.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_sales', dirtyIds);
+    }
+    prevSalesRef.current = sales;
+  }, [sales, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
     localStorage.setItem('ap_moda_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    if (!isSyncingRef.current) {
+      const prevList = prevTransactionsRef.current || [];
+      const prevMap = new Map(prevList.map(t => [t.id, t]));
+      const dirtyIds = getDirtyIds('ap_dirty_transactions');
+      let changed = false;
+
+      for (const t of transactions) {
+        const prevT = prevMap.get(t.id);
+        if (!prevT || JSON.stringify(prevT) !== JSON.stringify(t)) {
+          if (!dirtyIds.includes(t.id)) {
+            dirtyIds.push(t.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_transactions', dirtyIds);
+    }
+    prevTransactionsRef.current = transactions;
+  }, [transactions, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
     localStorage.setItem('ap_moda_online_orders', JSON.stringify(onlineOrders));
-  }, [onlineOrders]);
+    if (!isSyncingRef.current) {
+      const prevList = prevOnlineOrdersRef.current || [];
+      const prevMap = new Map(prevList.map(o => [o.id, o]));
+      const dirtyIds = getDirtyIds('ap_dirty_online_orders');
+      let changed = false;
+
+      for (const o of onlineOrders) {
+        const prevO = prevMap.get(o.id);
+        if (!prevO || JSON.stringify(prevO) !== JSON.stringify(o)) {
+          if (!dirtyIds.includes(o.id)) {
+            dirtyIds.push(o.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_online_orders', dirtyIds);
+    }
+    prevOnlineOrdersRef.current = onlineOrders;
+  }, [onlineOrders, getDirtyIds, saveDirtyIds]);
+
+  useEffect(() => {
+    if (!isSyncingRef.current) {
+      const prevList = prevTeamMembersRef.current || [];
+      const prevMap = new Map(prevList.map(m => [m.id, m]));
+      const dirtyIds = getDirtyIds('ap_dirty_team_members');
+      let changed = false;
+
+      for (const m of teamMembers || []) {
+        const prevM = prevMap.get(m.id);
+        if (!prevM || JSON.stringify(prevM) !== JSON.stringify(m)) {
+          if (!dirtyIds.includes(m.id)) {
+            dirtyIds.push(m.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveDirtyIds('ap_dirty_team_members', dirtyIds);
+    }
+    prevTeamMembersRef.current = teamMembers;
+  }, [teamMembers, getDirtyIds, saveDirtyIds]);
 
   // Dynamic refs to always hold fresh copies for syncing interval (strictly avoids infinite component rendering loops in React)
   const lastProductsRef = useRef(products);
@@ -411,6 +545,9 @@ export default function App() {
       setIsSyncingNow(true);
     }
 
+    // Set syncing flag so local change listener useEffects ignore these updates
+    isSyncingRef.current = true;
+
     try {
       console.log('[Supabase Sync] Sincronizando dados bilateralmente com a nuvem Supabase...');
 
@@ -420,34 +557,37 @@ export default function App() {
       // 1. Sincronização da Equipe (Logins e Cargos)
       const dbMembers = await fetchTeamMembersFromSupabase();
       if (dbMembers) {
-        const currentMembers = lastTeamMembersRef.current;
-        const localMap = new Map((currentMembers || []).map(m => [m.id, m]));
+        const dirtyMembers = getDirtyIds('ap_dirty_team_members');
+        const currentMembers = lastTeamMembersRef.current || [];
+        const localMap = new Map(currentMembers.map(m => [m.id, m]));
         const dbMap = new Map(dbMembers.map(m => [m.id, m]));
         let localModified = false;
         let remoteModified = false;
-        const merged = [...(currentMembers || [])];
+        const merged = [...currentMembers];
 
         for (const dbM of dbMembers) {
           const localM = localMap.get(dbM.id);
           if (!localM) {
             merged.push(dbM);
             localModified = true;
-          } else if (JSON.stringify(localM) !== JSON.stringify(dbM)) {
-            if (dbM.login === 'admin' && dbM.role === 'Admin') continue;
-            const idx = merged.findIndex(x => x.id === dbM.id);
-            if (idx >= 0) merged[idx] = dbM;
-            localModified = true;
+          } else if (!dirtyMembers.includes(dbM.id)) {
+            if (JSON.stringify(localM) !== JSON.stringify(dbM)) {
+              if (dbM.login === 'admin' && dbM.role === 'Admin') continue;
+              const idx = merged.findIndex(x => x.id === dbM.id);
+              if (idx >= 0) merged[idx] = dbM;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = (currentMembers || []).filter(lm => {
-          const dbM = dbMap.get(lm.id);
-          return !dbM || JSON.stringify(dbM) !== JSON.stringify(lm);
-        });
-
+        const toUpload = currentMembers.filter(lm => dirtyMembers.includes(lm.id));
         if (toUpload.length > 0) {
-          await syncBulkTeamMembersToSupabase(currentMembers || []);
-          remoteModified = true;
+          const success = await syncBulkTeamMembersToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_team_members').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_team_members', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -462,6 +602,7 @@ export default function App() {
       // 2. Sincronização do Catálogo de Produtos da Boutique
       const dbProducts = await fetchProductsFromSupabase();
       if (dbProducts) {
+        const dirtyProducts = getDirtyIds('ap_dirty_products');
         const currentProducts = lastProductsRef.current;
         const localMap = new Map(currentProducts.map(p => [p.id, p]));
         const dbMap = new Map(dbProducts.map(p => [p.id, p]));
@@ -474,21 +615,23 @@ export default function App() {
           if (!localP) {
             merged.push(dbP);
             localModified = true;
-          } else if (JSON.stringify(localP) !== JSON.stringify(dbP)) {
-            const idx = merged.findIndex(x => x.id === dbP.id);
-            if (idx >= 0) merged[idx] = dbP;
-            localModified = true;
+          } else if (!dirtyProducts.includes(dbP.id)) {
+            if (JSON.stringify(localP) !== JSON.stringify(dbP)) {
+              const idx = merged.findIndex(x => x.id === dbP.id);
+              if (idx >= 0) merged[idx] = dbP;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = currentProducts.filter(lp => {
-          const dbP = dbMap.get(lp.id);
-          return !dbP || JSON.stringify(dbP) !== JSON.stringify(lp);
-        });
-
+        const toUpload = currentProducts.filter(lp => dirtyProducts.includes(lp.id));
         if (toUpload.length > 0) {
-          await syncBulkProductsToSupabase(currentProducts);
-          remoteModified = true;
+          const success = await syncBulkProductsToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_products').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_products', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -503,6 +646,7 @@ export default function App() {
       // 3. Sincronização do CRM de Clientes
       const dbClients = await fetchClientsFromSupabase();
       if (dbClients) {
+        const dirtyClients = getDirtyIds('ap_dirty_clients');
         const currentClients = lastClientsRef.current;
         const localMap = new Map(currentClients.map(c => [c.id, c]));
         const dbMap = new Map(dbClients.map(c => [c.id, c]));
@@ -511,25 +655,27 @@ export default function App() {
         const merged = [...currentClients];
 
         for (const dbC of dbClients) {
-          const localP = localMap.get(dbC.id);
-          if (!localP) {
+          const localC = localMap.get(dbC.id);
+          if (!localC) {
             merged.push(dbC);
             localModified = true;
-          } else if (JSON.stringify(localP) !== JSON.stringify(dbC)) {
-            const idx = merged.findIndex(x => x.id === dbC.id);
-            if (idx >= 0) merged[idx] = dbC;
-            localModified = true;
+          } else if (!dirtyClients.includes(dbC.id)) {
+            if (JSON.stringify(localC) !== JSON.stringify(dbC)) {
+              const idx = merged.findIndex(x => x.id === dbC.id);
+              if (idx >= 0) merged[idx] = dbC;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = currentClients.filter(lc => {
-          const dbRef = dbMap.get(lc.id);
-          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lc);
-        });
-
+        const toUpload = currentClients.filter(lc => dirtyClients.includes(lc.id));
         if (toUpload.length > 0) {
-          await syncBulkClientsToSupabase(currentClients);
-          remoteModified = true;
+          const success = await syncBulkClientsToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_clients').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_clients', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -544,6 +690,7 @@ export default function App() {
       // 4. Sincronização de Vendas Realizadas (PDV e Canais)
       const dbSales = await fetchSalesFromSupabase();
       if (dbSales) {
+        const dirtySales = getDirtyIds('ap_dirty_sales');
         const currentSales = lastSalesRef.current;
         const localMap = new Map(currentSales.map(s => [s.id, s]));
         const dbMap = new Map(dbSales.map(s => [s.id, s]));
@@ -552,25 +699,27 @@ export default function App() {
         const merged = [...currentSales];
 
         for (const dbS of dbSales) {
-          const localP = localMap.get(dbS.id);
-          if (!localP) {
+          const localS = localMap.get(dbS.id);
+          if (!localS) {
             merged.push(dbS);
             localModified = true;
-          } else if (JSON.stringify(localP) !== JSON.stringify(dbS)) {
-            const idx = merged.findIndex(x => x.id === dbS.id);
-            if (idx >= 0) merged[idx] = dbS;
-            localModified = true;
+          } else if (!dirtySales.includes(dbS.id)) {
+            if (JSON.stringify(localS) !== JSON.stringify(dbS)) {
+              const idx = merged.findIndex(x => x.id === dbS.id);
+              if (idx >= 0) merged[idx] = dbS;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = currentSales.filter(ls => {
-          const dbRef = dbMap.get(ls.id);
-          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(ls);
-        });
-
+        const toUpload = currentSales.filter(ls => dirtySales.includes(ls.id));
         if (toUpload.length > 0) {
-          await syncBulkSalesToSupabase(currentSales);
-          remoteModified = true;
+          const success = await syncBulkSalesToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_sales').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_sales', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -585,6 +734,7 @@ export default function App() {
       // 5. Sincronização Financeira (Lançamentos de Caixa)
       const dbTransactions = await fetchTransactionsFromSupabase();
       if (dbTransactions) {
+        const dirtyTransactions = getDirtyIds('ap_dirty_transactions');
         const currentTransactions = lastTransactionsRef.current;
         const localMap = new Map(currentTransactions.map(t => [t.id, t]));
         const dbMap = new Map(dbTransactions.map(t => [t.id, t]));
@@ -593,25 +743,27 @@ export default function App() {
         const merged = [...currentTransactions];
 
         for (const dbT of dbTransactions) {
-          const localP = localMap.get(dbT.id);
-          if (!localP) {
+          const localT = localMap.get(dbT.id);
+          if (!localT) {
             merged.push(dbT);
             localModified = true;
-          } else if (JSON.stringify(localP) !== JSON.stringify(dbT)) {
-            const idx = merged.findIndex(x => x.id === dbT.id);
-            if (idx >= 0) merged[idx] = dbT;
-            localModified = true;
+          } else if (!dirtyTransactions.includes(dbT.id)) {
+            if (JSON.stringify(localT) !== JSON.stringify(dbT)) {
+              const idx = merged.findIndex(x => x.id === dbT.id);
+              if (idx >= 0) merged[idx] = dbT;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = currentTransactions.filter(lt => {
-          const dbRef = dbMap.get(lt.id);
-          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lt);
-        });
-
+        const toUpload = currentTransactions.filter(lt => dirtyTransactions.includes(lt.id));
         if (toUpload.length > 0) {
-          await syncBulkTransactionsToSupabase(currentTransactions);
-          remoteModified = true;
+          const success = await syncBulkTransactionsToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_transactions').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_transactions', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -626,6 +778,7 @@ export default function App() {
       // 6. Sincronização de Pedidos da Loja Online / Vitrine
       const dbOrders = await fetchOnlineOrdersFromSupabase();
       if (dbOrders) {
+        const dirtyOrders = getDirtyIds('ap_dirty_online_orders');
         const currentOrders = lastOnlineOrdersRef.current;
         const localMap = new Map(currentOrders.map(o => [o.id, o]));
         const dbMap = new Map(dbOrders.map(o => [o.id, o]));
@@ -634,25 +787,27 @@ export default function App() {
         const merged = [...currentOrders];
 
         for (const dbO of dbOrders) {
-          const localP = localMap.get(dbO.id);
-          if (!localP) {
+          const localO = localMap.get(dbO.id);
+          if (!localO) {
             merged.push(dbO);
             localModified = true;
-          } else if (JSON.stringify(localP) !== JSON.stringify(dbO)) {
-            const idx = merged.findIndex(x => x.id === dbO.id);
-            if (idx >= 0) merged[idx] = dbO;
-            localModified = true;
+          } else if (!dirtyOrders.includes(dbO.id)) {
+            if (JSON.stringify(localO) !== JSON.stringify(dbO)) {
+              const idx = merged.findIndex(x => x.id === dbO.id);
+              if (idx >= 0) merged[idx] = dbO;
+              localModified = true;
+            }
           }
         }
 
-        const toUpload = currentOrders.filter(lo => {
-          const dbRef = dbMap.get(lo.id);
-          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lo);
-        });
-
+        const toUpload = currentOrders.filter(lo => dirtyOrders.includes(lo.id));
         if (toUpload.length > 0) {
-          await syncBulkOnlineOrdersToSupabase(currentOrders);
-          remoteModified = true;
+          const success = await syncBulkOnlineOrdersToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_online_orders').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_online_orders', remaining);
+            remoteModified = true;
+          }
         }
 
         if (localModified) {
@@ -698,8 +853,12 @@ export default function App() {
       if (isManual) {
         setIsSyncingNow(false);
       }
+      // Allow React to bundle and update state before disabling syncing lock
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 300);
     }
-  }, [systemOffline]);
+  }, [systemOffline, getDirtyIds, saveDirtyIds]);
 
   // Agenda um loop a cada 15 segundos para atualizar todo o sistema em segundo plano entre os aparelhos conectados
   useEffect(() => {

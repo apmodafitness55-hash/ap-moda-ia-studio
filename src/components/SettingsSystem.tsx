@@ -224,6 +224,42 @@ export default function SettingsSystem({
   // Integrations states
   const [supabaseStatus, setSupabaseStatus] = useState<'connected' | 'offline_sync'>('connected');
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);
+
+  // Hook to calculate real pending sync queue count from local dirty registers
+  useEffect(() => {
+    const calcQueue = () => {
+      let count = 0;
+      const keys = [
+        'ap_dirty_products',
+        'ap_dirty_clients',
+        'ap_dirty_sales',
+        'ap_dirty_transactions',
+        'ap_dirty_online_orders',
+        'ap_dirty_team_members'
+      ];
+      for (const k of keys) {
+        try {
+          const saved = localStorage.getItem(k);
+          if (saved) {
+            const arr = JSON.parse(saved);
+            if (Array.isArray(arr)) {
+              count += arr.length;
+            }
+          }
+        } catch {}
+      }
+      setOfflineQueueCount(count);
+    };
+
+    calcQueue();
+    const interval = setInterval(calcQueue, 2000);
+    window.addEventListener('ap-storage-synced', calcQueue);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ap-storage-synced', calcQueue);
+    };
+  }, []);
   const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co');
   const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI');
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
