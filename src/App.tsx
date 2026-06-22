@@ -186,28 +186,6 @@ export default function App() {
     }
   }, [teamMembers]);
 
-  // Carregar usuários e credenciais do Supabase na inicialização, se houver
-  useEffect(() => {
-    async function initSupabaseSync() {
-      const config = getSupabaseConfig();
-      if (config) {
-        console.log('Supabase configurado! Baixando logins e senhas em tempo real...');
-        try {
-          const dbMembers = await fetchTeamMembersFromSupabase();
-          if (dbMembers && dbMembers.length > 0) {
-            console.log(`Sucesso! ${dbMembers.length} logins baixados do Supabase.`);
-            setTeamMembers(dbMembers);
-          } else if (dbMembers === null) {
-            console.warn('Tabela "ap_team_members" no Supabase não foi encontrada ou está vazia.');
-          }
-        } catch (err) {
-          console.error('Erro de conexão Supabase na inicialização:', err);
-        }
-      }
-    }
-    initSupabaseSync();
-  }, []);
-
   // Estado de login / Sessão do usuário
   const [currentUser, setCurrentUser] = useState<any | null>(() => {
     const saved = localStorage.getItem('ap_moda_current_user');
@@ -268,6 +246,14 @@ export default function App() {
 
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const isSyncingRef = useRef(false);
+
+  const [isCloudSyncingOnLogin, setIsCloudSyncingOnLogin] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{
+    status: 'idle' | 'running' | 'success' | 'error';
+    step: string;
+    details: string;
+    stepsCompleted: string[];
+  }>({ status: 'idle', step: '', details: '', stepsCompleted: [] });
 
   // Helper functions for tracking unsynced/dirty local changes
   const getDirtyIds = useCallback((key: string): string[] => {
@@ -472,6 +458,195 @@ export default function App() {
   useEffect(() => { lastTransactionsRef.current = transactions; }, [transactions]);
   useEffect(() => { lastOnlineOrdersRef.current = onlineOrders; }, [onlineOrders]);
   useEffect(() => { lastTeamMembersRef.current = teamMembers; }, [teamMembers]);
+
+  // Realiza um download completo, sequencial e forçado de todas as tabelas logo no login para evitar dados "picotados" ou atrasados
+  const runFullSynchronousSetup = useCallback(async (user: any) => {
+    if (!user) return;
+    setIsCloudSyncingOnLogin(true);
+    setSyncProgress({
+      status: 'running',
+      step: 'Conectando...',
+      details: 'Conectando ao banco de dados seguro da AP Moda Fitness na nuvem...',
+      stepsCompleted: []
+    });
+
+    isSyncingRef.current = true; // Lock standard background delta computations while writing initial database copies
+
+    try {
+      // 1. Acorda / testa o banco de dados
+      await pingSupabaseOnLogin(user.name, user.role);
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Login...',
+        details: 'Validando acessos e baixando logins da equipe comercial...',
+        stepsCompleted: [...prev.stepsCompleted, 'Conectando...']
+      }));
+
+      // 2. Sincroniza logins da Equipe
+      const dbMembers = await fetchTeamMembersFromSupabase();
+      if (dbMembers && dbMembers.length > 0) {
+        setTeamMembers(dbMembers);
+        localStorage.setItem('ap_moda_team_users', JSON.stringify(dbMembers));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Produtos...',
+        details: 'Baixando catálogo completo de mercadorias, tamanhos, cores e estoque...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Login...']
+      }));
+
+      // 3. Sincroniza Catálogo de Produtos
+      const dbProducts = await fetchProductsFromSupabase();
+      if (dbProducts) {
+        setProducts(dbProducts);
+        localStorage.setItem('ap_moda_products', JSON.stringify(dbProducts));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Clientes...',
+        details: 'Carregando lista completa do CRM, contatos e saldos de cashback...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Produtos...']
+      }));
+
+      // 4. Sincroniza Clientes
+      const dbClients = await fetchClientsFromSupabase();
+      if (dbClients) {
+        setClients(dbClients);
+        localStorage.setItem('ap_moda_clients', JSON.stringify(dbClients));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Histórico de Vendas...',
+        details: 'Sincronizando histórico de vendas realizadas em todos os caixas...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Clientes...']
+      }));
+
+      // 5. Sincroniza Vendas
+      const dbSales = await fetchSalesFromSupabase();
+      if (dbSales) {
+        setSales(dbSales);
+        localStorage.setItem('ap_moda_sales', JSON.stringify(dbSales));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Financeiro...',
+        details: 'Baixando os lançamentos de caixa, sangrias, aportes e despesas...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Histórico de Vendas...']
+      }));
+
+      // 6. Sincroniza Lançamentos Financeiros
+      const dbTransactions = await fetchTransactionsFromSupabase();
+      if (dbTransactions) {
+        setTransactions(dbTransactions);
+        localStorage.setItem('ap_moda_transactions', JSON.stringify(dbTransactions));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Pedidos Online...',
+        details: 'Carregando sacolas de compras pendentes na vitrine de atacado/varejo...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Financeiro...']
+      }));
+
+      // 7. Sincroniza Pedidos Online
+      const dbOrders = await fetchOnlineOrdersFromSupabase();
+      if (dbOrders) {
+        setOnlineOrders(dbOrders);
+        localStorage.setItem('ap_moda_online_orders', JSON.stringify(dbOrders));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Sincronizando Configurações Globais...',
+        details: 'Sincronizando dados institucionais, banners do carrossel da vitrine e taxas de juros...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Pedidos Online...']
+      }));
+
+      // 8. Sincroniza Configurações Globais
+      await syncSystemConfigsWithSupabase();
+
+      // Zera chaves de modificação local temporária (sujeira) para evitar re-uploads redundantes
+      localStorage.setItem('ap_dirty_team_members', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_products', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_clients', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_sales', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_transactions', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_online_orders', JSON.stringify([]));
+
+      setSyncProgress(prev => ({
+        ...prev,
+        step: 'Pronto!',
+        details: 'Aparelho pareado com sucesso! Todos os dados estão atualizados.',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Configurações Globais...']
+      }));
+
+      setTimeout(() => {
+        setIsCloudSyncingOnLogin(false);
+        setSyncProgress({ status: 'idle', step: '', details: '', stepsCompleted: [] });
+        
+        // Alerta de Bem-vinda
+        setNotifications(prev => [
+          {
+            id: Date.now() + 9993,
+            title: `Seja Bem-vindo(a), ${user.name}! 🌸`,
+            detail: `Seu aparelho foi sincronizado com sucesso. Nível de acesso comercial: [${user.role}].`,
+            read: false,
+            type: 'goal' as const
+          },
+          ...prev
+        ]);
+      }, 1000);
+
+    } catch (err: any) {
+      console.error('Falha severa na sincronização preliminar de credenciais:', err);
+      setSyncProgress(prev => ({
+        ...prev,
+        status: 'error',
+        step: 'X',
+        details: 'Ocorreu um erro ao carregar as informações na nuvem. Verifique sua conexão e tente novamente.'
+      }));
+    } finally {
+      isSyncingRef.current = false;
+    }
+  }, []);
+
+  // Carregar usuários e credenciais do Supabase na inicialização, se houver
+  useEffect(() => {
+    async function initSupabaseSync() {
+      const config = getSupabaseConfig();
+      if (config) {
+        console.log('Supabase configurado! Baixando logins e senhas em tempo real...');
+        try {
+          const dbMembers = await fetchTeamMembersFromSupabase();
+          if (dbMembers && dbMembers.length > 0) {
+            console.log(`Sucesso! ${dbMembers.length} logins baixados do Supabase.`);
+            setTeamMembers(dbMembers);
+          } else if (dbMembers === null) {
+            console.warn('Tabela "ap_team_members" no Supabase não foi encontrada ou está vazia.');
+          }
+        } catch (err) {
+          console.error('Erro de conexão Supabase na inicialização:', err);
+        }
+
+        // Se houver um usuário ativo na inicialização, faz o pull profundo imediatamente
+        const savedUser = localStorage.getItem('ap_moda_current_user');
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            if (parsed) {
+              runFullSynchronousSetup(parsed);
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    initSupabaseSync();
+  }, [runFullSynchronousSetup]);
 
   // Listen to table missing warnings from Supabase schemas and display advice
   useEffect(() => {
@@ -860,7 +1035,7 @@ export default function App() {
     }
   }, [systemOffline, getDirtyIds, saveDirtyIds]);
 
-  // Agenda um loop a cada 15 segundos para atualizar todo o sistema em segundo plano entre os aparelhos conectados
+  // Agenda um loop a cada 15 segundos e escuta o foco da janela para sincronizar em tempo real no segundo plano ao trocar de aparelho
   useEffect(() => {
     const config = getSupabaseConfig();
     if (!config) return;
@@ -875,7 +1050,19 @@ export default function App() {
       }
     }, 15000);
 
-    return () => clearInterval(interval);
+    const handleFocus = () => {
+      console.log('[Supabase Sync] Janela focada! Sincronizando alterações em segundo plano...');
+      if (!systemOffline) {
+        performSync();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [systemOffline, performSync]);
 
   // WhatsApp Business API triggers (com suporte a fila offline)
@@ -1478,35 +1665,9 @@ export default function App() {
         motoboys={motoboys}
         teamMembers={teamMembers}
         clients={clients}
-        onLogin={(user) => {
+        onLogin={async (user) => {
           setCurrentUser(user);
-          
-          // Sinal de ativação de tráfego para acordar/manter vivo o Supabase
-          pingSupabaseOnLogin(user.name, user.role)
-            .then((success) => {
-              if (success) {
-                setNotifications(prev => [
-                  {
-                    id: Date.now() + 999,
-                    title: 'Database Ativado ⚡',
-                    detail: `Conexão com o Supabase testada e ativa para o acesso de "${user.name}"!`,
-                    read: false,
-                    type: 'goal' as const
-                  },
-                  ...prev
-                ]);
-              }
-            })
-            .catch(err => console.error('Erro de ativação de tráfego Supabase:', err));
-
-          if (user.role === 'Vendedor') {
-            setActiveTab(ActiveTab.VENDAS); // or ActiveTab.PDV
-            setActiveTab(ActiveTab.PDV);
-          } else if (user.role === 'Cliente') {
-            // Handled automatically by the CustomerPortal intercept below
-          } else {
-            setActiveTab(ActiveTab.DASHBOARD);
-          }
+          await runFullSynchronousSetup(user);
         }}
       />
     );
@@ -1559,6 +1720,101 @@ export default function App() {
           currentUser={currentUser}
           onLogout={() => setCurrentUser(null)}
         />
+      </div>
+    );
+  }
+
+  if (isCloudSyncingOnLogin) {
+    const stepsList = [
+      'Conectando...',
+      'Sincronizando Login...',
+      'Sincronizando Produtos...',
+      'Sincronizando Clientes...',
+      'Sincronizando Histórico de Vendas...',
+      'Sincronizando Financeiro...',
+      'Sincronizando Pedidos Online...',
+      'Sincronizando Configurações Globais...'
+    ];
+
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white font-sans p-6 overflow-y-auto">
+        {/* Ambient high-tech neon details */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-600/10 rounded-full blur-3xl p-1 pointer-events-none animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl p-1 pointer-events-none animate-pulse" />
+        
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative z-10 text-center space-y-6">
+          <div className="flex flex-col items-center">
+            {/* Elegant glowing active loader logo */}
+            {syncProgress.status === 'error' ? (
+              <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 mb-4 animate-bounce">
+                <span className="font-bold text-2xl">!</span>
+              </div>
+            ) : (
+              <div className="relative mb-4">
+                <div className="w-16 h-16 rounded-full border-4 border-slate-800 border-t-pink-600 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="inline-block w-3.5 h-3.5 bg-pink-500 rounded-full animate-ping" />
+                </div>
+              </div>
+            )}
+            
+            <h2 className="text-xl font-bold tracking-tight text-white font-sans text-center">
+              {syncProgress.status === 'error' ? 'Falha na Sincronização' : 'Sincronizando com a Nuvem'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed text-center">
+              Olá, <strong className="text-pink-500">{currentUser?.name || 'Profissional'}</strong>. Estamos preparando e carregando todos os dados da loja em tempo real neste aparelho!
+            </p>
+          </div>
+
+          {/* Steps Progress List */}
+          <div className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 text-left space-y-2.5 font-mono text-[11px]">
+            {stepsList.map((stepItem, index) => {
+              const isCompleted = syncProgress.stepsCompleted.includes(stepItem);
+              const isActive = syncProgress.step === stepItem;
+              
+              let statusIndicator = <span className="w-1.5 h-1.5 rounded-full bg-slate-700 inline-block mr-2.5" />;
+              let textColor = 'text-slate-500';
+              
+              if (isCompleted) {
+                statusIndicator = <span className="text-emerald-500 font-bold mr-2 inline-block">✓</span>;
+                textColor = 'text-slate-400 line-through decoration-slate-800';
+              } else if (isActive) {
+                statusIndicator = <span className="text-pink-500 font-bold mr-2 inline-block animate-pulse">➔</span>;
+                textColor = 'text-pink-500 font-bold animate-pulse';
+              }
+              
+              return (
+                <div key={index} className={`flex items-center ${textColor}`}>
+                  {statusIndicator}
+                  <span>{stepItem}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-[11px] text-slate-400 italic bg-slate-850/40 p-3 rounded-lg border border-slate-800 text-center">
+              "{syncProgress.details}"
+            </p>
+
+            {syncProgress.status === 'error' ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => runFullSynchronousSetup(currentUser)}
+                  className="flex-1 py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold rounded-xl transition duration-300 cursor-pointer border-none"
+                >
+                  Tentar Novamente
+                </button>
+                <button
+                  onClick={() => setIsCloudSyncingOnLogin(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-bold rounded-xl transition duration-300 cursor-pointer border-none"
+                >
+                  Entrar Offline
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }

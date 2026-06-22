@@ -215,6 +215,38 @@ export default function SettingsSystem({
       setDiscordWebhook(localStorage.getItem('ap_discord_webhook') || '');
       setSupabaseUrl(localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co');
       setSupabaseKey(localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI');
+      
+      // Reload Vitrine settings on cloud sync
+      try {
+        const savedSlides = localStorage.getItem('ap_vitrine_slides');
+        if (savedSlides) {
+          const parsed = JSON.parse(savedSlides);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLookbookSlides(parsed);
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const savedAnn = localStorage.getItem('ap_vitrine_announcement');
+        if (savedAnn) {
+          setAnnouncement(JSON.parse(savedAnn));
+        }
+      } catch (e) {}
+
+      try {
+        const savedCat = localStorage.getItem('ap_vitrine_category_banners');
+        if (savedCat) {
+          setCategoryBanners(JSON.parse(savedCat));
+        }
+      } catch (e) {}
+
+      try {
+        const savedFlo = localStorage.getItem('ap_vitrine_floating_banner');
+        if (savedFlo) {
+          setFloatingBanner(JSON.parse(savedFlo));
+        }
+      } catch (e) {}
     };
 
     window.addEventListener('ap-storage-synced', handleStorageSynced);
@@ -1251,15 +1283,31 @@ export default function SettingsSystem({
             <div className="space-y-3.5">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Chave da API ImgBB (Client Token)</label>
-                <input
-                  type="text"
-                  value={imgbbKey}
-                  onChange={(e) => {
-                    setImgbbKey(e.target.value);
-                    localStorage.setItem('ap_imgbb_key', e.target.value);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 font-mono font-bold text-slate-700 focus:outline-hidden"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={imgbbKey}
+                    onChange={(e) => {
+                      setImgbbKey(e.target.value);
+                    }}
+                    onBlur={async () => {
+                      localStorage.setItem('ap_imgbb_key', imgbbKey);
+                      await pushSystemConfigToSupabase('ap_imgbb_key', imgbbKey);
+                    }}
+                    className="flex-grow bg-slate-50 border border-slate-150 rounded-lg p-2 font-mono font-bold text-slate-700 focus:outline-hidden text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      localStorage.setItem('ap_imgbb_key', imgbbKey);
+                      const success = await pushSystemConfigToSupabase('ap_imgbb_key', imgbbKey);
+                      if (success) alert('Chave ImgBB salva e sincronizada na nuvem com sucesso!');
+                    }}
+                    className="px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-[10px] transition cursor-pointer border-none"
+                  >
+                    Salvar
+                  </button>
+                </div>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-150/50">
@@ -1288,16 +1336,32 @@ export default function SettingsSystem({
             <div className="space-y-3.5">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">URL do Webhook do Canal</label>
-                <input
-                  type="text"
-                  placeholder="https://discord.com/api/webhooks/..."
-                  value={discordWebhook}
-                  onChange={(e) => {
-                    setDiscordWebhook(e.target.value);
-                    localStorage.setItem('ap_discord_webhook', e.target.value);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 font-mono text-[10px] text-slate-700 focus:outline-hidden"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="https://discord.com/api/webhooks/..."
+                    value={discordWebhook}
+                    onChange={(e) => {
+                      setDiscordWebhook(e.target.value);
+                    }}
+                    onBlur={async () => {
+                      localStorage.setItem('ap_discord_webhook', discordWebhook);
+                      await pushSystemConfigToSupabase('ap_discord_webhook', discordWebhook);
+                    }}
+                    className="flex-grow bg-slate-50 border border-slate-150 rounded-lg p-2 font-mono text-[10px] text-slate-700 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      localStorage.setItem('ap_discord_webhook', discordWebhook);
+                      const success = await pushSystemConfigToSupabase('ap_discord_webhook', discordWebhook);
+                      if (success) alert('Webhook Discord salvo e sincronizado na nuvem com sucesso!');
+                    }}
+                    className="px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-[10px] transition cursor-pointer border-none"
+                  >
+                    Salvar
+                  </button>
+                </div>
               </div>
 
               <div className="p-3 bg-pink-55/30 border border-pink-100/55 rounded-xl text-pink-900/80 leading-relaxed text-[10px]">
@@ -2668,14 +2732,20 @@ export default function SettingsSystem({
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   try {
                     localStorage.setItem('ap_vitrine_slides', JSON.stringify(lookbookSlides));
                     localStorage.setItem('ap_vitrine_announcement', JSON.stringify(announcement));
                     localStorage.setItem('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
                     localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
                     
-                    alert('✨ Vitrine Pública atualizada com sucesso! Suas campanhas, banners do carrossel, faixa de avisos e o banner flutuante já se encontram ativos na visualização de varejo/atacado!');
+                    // Push all vitrine keys instantly to Supabase
+                    await pushSystemConfigToSupabase('ap_vitrine_slides', JSON.stringify(lookbookSlides));
+                    await pushSystemConfigToSupabase('ap_vitrine_announcement', JSON.stringify(announcement));
+                    await pushSystemConfigToSupabase('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+                    await pushSystemConfigToSupabase('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+
+                    alert('✨ Vitrine Pública atualizada com sucesso! Suas campanhas, banners do carrossel, faixa de avisos e o banner flutuante já se encontram ativos na visualização de varejo/atacado e sincronizados entre todos aparelhos!');
                   } catch (e) {
                     alert('Erro ao persistir configurações da vitrine. Por favor, tente novamente!');
                   }

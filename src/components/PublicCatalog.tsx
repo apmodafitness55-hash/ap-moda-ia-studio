@@ -43,6 +43,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { Product, Client } from '../types';
+import { pushSystemConfigToSupabase } from '../supabase';
 
 interface PublicCatalogProps {
   products: Product[];
@@ -178,6 +179,47 @@ export default function PublicCatalog({
   useEffect(() => {
     localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
   }, [floatingBanner]);
+
+  // Listen for background sync updates to immediately reflect across screens
+  useEffect(() => {
+    const handleStorageSynced = () => {
+      console.log('[PublicCatalog] Sincronizando dados locais da vitrine a partir do localStorage.');
+      const savedName = localStorage.getItem('ap_vitrine_store_name');
+      if (savedName) setStoreName(savedName);
+
+      const savedSub = localStorage.getItem('ap_vitrine_store_sub');
+      if (savedSub) setStoreSub(savedSub);
+
+      const savedTheme = localStorage.getItem('ap_vitrine_theme_color');
+      if (savedTheme) setThemeColor(savedTheme);
+
+      try {
+        const savedSlides = localStorage.getItem('ap_vitrine_slides');
+        if (savedSlides) {
+          const parsed = JSON.parse(savedSlides);
+          if (Array.isArray(parsed) && parsed.length > 0) setLookbookSlides(parsed);
+        }
+      } catch (e) {}
+
+      try {
+        const savedAnn = localStorage.getItem('ap_vitrine_announcement');
+        if (savedAnn) setTickerConfig(JSON.parse(savedAnn));
+      } catch (e) {}
+
+      try {
+        const savedCat = localStorage.getItem('ap_vitrine_category_banners');
+        if (savedCat) setCategoryBanners(JSON.parse(savedCat));
+      } catch (e) {}
+
+      try {
+        const savedFlo = localStorage.getItem('ap_vitrine_floating_banner');
+        if (savedFlo) setFloatingBanner(JSON.parse(savedFlo));
+      } catch (e) {}
+    };
+
+    window.addEventListener('ap-storage-synced', handleStorageSynced);
+    return () => window.removeEventListener('ap-storage-synced', handleStorageSynced);
+  }, []);
 
   // Auto-advance banner slides
   useEffect(() => {
@@ -1181,8 +1223,30 @@ export default function PublicCatalog({
 
           <div className="pt-4 border-t border-slate-800 space-y-2 shrink-0">
             <button
-              onClick={() => {
-                alert('✨ Todas as alterações na Vitrine foram salvas com sucesso em tempo real no banco local!');
+              onClick={async () => {
+                try {
+                  // Save all 7 settings to localStorage to keep local state solid
+                  localStorage.setItem('ap_vitrine_store_name', storeName);
+                  localStorage.setItem('ap_vitrine_store_sub', storeSub);
+                  localStorage.setItem('ap_vitrine_theme_color', themeColor);
+                  localStorage.setItem('ap_vitrine_slides', JSON.stringify(lookbookSlides));
+                  localStorage.setItem('ap_vitrine_announcement', JSON.stringify(tickerConfig));
+                  localStorage.setItem('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+                  localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+
+                  // Push all 7 settings immediately to Supabase
+                  await pushSystemConfigToSupabase('ap_vitrine_store_name', storeName);
+                  await pushSystemConfigToSupabase('ap_vitrine_store_sub', storeSub);
+                  await pushSystemConfigToSupabase('ap_vitrine_theme_color', themeColor);
+                  await pushSystemConfigToSupabase('ap_vitrine_slides', JSON.stringify(lookbookSlides));
+                  await pushSystemConfigToSupabase('ap_vitrine_announcement', JSON.stringify(tickerConfig));
+                  await pushSystemConfigToSupabase('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+                  await pushSystemConfigToSupabase('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+
+                  alert('✨ Todas as alterações na Vitrine foram salvas com sucesso e sincronizadas em toda sua nuvem de aparelhos!');
+                } catch (e) {
+                  alert('✨ Alterações gravadas localmente.');
+                }
                 setViewMode('cliente');
               }}
               className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 active:scale-97 text-white font-bold text-xs rounded-xl transition duration-300 flex items-center justify-center gap-2 border-0 cursor-pointer text-center outline-none"

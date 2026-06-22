@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { pushSystemConfigToSupabase } from '../supabase';
 import { 
   CreditCard, 
   QrCode, 
@@ -97,11 +98,37 @@ export default function StorefrontPaymentConfig() {
   const [termSerial, setTermSerial] = useState('');
   const [termNotes, setTermNotes] = useState('');
 
+  // Listen for cloud sync changes
+  useEffect(() => {
+    const handleStorageSynced = () => {
+      console.log('[StorefrontPaymentConfig] Sincronizando dados locais a partir do localStorage.');
+      const savedConfig = localStorage.getItem('ap_moda_payment_config');
+      if (savedConfig) {
+        try {
+          setConfig(JSON.parse(savedConfig));
+        } catch (e) {}
+      }
+      const savedTerminals = localStorage.getItem('ap_moda_card_terminals');
+      if (savedTerminals) {
+        try {
+          setTerminals(JSON.parse(savedTerminals));
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener('ap-storage-synced', handleStorageSynced);
+    return () => window.removeEventListener('ap-storage-synced', handleStorageSynced);
+  }, []);
+
   // Handle saving configurations
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
-  const handleSaveConfig = () => {
-    localStorage.setItem('ap_moda_payment_config', JSON.stringify(config));
+  const handleSaveConfig = async () => {
+    const jsonStr = JSON.stringify(config);
+    localStorage.setItem('ap_moda_payment_config', jsonStr);
     
+    // Also push to Supabase
+    await pushSystemConfigToSupabase('ap_moda_payment_config', jsonStr);
+
     // Also retroactively mirror / keep in sync company_info pixKey for backwards compatibility
     try {
       const companyInfoSaved = localStorage.getItem('ap_moda_company_info');
@@ -114,11 +141,11 @@ export default function StorefrontPaymentConfig() {
 
     setIsSavedSuccess(true);
     setTimeout(() => setIsSavedSuccess(false), 3000);
-    alert('Configurações de formas de pagamentos da Vitrine salvas com sucesso em tempo real!');
+    alert('Configurações de formas de pagamentos da Vitrine salvas e sincronizadas na nuvem com sucesso!');
   };
 
   // Handle adding card reader terminal
-  const handleAddTerminalSubmit = (e: React.FormEvent) => {
+  const handleAddTerminalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!termName.trim()) return;
 
@@ -131,23 +158,32 @@ export default function StorefrontPaymentConfig() {
       notes: termNotes.trim() || undefined
     };
 
-    setTerminals(prev => [...prev, newTerm]);
+    const updated = [...terminals, newTerm];
+    setTerminals(updated);
+    localStorage.setItem('ap_moda_card_terminals', JSON.stringify(updated));
+    await pushSystemConfigToSupabase('ap_moda_card_terminals', JSON.stringify(updated));
+
     setIsAddTerminalOpen(false);
-    
     setTermName('');
     setTermSerial('');
     setTermNotes('');
   };
 
   // Handle deleting card reader terminal
-  const handleDeleteTerminal = (id: string) => {
+  const handleDeleteTerminal = async (id: string) => {
     if (confirm('Deseja excluir este terminal de maquininha do cadastro?')) {
-      setTerminals(prev => prev.filter(t => t.id !== id));
+      const updated = terminals.filter(t => t.id !== id);
+      setTerminals(updated);
+      localStorage.setItem('ap_moda_card_terminals', JSON.stringify(updated));
+      await pushSystemConfigToSupabase('ap_moda_card_terminals', JSON.stringify(updated));
     }
   };
 
-  const toggleTerminalStatus = (id: string) => {
-    setTerminals(prev => prev.map(t => t.id === id ? { ...t, status: t.status === 'Ativo' ? 'Inativo' : 'Ativo' } : t));
+  const toggleTerminalStatus = async (id: string) => {
+    const updated = terminals.map(t => t.id === id ? { ...t, status: t.status === 'Ativo' ? 'Inativo' : 'Ativo' } : t);
+    setTerminals(updated);
+    localStorage.setItem('ap_moda_card_terminals', JSON.stringify(updated));
+    await pushSystemConfigToSupabase('ap_moda_card_terminals', JSON.stringify(updated));
   };
 
   return (
