@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Menu, 
   X, 
@@ -18,7 +18,8 @@ import {
   Package,
   ShoppingBag,
   Sun,
-  Moon
+  Moon,
+  CloudLightning
 } from 'lucide-react';
 
 import { ActiveTab, Product, Sale, Client, Transaction } from './types';
@@ -265,6 +266,8 @@ export default function App() {
     return window.location.search.includes('catalog=true') || window.location.search.includes('view=catalog');
   });
 
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
+
   // States with persistent localStorage fallback
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('ap_moda_products');
@@ -392,304 +395,329 @@ export default function App() {
   }, []);
 
   // Sincronização automática bilateral de TODO o ecossistema AP Moda Fitness com o Supabase
+  const performSync = useCallback(async (isManual = false) => {
+    const config = getSupabaseConfig();
+    if (!config) return;
+
+    if (systemOffline) {
+      console.log('[Supabase Sync] Sistema offline. Sincronização suspensa.');
+      if (isManual) {
+        alert("Você está offline no momento. Ative a internet para realizar a sincronização na nuvem.");
+      }
+      return;
+    }
+
+    if (isManual) {
+      setIsSyncingNow(true);
+    }
+
+    try {
+      console.log('[Supabase Sync] Sincronizando dados bilateralmente com a nuvem Supabase...');
+
+      let localStateModified = false;
+      let remoteStateModified = false;
+
+      // 1. Sincronização da Equipe (Logins e Cargos)
+      const dbMembers = await fetchTeamMembersFromSupabase();
+      if (dbMembers) {
+        const currentMembers = lastTeamMembersRef.current;
+        const localMap = new Map((currentMembers || []).map(m => [m.id, m]));
+        const dbMap = new Map(dbMembers.map(m => [m.id, m]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...(currentMembers || [])];
+
+        for (const dbM of dbMembers) {
+          const localM = localMap.get(dbM.id);
+          if (!localM) {
+            merged.push(dbM);
+            localModified = true;
+          } else if (JSON.stringify(localM) !== JSON.stringify(dbM)) {
+            if (dbM.login === 'admin' && dbM.role === 'Admin') continue;
+            const idx = merged.findIndex(x => x.id === dbM.id);
+            if (idx >= 0) merged[idx] = dbM;
+            localModified = true;
+          }
+        }
+
+        const toUpload = (currentMembers || []).filter(lm => {
+          const dbM = dbMap.get(lm.id);
+          return !dbM || JSON.stringify(dbM) !== JSON.stringify(lm);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkTeamMembersToSupabase(currentMembers || []);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setTeamMembers(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 2. Sincronização do Catálogo de Produtos da Boutique
+      const dbProducts = await fetchProductsFromSupabase();
+      if (dbProducts) {
+        const currentProducts = lastProductsRef.current;
+        const localMap = new Map(currentProducts.map(p => [p.id, p]));
+        const dbMap = new Map(dbProducts.map(p => [p.id, p]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentProducts];
+
+        for (const dbP of dbProducts) {
+          const localP = localMap.get(dbP.id);
+          if (!localP) {
+            merged.push(dbP);
+            localModified = true;
+          } else if (JSON.stringify(localP) !== JSON.stringify(dbP)) {
+            const idx = merged.findIndex(x => x.id === dbP.id);
+            if (idx >= 0) merged[idx] = dbP;
+            localModified = true;
+          }
+        }
+
+        const toUpload = currentProducts.filter(lp => {
+          const dbP = dbMap.get(lp.id);
+          return !dbP || JSON.stringify(dbP) !== JSON.stringify(lp);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkProductsToSupabase(currentProducts);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setProducts(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 3. Sincronização do CRM de Clientes
+      const dbClients = await fetchClientsFromSupabase();
+      if (dbClients) {
+        const currentClients = lastClientsRef.current;
+        const localMap = new Map(currentClients.map(c => [c.id, c]));
+        const dbMap = new Map(dbClients.map(c => [c.id, c]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentClients];
+
+        for (const dbC of dbClients) {
+          const localP = localMap.get(dbC.id);
+          if (!localP) {
+            merged.push(dbC);
+            localModified = true;
+          } else if (JSON.stringify(localP) !== JSON.stringify(dbC)) {
+            const idx = merged.findIndex(x => x.id === dbC.id);
+            if (idx >= 0) merged[idx] = dbC;
+            localModified = true;
+          }
+        }
+
+        const toUpload = currentClients.filter(lc => {
+          const dbRef = dbMap.get(lc.id);
+          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lc);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkClientsToSupabase(currentClients);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setClients(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 4. Sincronização de Vendas Realizadas (PDV e Canais)
+      const dbSales = await fetchSalesFromSupabase();
+      if (dbSales) {
+        const currentSales = lastSalesRef.current;
+        const localMap = new Map(currentSales.map(s => [s.id, s]));
+        const dbMap = new Map(dbSales.map(s => [s.id, s]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentSales];
+
+        for (const dbS of dbSales) {
+          const localP = localMap.get(dbS.id);
+          if (!localP) {
+            merged.push(dbS);
+            localModified = true;
+          } else if (JSON.stringify(localP) !== JSON.stringify(dbS)) {
+            const idx = merged.findIndex(x => x.id === dbS.id);
+            if (idx >= 0) merged[idx] = dbS;
+            localModified = true;
+          }
+        }
+
+        const toUpload = currentSales.filter(ls => {
+          const dbRef = dbMap.get(ls.id);
+          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(ls);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkSalesToSupabase(currentSales);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setSales(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 5. Sincronização Financeira (Lançamentos de Caixa)
+      const dbTransactions = await fetchTransactionsFromSupabase();
+      if (dbTransactions) {
+        const currentTransactions = lastTransactionsRef.current;
+        const localMap = new Map(currentTransactions.map(t => [t.id, t]));
+        const dbMap = new Map(dbTransactions.map(t => [t.id, t]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentTransactions];
+
+        for (const dbT of dbTransactions) {
+          const localP = localMap.get(dbT.id);
+          if (!localP) {
+            merged.push(dbT);
+            localModified = true;
+          } else if (JSON.stringify(localP) !== JSON.stringify(dbT)) {
+            const idx = merged.findIndex(x => x.id === dbT.id);
+            if (idx >= 0) merged[idx] = dbT;
+            localModified = true;
+          }
+        }
+
+        const toUpload = currentTransactions.filter(lt => {
+          const dbRef = dbMap.get(lt.id);
+          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lt);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkTransactionsToSupabase(currentTransactions);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setTransactions(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 6. Sincronização de Pedidos da Loja Online / Vitrine
+      const dbOrders = await fetchOnlineOrdersFromSupabase();
+      if (dbOrders) {
+        const currentOrders = lastOnlineOrdersRef.current;
+        const localMap = new Map(currentOrders.map(o => [o.id, o]));
+        const dbMap = new Map(dbOrders.map(o => [o.id, o]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentOrders];
+
+        for (const dbO of dbOrders) {
+          const localP = localMap.get(dbO.id);
+          if (!localP) {
+            merged.push(dbO);
+            localModified = true;
+          } else if (JSON.stringify(localP) !== JSON.stringify(dbO)) {
+            const idx = merged.findIndex(x => x.id === dbO.id);
+            if (idx >= 0) merged[idx] = dbO;
+            localModified = true;
+          }
+        }
+
+        const toUpload = currentOrders.filter(lo => {
+          const dbRef = dbMap.get(lo.id);
+          return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lo);
+        });
+
+        if (toUpload.length > 0) {
+          await syncBulkOnlineOrdersToSupabase(currentOrders);
+          remoteModified = true;
+        }
+
+        if (localModified) {
+          setOnlineOrders(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
+      // 7. Sincronização de Configurações Globais (Microsoft/Google Workspace keys, dados de loja, logo, bandeiras, etc.)
+      const localConfigsChanged = await syncSystemConfigsWithSupabase();
+      if (localConfigsChanged) {
+        console.log('[Supabase Sync] Chaves de integração, logs e dados da loja atualizados a partir da nuvem!');
+        
+        // Dispara evento para o SettingsSystem e outros para recarregarem os dados do localStorage na tela
+        window.dispatchEvent(new Event('ap-storage-synced'));
+      }
+
+      if (localStateModified || remoteStateModified) {
+        setNotifications(prev => [
+          {
+            id: Date.now() + 800,
+            title: isManual ? 'Nuvem Sincronizada ☁️✨' : 'Sincronização Concluída ✨',
+            detail: 'Todos os produtos, vendas, clientes, Google/Microsoft Workspace, logotipo e configurações compartilhados com este aparelho!',
+            read: false,
+            type: 'goal' as const
+          },
+          ...prev
+        ]);
+      }
+      
+      if (isManual) {
+        alert("✅ Conectado & Pareado!\n\nDados totalmente sincronizados em tempo real com todos os celulares e computadores conectados na nuvem AP Moda Fitness!");
+      }
+    } catch (e) {
+      console.warn('[Supabase Sync Exception] Erro severo na sincronização periódica:', e);
+      if (isManual) {
+        alert("⚠️ Falha ao sincronizar: " + (e as any).message);
+      }
+    } finally {
+      if (isManual) {
+        setIsSyncingNow(false);
+      }
+    }
+  }, [systemOffline]);
+
+  // Agenda um loop a cada 15 segundos para atualizar todo o sistema em segundo plano entre os aparelhos conectados
   useEffect(() => {
     const config = getSupabaseConfig();
     if (!config) return;
 
-    const performSync = async () => {
-      if (systemOffline) {
-        console.log('[Supabase Sync] Sistema offline. Sincronização suspensa.');
-        return;
-      }
-      try {
-        console.log('[Supabase Sync] Sincronizando dados bilateralmente com a nuvem Supabase...');
-
-        let localStateModified = false;
-        let remoteStateModified = false;
-
-        // 1. Sincronização da Equipe (Logins e Cargos)
-        const dbMembers = await fetchTeamMembersFromSupabase();
-        if (dbMembers) {
-          const currentMembers = lastTeamMembersRef.current;
-          const localMap = new Map((currentMembers || []).map(m => [m.id, m]));
-          const dbMap = new Map(dbMembers.map(m => [m.id, m]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...(currentMembers || [])];
-
-          for (const dbM of dbMembers) {
-            const localM = localMap.get(dbM.id);
-            if (!localM) {
-              merged.push(dbM);
-              localModified = true;
-            } else if (JSON.stringify(localM) !== JSON.stringify(dbM)) {
-              if (dbM.login === 'admin' && dbM.role === 'Admin') continue;
-              const idx = merged.findIndex(x => x.id === dbM.id);
-              if (idx >= 0) merged[idx] = dbM;
-              localModified = true;
-            }
-          }
-
-          const toUpload = (currentMembers || []).filter(lm => {
-            const dbM = dbMap.get(lm.id);
-            return !dbM || JSON.stringify(dbM) !== JSON.stringify(lm);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkTeamMembersToSupabase(currentMembers || []);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setTeamMembers(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 2. Sincronização do Catálogo de Produtos da Boutique
-        const dbProducts = await fetchProductsFromSupabase();
-        if (dbProducts) {
-          const currentProducts = lastProductsRef.current;
-          const localMap = new Map(currentProducts.map(p => [p.id, p]));
-          const dbMap = new Map(dbProducts.map(p => [p.id, p]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...currentProducts];
-
-          for (const dbP of dbProducts) {
-            const localP = localMap.get(dbP.id);
-            if (!localP) {
-              merged.push(dbP);
-              localModified = true;
-            } else if (JSON.stringify(localP) !== JSON.stringify(dbP)) {
-              const idx = merged.findIndex(x => x.id === dbP.id);
-              if (idx >= 0) merged[idx] = dbP;
-              localModified = true;
-            }
-          }
-
-          const toUpload = currentProducts.filter(lp => {
-            const dbP = dbMap.get(lp.id);
-            return !dbP || JSON.stringify(dbP) !== JSON.stringify(lp);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkProductsToSupabase(currentProducts);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setProducts(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 3. Sincronização do CRM de Clientes
-        const dbClients = await fetchClientsFromSupabase();
-        if (dbClients) {
-          const currentClients = lastClientsRef.current;
-          const localMap = new Map(currentClients.map(c => [c.id, c]));
-          const dbMap = new Map(dbClients.map(c => [c.id, c]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...currentClients];
-
-          for (const dbC of dbClients) {
-            const localP = localMap.get(dbC.id);
-            if (!localP) {
-              merged.push(dbC);
-              localModified = true;
-            } else if (JSON.stringify(localP) !== JSON.stringify(dbC)) {
-              const idx = merged.findIndex(x => x.id === dbC.id);
-              if (idx >= 0) merged[idx] = dbC;
-              localModified = true;
-            }
-          }
-
-          const toUpload = currentClients.filter(lc => {
-            const dbRef = dbMap.get(lc.id);
-            return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lc);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkClientsToSupabase(currentClients);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setClients(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 4. Sincronização de Vendas Realizadas (PDV e Canais)
-        const dbSales = await fetchSalesFromSupabase();
-        if (dbSales) {
-          const currentSales = lastSalesRef.current;
-          const localMap = new Map(currentSales.map(s => [s.id, s]));
-          const dbMap = new Map(dbSales.map(s => [s.id, s]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...currentSales];
-
-          for (const dbS of dbSales) {
-            const localP = localMap.get(dbS.id);
-            if (!localP) {
-              merged.push(dbS);
-              localModified = true;
-            } else if (JSON.stringify(localP) !== JSON.stringify(dbS)) {
-              const idx = merged.findIndex(x => x.id === dbS.id);
-              if (idx >= 0) merged[idx] = dbS;
-              localModified = true;
-            }
-          }
-
-          const toUpload = currentSales.filter(ls => {
-            const dbRef = dbMap.get(ls.id);
-            return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(ls);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkSalesToSupabase(currentSales);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setSales(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 5. Sincronização Financeira (Lançamentos de Caixa)
-        const dbTransactions = await fetchTransactionsFromSupabase();
-        if (dbTransactions) {
-          const currentTransactions = lastTransactionsRef.current;
-          const localMap = new Map(currentTransactions.map(t => [t.id, t]));
-          const dbMap = new Map(dbTransactions.map(t => [t.id, t]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...currentTransactions];
-
-          for (const dbT of dbTransactions) {
-            const localP = localMap.get(dbT.id);
-            if (!localP) {
-              merged.push(dbT);
-              localModified = true;
-            } else if (JSON.stringify(localP) !== JSON.stringify(dbT)) {
-              const idx = merged.findIndex(x => x.id === dbT.id);
-              if (idx >= 0) merged[idx] = dbT;
-              localModified = true;
-            }
-          }
-
-          const toUpload = currentTransactions.filter(lt => {
-            const dbRef = dbMap.get(lt.id);
-            return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lt);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkTransactionsToSupabase(currentTransactions);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setTransactions(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 6. Sincronização de Pedidos da Loja Online / Vitrine
-        const dbOrders = await fetchOnlineOrdersFromSupabase();
-        if (dbOrders) {
-          const currentOrders = lastOnlineOrdersRef.current;
-          const localMap = new Map(currentOrders.map(o => [o.id, o]));
-          const dbMap = new Map(dbOrders.map(o => [o.id, o]));
-          let localModified = false;
-          let remoteModified = false;
-          const merged = [...currentOrders];
-
-          for (const dbO of dbOrders) {
-            const localP = localMap.get(dbO.id);
-            if (!localP) {
-              merged.push(dbO);
-              localModified = true;
-            } else if (JSON.stringify(localP) !== JSON.stringify(dbO)) {
-              const idx = merged.findIndex(x => x.id === dbO.id);
-              if (idx >= 0) merged[idx] = dbO;
-              localModified = true;
-            }
-          }
-
-          const toUpload = currentOrders.filter(lo => {
-            const dbRef = dbMap.get(lo.id);
-            return !dbRef || JSON.stringify(dbRef) !== JSON.stringify(lo);
-          });
-
-          if (toUpload.length > 0) {
-            await syncBulkOnlineOrdersToSupabase(currentOrders);
-            remoteModified = true;
-          }
-
-          if (localModified) {
-            setOnlineOrders(merged);
-            localStateModified = true;
-          }
-          if (remoteModified || localModified) {
-            remoteStateModified = true;
-          }
-        }
-
-        // 7. Sincronização de Configurações Globais (Microsoft/Google Workspace keys, dados de loja, logo, bandeiras, etc.)
-        const localConfigsChanged = await syncSystemConfigsWithSupabase();
-        if (localConfigsChanged) {
-          console.log('[Supabase Sync] Chaves de integração, logs e dados da loja atualizados a partir da nuvem!');
-          
-          // Dispara evento para o SettingsSystem e outros para recarregarem os dados do localStorage na tela
-          window.dispatchEvent(new Event('ap-storage-synced'));
-        }
-
-        if (localStateModified || remoteStateModified) {
-          setNotifications(prev => [
-            {
-              id: Date.now() + 800,
-              title: 'Sincronização Concluída ✨',
-              detail: 'Todos os produtos, vendas, clientes, Google/Microsoft Workspace, logotipo e configurações compartilhados com este aparelho!',
-              read: false,
-              type: 'goal' as const
-            },
-            ...prev
-          ]);
-        }
-      } catch (e) {
-        console.warn('[Supabase Sync Exception] Erro severo na sincronização periódica:', e);
-      }
-    };
-
-    // Agenda um loop a cada 15 segundos para atualizar todo o sistema em segundo plano entre os aparelhos conectados
-    const interval = setInterval(performSync, 15000);
-
-    // Executa imediatamente no início
     if (!systemOffline) {
       performSync();
     }
 
+    const interval = setInterval(() => {
+      if (!systemOffline) {
+        performSync();
+      }
+    }, 15000);
+
     return () => clearInterval(interval);
-  }, [systemOffline]);
+  }, [systemOffline, performSync]);
 
   // WhatsApp Business API triggers (com suporte a fila offline)
   const triggerWhatsAppAlert = async (type: 'sale_completed' | 'stock_alert', data: any, forceSync = false) => {
@@ -1483,6 +1511,24 @@ export default function App() {
           {/* Quick global search text & notification alerts */}
           <div className="flex items-center gap-4">
             
+            {/* Manual Cloud Sync Button (Instantly connects multiple devices to the same data) */}
+            <button 
+              onClick={() => performSync(true)}
+              disabled={isSyncingNow}
+              className={`flex items-center gap-1.5 font-bold text-xs px-3.5 py-2.5 sm:py-2 rounded-xl border-none cursor-pointer transition-all active:scale-95 text-white shadow-md ${
+                isSyncingNow 
+                  ? 'bg-amber-500 hover:bg-amber-600 animate-pulse cursor-not-allowed shadow-amber-500/25' 
+                  : systemOffline
+                    ? 'bg-slate-400 hover:bg-slate-500 shadow-slate-450/25'
+                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
+              }`}
+              title="Clique para sincronizar, parear e compartilhar os dados em tempo real com todos os celulares e tablets conectados"
+            >
+              <CloudLightning size={14} className={isSyncingNow ? 'animate-spin text-white' : 'text-emerald-100'} />
+              <span className="hidden sm:inline">{isSyncingNow ? 'Sincronizando...' : 'Sincronizar Vários Aparelhos ☁️'}</span>
+              <span className="sm:hidden">{isSyncingNow ? 'Sincronizando...' : 'Sincronizar ☁️'}</span>
+            </button>
+
             {/* Search mock bar */}
             <div className="relative hidden md:block w-64">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">

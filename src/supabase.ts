@@ -11,14 +11,24 @@ export interface TeamMember {
   createdAt?: string;
 }
 
-// Retrieves configuration dynamically from localStorage, falling back to default shared credentials
+// Retrieves configuration dynamically from localStorage, falling back to default shared credentials, and self-heals placeholder text
 export function getSupabaseConfig() {
-  const url = localStorage.getItem('ap_supabase_url') || 'https://xkbryirdcjgjrrqnvmme.supabase.co';
-  const key = localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI';
+  let url = localStorage.getItem('ap_supabase_url');
+  let key = localStorage.getItem('ap_supabase_key');
   
-  if (!url || !key || url.includes('suachave') || key.includes('suachave')) {
-    return null;
+  const defaultUrl = 'https://xkbryirdcjgjrrqnvmme.supabase.co';
+  const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnJ5aXJkY2pnanJqcnFudm1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2Nzk0MDgsImV4cCI6MjA5NjI1NTQwOH0.DeWntFUq4jkKK38vsAxC-I8tzKN_l8GK5OqmgfoT7MI';
+  
+  if (!url || url.includes('suachave') || url.includes('sua-url') || url.trim() === '') {
+    url = defaultUrl;
+    localStorage.setItem('ap_supabase_url', defaultUrl);
   }
+  
+  if (!key || key.includes('suachave') || key.includes('suashare') || key.trim() === '') {
+    key = defaultKey;
+    localStorage.setItem('ap_supabase_key', defaultKey);
+  }
+  
   return { url, key };
 }
 
