@@ -49,6 +49,7 @@ import SuppliersManagement from './components/SuppliersManagement';
 import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
 import { 
   getSupabaseConfig, 
+  getSupabaseClient,
   initializeSupabaseConfig,
   fetchTeamMembersFromSupabase, 
   syncBulkTeamMembersToSupabase,
@@ -1138,6 +1139,432 @@ export default function App() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [systemOffline, performSync]);
+
+  // Assinatura em Tempo Real (Realtime) do Supabase para Sincronização Instantânea Multidispositivo
+  useEffect(() => {
+    if (systemOffline) return;
+
+    const conf = getSupabaseConfig();
+    if (!conf || !conf.url || !conf.key) return;
+
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    console.log('[Supabase Realtime] Inicializando canais de escuta em tempo real...');
+
+    // Canal para todas as tabelas principais em tempo real
+    const realtimeChannel = client.channel('custom-filter-channel');
+
+    const handlePostgresChange = (tableName: string, payload: any) => {
+      // Ignora alterações do próprio aparelho se estivermos no meio de um sync bilateral em lote para prevenir colisões ou loops redundantes
+      if (isSyncingRef.current) {
+        console.log(`[Supabase Realtime] Evento recebido, mas ignorado por lock de sincronização em andamento na tabela: ${tableName}`);
+        return;
+      }
+
+      const { eventType, new: newRec, old: oldRec } = payload;
+      console.log(`[Supabase Realtime Change Detected] Tabela: ${tableName} | Evento: ${eventType}`, payload);
+
+      const user = currentUserRef.current;
+      const userRole = user?.role; // 'Admin' | 'Gerente' | 'Vendedor' | 'Parceiro' | 'Entregador' | 'Cliente'
+
+      // Filtro de Segurança por Perfil de Acesso em Tempo Real (Security Shield):
+      if (userRole) {
+        // 1. Dados Financeiros (ap_transactions) e faturamento restritos a administradores e gerentes
+        if (tableName === 'ap_transactions') {
+          if (userRole !== 'Admin' && userRole !== 'Gerente') {
+            console.log(`[Supabase Realtime Blocked] Canal de transação bloqueado para perfil: ${userRole}`);
+            return;
+          }
+        }
+
+        // 2. Colaboradores da Equipe (ap_team_members) restritos a administradores e gerentes
+        if (tableName === 'ap_team_members') {
+          if (userRole !== 'Admin' && userRole !== 'Gerente') {
+            console.log(`[Supabase Realtime Blocked] Canal de equipe bloqueado para perfil: ${userRole}`);
+            return;
+          }
+        }
+
+        // 3. Cadastros de Clientes (ap_clients) no CRM: Clientes VIP só atualizam seus próprios dados. Vendedores acessam tudo. Outros perfis ignoram.
+        if (tableName === 'ap_clients') {
+          if (userRole === 'Cliente') {
+            const isMe = newRec && newRec.id === user.details?.id;
+            if (!isMe) {
+              console.log('[Supabase Realtime Filter] Registro de cliente externo ignorado.');
+              return;
+            }
+          } else if (userRole !== 'Admin' && userRole !== 'Gerente' && userRole !== 'Vendedor') {
+            console.log('[Supabase Realtime Filter] Cadastro de CRM indisponível para este perfil.');
+            return;
+          }
+        }
+
+        // 4. Fluxo de Vendas (ap_sales): 
+        // Clientes só recebem suas próprias compras
+        // Parceiros / Afiliados só recebem vendas associadas ao seu respectivo cupom
+        // Entregadores ignoram faturamento das vendas
+        if (tableName === 'ap_sales') {
+          if (userRole === 'Cliente') {
+            const isMySale = newRec && (
+              (newRec.clientName && newRec.clientName.trim().toLowerCase() === user.name?.trim().toLowerCase()) ||
+              (newRec.clientDoc && user.details?.cpf && newRec.clientDoc.replace(/\D/g, '') === user.details.cpf.replace(/\D/g, ''))
+            );
+            if (!isMySale) {
+              console.log('[Supabase Realtime Filter] Venda externa omitida.');
+              return;
+            }
+          } else if (userRole === 'Parceiro') {
+            const isMyCoupon = newRec && (
+              (newRec.salesperson && newRec.salesperson.trim().toLowerCase().includes(user.name?.trim().toLowerCase())) ||
+              (newRec.items && JSON.stringify(newRec.items).toLowerCase().includes(user.name?.trim().toLowerCase()))
+            );
+            if (!isMyCoupon) {
+              console.log('[Supabase Realtime Filter] Pedido de cupom de outra parceira ignorado.');
+              return;
+            }
+          } else if (userRole === 'Entregador') {
+            console.log('[Supabase Realtime Filter] Histórico fiduciário indisponível para entregador.');
+            return;
+          }
+        }
+
+        // 5. Pedidos de Encomendas Online (ap_online_orders) / Logística:
+        // Clientes apenas acompanham o rastreio do seu próprio pedido online
+        // Entregadores apenas visualizam encomendas especificamente atribuídas a eles (nome do motoboy)
+        // Parceiros ignoram o painel operacional de envios
+        if (tableName === 'ap_online_orders') {
+          if (userRole === 'Cliente') {
+            const isMyOrder = newRec && (
+              (newRec.clientName && newRec.clientName.trim().toLowerCase() === user.name?.trim().toLowerCase()) ||
+              (newRec.phone && user.details?.phone && newRec.phone.replace(/\D/g, '') === user.details.phone.replace(/\D/g, ''))
+            );
+            if (!isMyOrder) {
+              console.log('[Supabase Realtime Filter] Pedido online de terceiros ocultado.');
+              return;
+            }
+          } else if (userRole === 'Entregador') {
+            const isMyDelivery = newRec && newRec.motoboy && (
+              newRec.motoboy.trim().toLowerCase().includes(user.name?.trim().toLowerCase()) || 
+              user.name?.trim().toLowerCase().includes(newRec.motoboy.trim().toLowerCase())
+            );
+            if (!isMyDelivery) {
+              console.log(`[Supabase Realtime Filter] Pedido omitido (atribuído para outro motoboy).`);
+              return;
+            }
+          } else if (userRole === 'Parceiro') {
+            return;
+          }
+        }
+      }
+
+      if (tableName === 'ap_products') {
+        setProducts(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              sku: newRec.sku,
+              category: newRec.category,
+              price: Number(newRec.price),
+              cost: Number(newRec.cost),
+              stock: Number(newRec.stock),
+              minStock: Number(newRec.minStock),
+              image: newRec.image,
+              images: Array.isArray(newRec.images) ? newRec.images : [],
+              salesCount: Number(newRec.salesCount || 0),
+              description: newRec.description || '',
+              videoUrl: newRec.videoUrl || '',
+              colors: Array.isArray(newRec.colors) ? newRec.colors : [],
+              sizes: Array.isArray(newRec.sizes) ? newRec.sizes : [],
+              sizeColors: newRec.size_colors || {}
+            };
+            if (!prev.some(p => p.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              sku: newRec.sku,
+              category: newRec.category,
+              price: Number(newRec.price),
+              cost: Number(newRec.cost),
+              stock: Number(newRec.stock),
+              minStock: Number(newRec.minStock),
+              image: newRec.image,
+              images: Array.isArray(newRec.images) ? newRec.images : [],
+              salesCount: Number(newRec.salesCount || 0),
+              description: newRec.description || '',
+              videoUrl: newRec.videoUrl || '',
+              colors: Array.isArray(newRec.colors) ? newRec.colors : [],
+              sizes: Array.isArray(newRec.sizes) ? newRec.sizes : [],
+              sizeColors: newRec.size_colors || {}
+            };
+            updated = prev.map(p => p.id === mapped.id ? mapped : p);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(p => p.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_products', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_clients') {
+        setClients(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              email: newRec.email || '',
+              phone: newRec.phone || '',
+              cpf: newRec.cpf || '',
+              birthDate: newRec.birthDate || '',
+              whatsapp: newRec.whatsapp || '',
+              addressStreet: newRec.addressStreet || '',
+              addressNum: newRec.addressNum || '',
+              addressComp: newRec.addressComp || '',
+              addressBairro: newRec.addressBairro || '',
+              addressCidade: newRec.addressCidade || '',
+              addressEstado: newRec.addressEstado || '',
+              addressCep: newRec.addressCep || '',
+              channel: newRec.channel || 'Balcão',
+              npsScore: Number(newRec.npsScore || 0),
+              totalSpent: Number(newRec.totalSpent || 0),
+              ordersCount: Number(newRec.ordersCount || 0),
+              createdAt: newRec.created_at || new Date().toISOString(),
+              cashbackBalance: Number(newRec.cashbackBalance || 0),
+              busto: newRec.busto ? Number(newRec.busto) : undefined,
+              cintura: newRec.cintura ? Number(newRec.cintura) : undefined,
+              quadril: newRec.quadril ? Number(newRec.quadril) : undefined,
+              coxa: newRec.coxa ? Number(newRec.coxa) : undefined,
+              altura: newRec.altura ? Number(newRec.altura) : undefined,
+              peso: newRec.peso ? Number(newRec.peso) : undefined
+            };
+            if (!prev.some(c => c.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              email: newRec.email || '',
+              phone: newRec.phone || '',
+              cpf: newRec.cpf || '',
+              birthDate: newRec.birthDate || '',
+              whatsapp: newRec.whatsapp || '',
+              addressStreet: newRec.addressStreet || '',
+              addressNum: newRec.addressNum || '',
+              addressComp: newRec.addressComp || '',
+              addressBairro: newRec.addressBairro || '',
+              addressCidade: newRec.addressCidade || '',
+              addressEstado: newRec.addressEstado || '',
+              addressCep: newRec.addressCep || '',
+              channel: newRec.channel || 'Balcão',
+              npsScore: Number(newRec.npsScore || 0),
+              totalSpent: Number(newRec.totalSpent || 0),
+              ordersCount: Number(newRec.ordersCount || 0),
+              createdAt: newRec.created_at || new Date().toISOString(),
+              cashbackBalance: Number(newRec.cashbackBalance || 0),
+              busto: newRec.busto ? Number(newRec.busto) : undefined,
+              cintura: newRec.cintura ? Number(newRec.cintura) : undefined,
+              quadril: newRec.quadril ? Number(newRec.quadril) : undefined,
+              coxa: newRec.coxa ? Number(newRec.coxa) : undefined,
+              altura: newRec.altura ? Number(newRec.altura) : undefined,
+              peso: newRec.peso ? Number(newRec.peso) : undefined
+            };
+            updated = prev.map(c => c.id === mapped.id ? mapped : c);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(c => c.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_clients', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_sales') {
+        setSales(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.clientName,
+              clientDoc: newRec.clientDoc || '',
+              channel: newRec.channel,
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              total: Number(newRec.total),
+              costTotal: Number(newRec.costTotal || 0),
+              status: newRec.status,
+              createdAt: newRec.createdAt,
+              payments: Array.isArray(newRec.payments) ? newRec.payments : [],
+              salesperson: newRec.salesperson || ''
+            };
+            if (!prev.some(s => s.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.clientName,
+              clientDoc: newRec.clientDoc || '',
+              channel: newRec.channel,
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              total: Number(newRec.total),
+              costTotal: Number(newRec.costTotal || 0),
+              status: newRec.status,
+              createdAt: newRec.createdAt,
+              payments: Array.isArray(newRec.payments) ? newRec.payments : [],
+              salesperson: newRec.salesperson || ''
+            };
+            updated = prev.map(s => s.id === mapped.id ? mapped : s);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(s => s.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_sales', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_transactions') {
+        setTransactions(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              type: newRec.type,
+              category: newRec.category,
+              description: newRec.description,
+              amount: Number(newRec.amount),
+              date: newRec.date
+            };
+            if (!prev.some(t => t.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              type: newRec.type,
+              category: newRec.category,
+              description: newRec.description,
+              amount: Number(newRec.amount),
+              date: newRec.date
+            };
+            updated = prev.map(t => t.id === mapped.id ? mapped : t);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(t => t.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_transactions', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_online_orders') {
+        setOnlineOrders(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.clientName,
+              total: Number(newRec.total),
+              status: newRec.status,
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              createdAt: newRec.createdAt,
+              phone: newRec.phone || '',
+              address: newRec.address || '',
+              paymentMethod: newRec.paymentMethod || ''
+            };
+            if (!prev.some(o => o.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.clientName,
+              total: Number(newRec.total),
+              status: newRec.status,
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              createdAt: newRec.createdAt,
+              phone: newRec.phone || '',
+              address: newRec.address || '',
+              paymentMethod: newRec.paymentMethod || ''
+            };
+            updated = prev.map(o => o.id === mapped.id ? mapped : o);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(o => o.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_online_orders', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_team_members') {
+        setTeamMembers(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              login: newRec.login,
+              password: newRec.password,
+              role: newRec.role,
+              details: newRec.details || '',
+              birthDate: newRec.birthDate || '',
+              createdAt: newRec.createdAt || newRec.created_at || new Date().toISOString()
+            };
+            if (!prev.some(m => m.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              name: newRec.name,
+              login: newRec.login,
+              password: newRec.password,
+              role: newRec.role,
+              details: newRec.details || '',
+              birthDate: newRec.birthDate || '',
+              createdAt: newRec.createdAt || newRec.created_at || new Date().toISOString()
+            };
+            updated = prev.map(m => m.id === mapped.id ? mapped : m);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(m => m.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_team_users', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      else if (tableName === 'ap_system_configs') {
+        console.log('[Supabase Realtime] Alteração nas configurações do sistema detectada. Sincronizando parâmetros em tempo real...');
+        syncSystemConfigsWithSupabase().then((localModified) => {
+          if (localModified) {
+            console.log('[Supabase Realtime] Configurações administrativas atualizadas. Disparando evento de renderização...');
+            const configEvent = new CustomEvent('ap-system-configs-refreshed');
+            window.dispatchEvent(configEvent);
+          }
+        });
+      }
+    };
+
+    realtimeChannel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_sales' }, (p) => handlePostgresChange('ap_sales', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_clients' }, (p) => handlePostgresChange('ap_clients', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_products' }, (p) => handlePostgresChange('ap_products', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_transactions' }, (p) => handlePostgresChange('ap_transactions', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_online_orders' }, (p) => handlePostgresChange('ap_online_orders', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_team_members' }, (p) => handlePostgresChange('ap_team_members', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_system_configs' }, (p) => handlePostgresChange('ap_system_configs', p))
+      .subscribe((status) => {
+        console.log(`[Supabase Realtime] Canal custom-filter-channel inscrito com status: ${status}`);
+      });
+
+    return () => {
+      console.log('[Supabase Realtime] Cancelando assinaturas de tempo real (unsubscribing)...');
+      realtimeChannel.unsubscribe();
+    };
+  }, [systemOffline]);
 
   // WhatsApp Business API triggers (com suporte a fila offline)
   const triggerWhatsAppAlert = async (type: 'sale_completed' | 'stock_alert', data: any, forceSync = false) => {

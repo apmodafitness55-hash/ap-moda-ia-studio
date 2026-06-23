@@ -223,14 +223,97 @@ DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_transactions;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_online_orders;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_system_configs;
 
--- Criar políticas flexíveis para sincronismo multi-dispositivo sem barreira de token anonimo
-CREATE POLICY "Acesso Total para AP Moda" ON ap_team_members FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_products FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_clients FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_sales FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_transactions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_online_orders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total para AP Moda" ON ap_system_configs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Leitura de Equipes para Login" ON ap_team_members;
+DROP POLICY IF EXISTS "Escrita de Equipes apenas para Admin e Gerente" ON ap_team_members;
+DROP POLICY IF EXISTS "Visualização pública de produtos" ON ap_products;
+DROP POLICY IF EXISTS "Gerenciamento de produtos restrito a Admin e Gerente" ON ap_products;
+DROP POLICY IF EXISTS "Segurança no cadastro de clientes" ON ap_clients;
+DROP POLICY IF EXISTS "Segurança avançada de vendas" ON ap_sales;
+DROP POLICY IF EXISTS "Fluxo de caixa restrito a Admin e Gerente" ON ap_transactions;
+DROP POLICY IF EXISTS "Segurança em pedidos de logística" ON ap_online_orders;
+DROP POLICY IF EXISTS "Leitura de configurações gerais" ON ap_system_configs;
+DROP POLICY IF EXISTS "Escrita de configurações apenas Admin e Gerente" ON ap_system_configs;
+
+-- 1. Políticas de Segurança para ap_team_members (Funcionários)
+CREATE POLICY "Leitura de Equipes para Login" ON ap_team_members FOR SELECT USING (true);
+CREATE POLICY "Escrita de Equipes apenas para Admin e Gerente" ON ap_team_members FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente')
+  )
+) WITH CHECK (true);
+
+-- 2. Políticas de Segurança para ap_products (Produtos)
+CREATE POLICY "Visualização pública de produtos" ON ap_products FOR SELECT USING (true);
+CREATE POLICY "Gerenciamento de produtos restrito a Admin e Gerente" ON ap_products FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente')
+  )
+) WITH CHECK (true);
+
+-- 3. Políticas de Segurança para ap_clients (Clientes CRM)
+CREATE POLICY "Segurança no cadastro de clientes" ON ap_clients FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente', 'Vendedor')
+  )
+  OR id = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')
+) WITH CHECK (true);
+
+-- 4. Políticas de Segurança para ap_sales (Vendas)
+CREATE POLICY "Segurança avançada de vendas" ON ap_sales FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente', 'Vendedor')
+  )
+  -- Clientes só recebem atualizações de suas próprias compras
+  OR clientName = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
+  OR clientDoc = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'cpf', '')
+) WITH CHECK (true);
+
+-- 5. Políticas de Segurança para ap_transactions (Financeiro)
+CREATE POLICY "Fluxo de caixa restrito a Admin e Gerente" ON ap_transactions FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente')
+  )
+) WITH CHECK (true);
+
+-- 6. Políticas de Segurança para ap_online_orders (Pedidos Online)
+CREATE POLICY "Segurança em pedidos de logística" ON ap_online_orders FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente', 'Vendedor')
+  )
+  -- Entregadores apenas de suas entregas
+  OR motoboy = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
+  -- Clientes apenas de seus próprios pedidos
+  OR clientName = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
+) WITH CHECK (true);
+
+-- 7. Políticas de Segurança para ap_system_configs (Configurações)
+CREATE POLICY "Leitura de configurações gerais" ON ap_system_configs FOR SELECT USING (true);
+CREATE POLICY "Escrita de configurações apenas Admin e Gerente" ON ap_system_configs FOR ALL USING (
+  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
+  OR EXISTS (
+    SELECT 1 FROM ap_team_members
+    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
+    AND role IN ('Admin', 'Gerente')
+  )
+) WITH CHECK (true);
 
 -- Inserir Administrador Padrão Inicial (Ana Paula Admin / Ap01695*) caso já não exista
 INSERT INTO ap_team_members (id, name, login, password, role, details, createdAt)
