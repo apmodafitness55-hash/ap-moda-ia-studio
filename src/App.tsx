@@ -1842,6 +1842,10 @@ export default function App() {
       localStorage.setItem('ap_moda_opportunities', JSON.stringify([]));
       localStorage.setItem('ap_moda_followups', JSON.stringify([]));
       localStorage.setItem('ap_moda_partners', JSON.stringify([]));
+      localStorage.setItem('ap_moda_trocas', JSON.stringify([]));
+      localStorage.setItem('ap_moda_delivery_riders', JSON.stringify([]));
+      localStorage.setItem('ap_moda_suppliers', JSON.stringify([]));
+      localStorage.setItem('ap_moda_supplier_purchases', JSON.stringify([]));
       setProducts([]);
       setClients([]);
       setSales([]);
@@ -1850,7 +1854,7 @@ export default function App() {
       setSellers([]);
       setMotoboys([]);
       alert('Tudo limpo! O sistema está zerado e com todos os dados fantasmas excluídos, pronto para o seu uso oficial.');
-      setActiveTab(ActiveTab.DASHBOARD);
+      window.location.reload();
     }
   };
 

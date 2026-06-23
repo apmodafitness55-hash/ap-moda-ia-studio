@@ -21,7 +21,9 @@ import {
   TrendingUp,
   FileText,
   Briefcase,
-  Trash2
+  Trash2,
+  Edit,
+  X
 } from 'lucide-react';
 import { Product, Sale, Client } from '../types';
 
@@ -124,12 +126,141 @@ export default function OrdersLogistics({
     { id: 'cred-3', clientName: 'Gabriela Souza', totalLimit: 1000.00, usedAmount: 580.00, lastPaymentDate: '2026-04-10', status: 'Atrasado' }
   ]);
 
-  const [trocas, setTrocas] = useState<TrocaItem[]>([
-    { id: 'trc-1', clientName: 'Maria Silva', productReturned: 'Regata Cavada Premium (M)', productTaken: 'Legging All-Black (M)', differenceAmount: 100.00, date: '2026-06-10T11:00:00Z', reason: 'Ficou apertado nas costas' }
-  ]);
+  const [trocas, setTrocas] = useState<TrocaItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_trocas');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      { id: 'trc-1', clientName: 'Maria Silva', productReturned: 'Regata Cavada Premium (M)', productTaken: 'Legging All-Black (M)', differenceAmount: 100.00, date: '2026-06-10T11:00:00Z', reason: 'Ficou apertado nas costas' }
+    ];
+  });
 
-  // Delivery riders
-  const motoboys = ['Bruno Ramos (Moto 1)', 'Lucas Correia (Moto 2)', 'Thales Silva (Bike/Região Central)', 'Cláudio Santos (Parceiro Envio Rápido)'];
+  const [deliveryRiders, setDeliveryRiders] = useState<{ id: string, name: string, status: string, region: string, salesAssigned: number }[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_motoboys_detailed');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      { id: 'moto-1', name: 'Bruno Ramos (Moto 1)', status: 'Fazendo Entrega', region: 'Zona Sul / Copacabana', salesAssigned: 1 },
+      { id: 'moto-2', name: 'Lucas Correia (Moto 2)', status: 'Disponível', region: 'Centro / Floresta', salesAssigned: 0 },
+      { id: 'moto-3', name: 'Thales Silva (Bike)', status: 'Completado', region: 'Vila Madalena / Jardins', salesAssigned: 2 }
+    ];
+  });
+
+  const motoboys = deliveryRiders.map(dr => dr.name);
+
+  // Sync to local storage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('ap_moda_trocas', JSON.stringify(trocas));
+    } catch (e) {}
+  }, [trocas]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('ap_moda_motoboys_detailed', JSON.stringify(deliveryRiders));
+    } catch (e) {}
+  }, [deliveryRiders]);
+
+  const [editingTroca, setEditingTroca] = useState<TrocaItem | null>(null);
+  const [editTrocaClient, setEditTrocaClient] = useState('');
+  const [editTrocaReturned, setEditTrocaReturned] = useState('');
+  const [editTrocaTaken, setEditTrocaTaken] = useState('');
+  const [editTrocaDiff, setEditTrocaDiff] = useState(0);
+  const [editTrocaReason, setEditTrocaReason] = useState('');
+
+  const [editingRider, setEditingRider] = useState<any | null>(null);
+  const [editRiderName, setEditRiderName] = useState('');
+  const [editRiderStatus, setEditRiderStatus] = useState('Disponível');
+  const [editRiderRegion, setEditRiderRegion] = useState('');
+  const [editRiderAssigned, setEditRiderAssigned] = useState(0);
+
+  const [isAddRiderModalOpen, setIsAddRiderModalOpen] = useState(false);
+  const [addRiderName, setAddRiderName] = useState('');
+  const [addRiderStatus, setAddRiderStatus] = useState('Disponível');
+  const [addRiderRegion, setAddRiderRegion] = useState('');
+  const [addRiderAssigned, setAddRiderAssigned] = useState(0);
+
+  const handleDeleteTroca = (id: string) => {
+    if (confirm('Deseja realmente excluir esta troca/devolução?')) {
+      setTrocas(prev => prev.filter(t => t.id !== id));
+    }
+  };
+
+  const startEditTroca = (tr: TrocaItem) => {
+    setEditingTroca(tr);
+    setEditTrocaClient(tr.clientName);
+    setEditTrocaReturned(tr.productReturned);
+    setEditTrocaTaken(tr.productTaken);
+    setEditTrocaDiff(tr.differenceAmount);
+    setEditTrocaReason(tr.reason);
+  };
+
+  const handleSaveTrocaEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTroca) return;
+    setTrocas(prev => prev.map(t => t.id === editingTroca.id ? {
+      ...t,
+      clientName: editTrocaClient,
+      productReturned: editTrocaReturned,
+      productTaken: editTrocaTaken,
+      differenceAmount: Number(editTrocaDiff),
+      reason: editTrocaReason
+    } : t));
+    setEditingTroca(null);
+    alert('Troca editada com sucesso!');
+  };
+
+  const startEditRider = (r: any) => {
+    setEditingRider(r);
+    setEditRiderName(r.name);
+    setEditRiderStatus(r.status);
+    setEditRiderRegion(r.region);
+    setEditRiderAssigned(r.salesAssigned);
+  };
+
+  const handleSaveRiderEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRider) return;
+    setDeliveryRiders(prev => prev.map(r => r.id === editingRider.id ? {
+      ...r,
+      name: editRiderName,
+      status: editRiderStatus,
+      region: editRiderRegion,
+      salesAssigned: Number(editRiderAssigned)
+    } : r));
+    setEditingRider(null);
+    alert('Entregador editado com sucesso!');
+  };
+
+  const handleDeleteRider = (id: string) => {
+    if (confirm('Deseja realmente excluir este entregador?')) {
+      setDeliveryRiders(prev => prev.filter(r => r.id !== id));
+    }
+  };
+
+  const handleAddRiderSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addRiderName || !addRiderRegion) {
+      alert('Por favor, preencha o nome e a região.');
+      return;
+    }
+    const newRider = {
+      id: 'moto-' + Date.now(),
+      name: addRiderName,
+      status: addRiderStatus,
+      region: addRiderRegion,
+      salesAssigned: Number(addRiderAssigned)
+    };
+    setDeliveryRiders(prev => [...prev, newRider]);
+    setAddRiderName('');
+    setAddRiderRegion('');
+    setAddRiderStatus('Disponível');
+    setAddRiderAssigned(0);
+    setIsAddRiderModalOpen(false);
+    alert('Entregador adicionado com sucesso!');
+  };
 
   // Form States for Reserva creation
   const [reservaClient, setReservaClient] = useState('');
@@ -862,7 +993,7 @@ export default function OrdersLogistics({
 
             {/* List of past Trocas */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
-              <h3 className="text-xs font-bold font-sans uppercase text-slate-500 tracking-wider mb-2.5">Histórico Recente de Trocas</h3>
+              <h3 className="text-xs font-bold font-sans uppercase text-slate-500 tracking-wider mb-2.5 font-sans">Histórico Recente de Trocas</h3>
               
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs font-sans">
@@ -874,6 +1005,7 @@ export default function OrdersLogistics({
                       <th className="p-3">Item Entregue</th>
                       <th className="p-3">Diferença</th>
                       <th className="p-3">Motivo</th>
+                      <th className="p-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-700">
@@ -893,6 +1025,26 @@ export default function OrdersLogistics({
                           )}
                         </td>
                         <td className="p-3 text-slate-450 italic">{tr.reason}</td>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditTroca(tr)}
+                              className="p-1 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+                              title="Editar Troca"
+                            >
+                              <Edit size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTroca(tr.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                              title="Excluir Troca"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1008,14 +1160,19 @@ export default function OrdersLogistics({
               </div>
 
               {/* Delivery Riders statuses */}
-              <h4 className="font-bold text-slate-700 mb-2">Status dos Entregadores Parceiros</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-slate-700">Status dos Entregadores Parceiros</h4>
+                <button
+                  type="button"
+                  onClick={() => setIsAddRiderModalOpen(true)}
+                  className="text-[10px] font-bold text-pink-600 hover:text-pink-700 flex items-center gap-0.5 cursor-pointer bg-pink-50 px-2 py-1 rounded"
+                >
+                  <Plus size={11} /> Novo Entregador
+                </button>
+              </div>
               <div className="space-y-2.5">
-                {[
-                  { name: 'Bruno Ramos (Moto 1)', status: 'Fazendo Entrega', region: 'Zona Sul / Copacabana', salesAssigned: 1 },
-                  { name: 'Lucas Correia (Moto 2)', status: 'Disponível', region: 'Centro / Floresta', salesAssigned: 0 },
-                  { name: 'Thales Silva (Bike)', status: 'Completado', region: 'Vila Madalena / Jardins', salesAssigned: 2 },
-                ].map((m, idx) => (
-                  <div key={idx} className="p-3 bg-white border border-slate-150 rounded-xl hover:shadow-xs transition-shadow flex items-center justify-between">
+                {deliveryRiders.map((m, idx) => (
+                  <div key={m.id || idx} className="p-3 bg-white border border-slate-150 rounded-xl hover:shadow-xs transition-shadow flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-pink-50 text-pink-600 font-bold flex items-center justify-center">
                         <User size={13} />
@@ -1025,12 +1182,32 @@ export default function OrdersLogistics({
                         <p className="text-slate-400 text-[10px] mt-0.5">Região preferencial: {m.region}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full inline-block
-                        ${m.status === 'Disponível' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800 animate-pulse'}`}>
-                        {m.status}
-                      </span>
-                      {m.salesAssigned > 0 && <p className="text-slate-400 text-[9px] mt-1">{m.salesAssigned} entrega(s) pendente</p>}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full inline-block
+                          ${m.status === 'Disponível' || m.status === 'Completado' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800 animate-pulse'}`}>
+                          {m.status}
+                        </span>
+                        {m.salesAssigned > 0 && <p className="text-slate-400 text-[9px] mt-0.5">{m.salesAssigned} entrega(s) pendente</p>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEditRider(m)}
+                          className="p-1 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+                          title="Editar Entregador"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRider(m.id)}
+                          className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Excluir Entregador"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1687,6 +1864,198 @@ export default function OrdersLogistics({
                 );
               })()}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Troca */}
+      {editingTroca && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-100 max-w-md w-full shadow-lg overflow-hidden animate-in fade-in duration-200 text-left font-sans text-xs">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <span className="font-extrabold text-xs uppercase tracking-wider">Editar Registro de Troca</span>
+              <button type="button" onClick={() => setEditingTroca(null)} className="text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer">✕</button>
+            </div>
+            <form onSubmit={handleSaveTrocaEdit} className="p-4 space-y-3">
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Cliente</label>
+                <input
+                  type="text"
+                  value={editTrocaClient}
+                  onChange={e => setEditTrocaClient(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Item Devolvido</label>
+                <input
+                  type="text"
+                  value={editTrocaReturned}
+                  onChange={e => setEditTrocaReturned(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Item Entregue / Retirado</label>
+                <input
+                  type="text"
+                  value={editTrocaTaken}
+                  onChange={e => setEditTrocaTaken(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Diferença Financeira (Em R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editTrocaDiff}
+                  onChange={e => setEditTrocaDiff(Number(e.target.value))}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+                <span className="text-[9px] text-slate-400 block mt-0.5">Positivo se o cliente pagou a mais; Negativo se ficou de vale-crédito.</span>
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Motivo da Troca</label>
+                <input
+                  type="text"
+                  value={editTrocaReason}
+                  onChange={e => setEditTrocaReason(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button type="button" onClick={() => setEditingTroca(null)} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold border-none cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold border-none cursor-pointer">Salvar Alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Add Delivery Rider */}
+      {isAddRiderModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-100 max-w-md w-full shadow-lg overflow-hidden animate-in fade-in duration-200 text-left font-sans text-xs">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <span className="font-extrabold text-xs uppercase tracking-wider">Novo Entregador Parceiro</span>
+              <button type="button" onClick={() => setIsAddRiderModalOpen(false)} className="text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer">✕</button>
+            </div>
+            <form onSubmit={handleAddRiderSubmit} className="p-4 space-y-3">
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Nome do Entregador</label>
+                <input
+                  type="text"
+                  value={addRiderName}
+                  onChange={e => setAddRiderName(e.target.value)}
+                  placeholder="Ex: Pedro Henrique (Moto 3)"
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Região Preferencial</label>
+                <input
+                  type="text"
+                  value={addRiderRegion}
+                  onChange={e => setAddRiderRegion(e.target.value)}
+                  placeholder="Ex: Zona Norte / Santana"
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Status Inicial</label>
+                <select
+                  value={addRiderStatus}
+                  onChange={e => setAddRiderStatus(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                >
+                  <option value="Disponível">Disponível</option>
+                  <option value="Fazendo Entrega">Fazendo Entrega</option>
+                  <option value="Completado">Completado</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Entregas Pendentes</label>
+                <input
+                  type="number"
+                  value={addRiderAssigned}
+                  onChange={e => setAddRiderAssigned(Number(e.target.value))}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button type="button" onClick={() => setIsAddRiderModalOpen(false)} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold border-none cursor-pointer font-sans">Cancelar</button>
+                <button type="submit" className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold border-none cursor-pointer font-sans">Adicionar Entregador</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Delivery Rider */}
+      {editingRider && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-100 max-w-md w-full shadow-lg overflow-hidden animate-in fade-in duration-200 text-left font-sans text-xs">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <span className="font-extrabold text-xs uppercase tracking-wider">Editar Entregador</span>
+              <button type="button" onClick={() => setEditingRider(null)} className="text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer">✕</button>
+            </div>
+            <form onSubmit={handleSaveRiderEdit} className="p-4 space-y-3">
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Nome do Entregador</label>
+                <input
+                  type="text"
+                  value={editRiderName}
+                  onChange={e => setEditRiderName(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Região</label>
+                <input
+                  type="text"
+                  value={editRiderRegion}
+                  onChange={e => setEditRiderRegion(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Status</label>
+                <select
+                  value={editRiderStatus}
+                  onChange={e => setEditRiderStatus(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                >
+                  <option value="Disponível">Disponível</option>
+                  <option value="Fazendo Entrega">Fazendo Entrega</option>
+                  <option value="Completado">Completado</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block mb-0.5">Entregas Pendentes</label>
+                <input
+                  type="number"
+                  value={editRiderAssigned}
+                  onChange={e => setEditRiderAssigned(Number(e.target.value))}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 bg-slate-50 focus:bg-white transition-colors focus:ring-1 focus:ring-pink-500 outline-none"
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button type="button" onClick={() => setEditingRider(null)} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold border-none cursor-pointer font-sans">Cancelar</button>
+                <button type="submit" className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold border-none cursor-pointer font-sans">Salvar Alterações</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -22,7 +22,9 @@ import {
   Truck, 
   Users,
   Award,
-  Zap
+  Zap,
+  Edit,
+  X
 } from 'lucide-react';
 import { Product, Transaction } from '../types';
 
@@ -100,6 +102,57 @@ export default function SuppliersManagement({
   useEffect(() => {
     localStorage.setItem('ap_moda_supplier_purchases', JSON.stringify(purchases));
   }, [purchases]);
+
+  const [editingPurchase, setEditingPurchase] = useState<SupplierPurchase | null>(null);
+  const [editPurSupplierId, setEditPurSupplierId] = useState('');
+  const [editPurProductId, setEditPurProductId] = useState('');
+  const [editPurQty, setEditPurQty] = useState<number>(0);
+  const [editPurUnitCost, setEditPurUnitCost] = useState<number>(0);
+  const [editPurDate, setEditPurDate] = useState('');
+  const [editPurStatus, setEditPurStatus] = useState<'Recebido' | 'A Caminho' | 'Pendente'>('Recebido');
+  const [editPurNotes, setEditPurNotes] = useState('');
+
+  const handleDeletePurchase = (id: string) => {
+    if (confirm('Deseja realmente excluir esta compra de suprimentos?')) {
+      setPurchases(prev => prev.filter(p => p.id !== id));
+    }
+  };
+
+  const startEditPurchase = (pur: SupplierPurchase) => {
+    setEditingPurchase(pur);
+    setEditPurSupplierId(pur.supplierId);
+    setEditPurProductId(pur.productId || '');
+    setEditPurQty(pur.quantity);
+    setEditPurUnitCost(pur.unitCost);
+    setEditPurDate(pur.purchaseDate);
+    setEditPurStatus(pur.status);
+    setEditPurNotes(pur.notes || '');
+  };
+
+  const handleSavePurchaseEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPurchase) return;
+    
+    const selectedProd = products.find(p => p.id === editPurProductId);
+    const prodName = selectedProd ? selectedProd.name : editingPurchase.productName;
+    const totCost = Number(editPurQty) * Number(editPurUnitCost);
+
+    setPurchases(prev => prev.map(p => p.id === editingPurchase.id ? {
+      ...p,
+      supplierId: editPurSupplierId,
+      productId: editPurProductId,
+      productName: prodName,
+      quantity: Number(editPurQty),
+      unitCost: Number(editPurUnitCost),
+      totalCost: totCost,
+      purchaseDate: editPurDate,
+      status: editPurStatus,
+      notes: editPurNotes
+    } : p));
+
+    setEditingPurchase(null);
+    alert('Compra de suprimentos editada com sucesso!');
+  };
 
   // Form states - Fornecedor
   const [isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
@@ -526,6 +579,7 @@ export default function SuppliersManagement({
                         <th className="p-3 text-right">Total Pedido</th>
                         <th className="p-3 text-center">Status</th>
                         <th className="p-3">Obs</th>
+                        <th className="p-3 text-center">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-[11px] font-semibold text-slate-700">
@@ -568,6 +622,26 @@ export default function SuppliersManagement({
                             </td>
                             <td className="p-3 text-slate-500 max-w-xs truncate text-[10px]" title={pur.notes}>
                               {pur.notes || '-'}
+                            </td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditPurchase(pur)}
+                                  className="p-1 text-slate-450 hover:text-slate-800 transition-colors cursor-pointer"
+                                  title="Editar Lançamento"
+                                >
+                                  <Edit size={12} className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePurchase(pur.id)}
+                                  className="p-1 text-slate-450 hover:text-red-650 transition-colors cursor-pointer"
+                                  title="Excluir Lançamento"
+                                >
+                                  <Trash2 size={12} className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -855,6 +929,133 @@ export default function SuppliersManagement({
                   className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-extrabold text-[11px] uppercase tracking-wide cursor-pointer border-0 shadow-sm"
                 >
                   Lançar Compra
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: EDIT PURCHASE (COMPRA) */}
+      {editingPurchase && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-100 max-w-md w-full shadow-lg overflow-hidden animate-in fade-in duration-200 text-left font-sans text-xs">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Truck size={16} className="text-pink-500" />
+                <span className="font-extrabold text-xs uppercase tracking-wider">Editar Compra de Suprimentos</span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingPurchase(null)}
+                className="text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleSavePurchaseEdit} className="p-4 space-y-3">
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5">Fornecedor *</label>
+                <select
+                  required
+                  value={editPurSupplierId}
+                  onChange={(e) => setEditPurSupplierId(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500 cursor-pointer text-slate-700 font-bold"
+                >
+                  <option value="">Selecione o fabricante...</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.category})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5">Produto Cadastrado *</label>
+                <select
+                  required
+                  value={editPurProductId}
+                  onChange={(e) => setEditPurProductId(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500 cursor-pointer text-slate-700 font-bold"
+                >
+                  <option value="">Selecione a mercadoria...</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} (Ref: {p.sku || p.id})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5 font-sans">Quantidade Comprada *</label>
+                  <input 
+                    type="number"
+                    required
+                    min="1"
+                    value={editPurQty}
+                    onChange={(e) => setEditPurQty(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5 font-sans">Preço Custo Un. (R$) *</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editPurUnitCost}
+                    onChange={(e) => setEditPurUnitCost(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 font-sans">
+                <div>
+                  <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5">Data Compra</label>
+                  <input 
+                    type="date"
+                    value={editPurDate}
+                    onChange={(e) => setEditPurDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5">Status</label>
+                  <select
+                    value={editPurStatus}
+                    onChange={(e) => setEditPurStatus(e.target.value as any)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500 cursor-pointer text-slate-700 font-bold"
+                  >
+                    <option value="Recebido">Recebido</option>
+                    <option value="A Caminho">A Caminho</option>
+                    <option value="Pendente">Pendente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-bold text-[8px] uppercase block tracking-wider mb-0.5 font-sans">Observação</label>
+                <input 
+                  type="text"
+                  value={editPurNotes}
+                  onChange={(e) => setEditPurNotes(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-pink-500"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5 font-sans">
+                <button
+                  type="button"
+                  onClick={() => setEditingPurchase(null)}
+                  className="px-4 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-550 border border-slate-200 rounded-lg font-bold text-[11px] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-extrabold text-[11px] uppercase tracking-wide cursor-pointer border-0"
+                >
+                  Salvar
                 </button>
               </div>
             </form>

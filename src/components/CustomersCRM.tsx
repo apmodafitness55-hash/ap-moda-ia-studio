@@ -29,7 +29,8 @@ import {
   Gift,
   Zap,
   Save,
-  Check
+  Check,
+  X
 } from 'lucide-react';
 import { Client, Sale, SalesChannel } from '../types';
 
@@ -111,17 +112,23 @@ export default function CustomersCRM({
   const [newPeso, setNewPeso] = useState<string>('');
 
   // Interactive CRM states
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([
-    { id: 'op-1', clientName: 'Gabriela Souza', value: 289.90, probability: 80, stage: 'Prospecção', itemInteresse: 'Conjunto Seamless Sculpt', notes: 'Quer para o aniversário dia 20.' },
-    { id: 'op-2', clientName: 'Ana Costa', value: 159.90, probability: 50, stage: 'Foto Enviada', itemInteresse: 'Legging All-Black Cós Alto', notes: 'Gostou do cós alto anatômico.' },
-    { id: 'op-3', clientName: 'Beatriz Pereira', value: 450.00, probability: 90, stage: 'Prova / Reserva', itemInteresse: 'Combo Macacão Wave + Tops', notes: 'Reserva expira amanhã.' }
-  ]);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_opportunities');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
-  const [followups, setFollowups] = useState<FollowUp[]>([
-    { id: 'fup-1', clientName: 'Maria Silva', channel: 'WhatsApp', date: '2026-06-14', notes: 'Perguntar se gostou do tamanho M do Conjunto Seamless.', completed: false },
-    { id: 'fup-2', clientName: 'Carla Oliveira', channel: 'Instagram', date: '2026-06-15', notes: 'Enviar as novidades de casaco corta-vento Dry.', completed: false },
-    { id: 'fup-3', clientName: 'Julia Santos', channel: 'Call', date: '2026-06-13', notes: 'Ligar para acertar retirada de reserva.', completed: true }
-  ]);
+  const [followups, setFollowups] = useState<FollowUp[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_moda_followups');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Cashback config and manual adjust states
   const [cashbackRateConfig, setCashbackRateConfig] = useState<number>(() => {
@@ -387,6 +394,28 @@ export default function CustomersCRM({
   const [opItem, setOpItem] = useState('');
   const [opNotes, setOpNotes] = useState('');
 
+  // Edit states for Opportunity
+  const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
+  const [editOpClient, setEditOpClient] = useState('');
+  const [editOpVal, setEditOpVal] = useState(150);
+  const [editOpProb, setEditOpProb] = useState(70);
+  const [editOpItem, setEditOpItem] = useState('');
+  const [editOpNotes, setEditOpNotes] = useState('');
+  const [editOpStage, setEditOpStage] = useState<Opportunity['stage']>('Prospecção');
+
+  // Auto-sync local state back to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('ap_moda_opportunities', JSON.stringify(opportunities));
+    } catch (e) {}
+  }, [opportunities]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ap_moda_followups', JSON.stringify(followups));
+    } catch (e) {}
+  }, [followups]);
+
   // Form states for new Follow-up
   const [fClient, setFClient] = useState('');
   const [fChannel, setFChannel] = useState<'WhatsApp' | 'Instagram' | 'Call' | 'E-mail'>('WhatsApp');
@@ -535,6 +564,52 @@ export default function CustomersCRM({
       }
       return o;
     }));
+  };
+
+  const startEditOpportunity = (op: Opportunity) => {
+    setEditingOpportunityId(op.id);
+    setEditOpClient(op.clientName);
+    setEditOpVal(op.value);
+    setEditOpProb(op.probability);
+    setEditOpItem(op.itemInteresse);
+    setEditOpNotes(op.notes || '');
+    setEditOpStage(op.stage);
+  };
+
+  const handleSaveOpportunityEdit = () => {
+    if (!editOpClient.trim()) {
+      alert('Por favor, informe o nome da interessada.');
+      return;
+    }
+    if (!editOpItem.trim()) {
+      alert('Por favor, informe a peça de interesse.');
+      return;
+    }
+
+    setOpportunities(prev => prev.map(o => {
+      if (o.id === editingOpportunityId) {
+        return {
+          ...o,
+          clientName: editOpClient,
+          value: Number(editOpVal),
+          probability: Number(editOpProb),
+          stage: editOpStage,
+          itemInteresse: editOpItem,
+          notes: editOpNotes
+        };
+      }
+      return o;
+    }));
+
+    setEditingOpportunityId(null);
+    alert('Oportunidade atualizada com sucesso!');
+  };
+
+  const handleDeleteOpportunity = (id: string, name: string) => {
+    if (confirm(`Tem certeza de que deseja excluir a oportunidade de ${name} do funil de vendas?`)) {
+      setOpportunities(prev => prev.filter(o => o.id !== id));
+      alert('Oportunidade excluída com sucesso!');
+    }
   };
 
   const handleCreateOpportunity = (e: React.FormEvent) => {
@@ -925,9 +1000,28 @@ export default function CustomersCRM({
 
                     <div className="space-y-2">
                       {stageOps.map(op => (
-                        <div key={op.id} className="bg-white p-3 rounded-xl border border-slate-100 hover:shadow-xs transition relative">
+                        <div key={op.id} className="bg-white p-3 rounded-xl border border-slate-100 hover:shadow-xs transition relative pr-14">
                           <p className="font-bold text-slate-800 truncate mb-1">{op.clientName}</p>
-                          <p className="font-medium text-pink-600 text-[10px] mb-1.5">{op.itemInteresse}</p>
+                          <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                            <button
+                              type="button"
+                              onClick={() => startEditOpportunity(op)}
+                              title="Editar Oportunidade"
+                              className="p-1 text-slate-400 hover:text-pink-600 rounded-md hover:bg-pink-50 transition-colors cursor-pointer"
+                            >
+                              <Edit size={10} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOpportunity(op.id, op.clientName)}
+                              title="Excluir Oportunidade"
+                              className="p-1 text-slate-400 hover:text-red-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+
+                          <p className="font-medium text-pink-600 text-[10px] mb-1.5 truncate">{op.itemInteresse}</p>
                           <div className="flex justify-between items-center text-[10px] text-slate-400">
                             <span>Prob: <strong className="text-slate-600">{op.probability}%</strong></span>
                             <span className="font-bold font-mono text-slate-700">{formatCurrency(op.value)}</span>
@@ -958,6 +1052,112 @@ export default function CustomersCRM({
               );
             })}
           </div>
+
+          {/* EDIT OPPORTUNITY MODAL */}
+          {editingOpportunityId && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-xl w-full max-w-md space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <h3 className="font-bold text-sm uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Edit size={14} className="text-pink-600" />
+                    <span>Editar Oportunidade</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingOpportunityId(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Interessada (Cliente)</label>
+                    <input
+                      type="text"
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-medium font-sans"
+                      value={editOpClient}
+                      onChange={(e) => setEditOpClient(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Est. Peças (R$)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-medium font-sans"
+                        value={editOpVal}
+                        onChange={(e) => setEditOpVal(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Probabilidade (%)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-medium font-sans"
+                        value={editOpProb}
+                        onChange={(e) => setEditOpProb(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Peça de Interesse</label>
+                    <input
+                      type="text"
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-medium font-sans"
+                      value={editOpItem}
+                      onChange={(e) => setEditOpItem(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Etapa no Funil</label>
+                    <select
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-semibold cursor-pointer font-sans"
+                      value={editOpStage}
+                      onChange={(e) => setEditOpStage(e.target.value as any)}
+                    >
+                      <option value="Prospecção">Prospecção</option>
+                      <option value="Foto Enviada">Foto Enviada</option>
+                      <option value="Prova / Reserva">Prova / Reserva</option>
+                      <option value="Fechado">Fechado</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1">Anotações rápidas</label>
+                    <textarea
+                      rows={3}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 focus:outline-hidden text-slate-800 font-sans"
+                      value={editOpNotes}
+                      onChange={(e) => setEditOpNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingOpportunityId(null)}
+                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-150 text-slate-600 font-bold rounded-lg transition cursor-pointer font-sans"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveOpportunityEdit}
+                    className="flex-1 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer font-sans"
+                  >
+                    <Save size={13} />
+                    <span>Salvar Alterações</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
