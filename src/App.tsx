@@ -466,21 +466,6 @@ export default function App() {
     prevTeamMembersRef.current = teamMembers;
   }, [teamMembers, getDirtyIds, saveDirtyIds]);
 
-  // Dynamic refs to always hold fresh copies for syncing interval (strictly avoids infinite component rendering loops in React)
-  const lastProductsRef = useRef(products);
-  const lastClientsRef = useRef(clients);
-  const lastSalesRef = useRef(sales);
-  const lastTransactionsRef = useRef(transactions);
-  const lastOnlineOrdersRef = useRef(onlineOrders);
-  const lastTeamMembersRef = useRef(teamMembers);
-
-  useEffect(() => { lastProductsRef.current = products; }, [products]);
-  useEffect(() => { lastClientsRef.current = clients; }, [clients]);
-  useEffect(() => { lastSalesRef.current = sales; }, [sales]);
-  useEffect(() => { lastTransactionsRef.current = transactions; }, [transactions]);
-  useEffect(() => { lastOnlineOrdersRef.current = onlineOrders; }, [onlineOrders]);
-  useEffect(() => { lastTeamMembersRef.current = teamMembers; }, [teamMembers]);
-
   // Realiza um download completo, sequencial e forçado de todas as tabelas logo no login para evitar dados "picotados" ou atrasados
   const runFullSynchronousSetup = useCallback(async (user: any) => {
     if (!user) return;
@@ -637,6 +622,27 @@ export default function App() {
     }
   }, []);
 
+  // Dynamic refs to always hold fresh copies for syncing interval (strictly avoids infinite component rendering loops in React)
+  const lastProductsRef = useRef(products);
+  const lastClientsRef = useRef(clients);
+  const lastSalesRef = useRef(sales);
+  const lastTransactionsRef = useRef(transactions);
+  const lastOnlineOrdersRef = useRef(onlineOrders);
+  const lastTeamMembersRef = useRef(teamMembers);
+  const currentUserRef = useRef(currentUser);
+  const isCustomerViewRef = useRef(isCustomerView);
+  const runFullSynchronousSetupRef = useRef<any>(null);
+
+  useEffect(() => { lastProductsRef.current = products; }, [products]);
+  useEffect(() => { lastClientsRef.current = clients; }, [clients]);
+  useEffect(() => { lastSalesRef.current = sales; }, [sales]);
+  useEffect(() => { lastTransactionsRef.current = transactions; }, [transactions]);
+  useEffect(() => { lastOnlineOrdersRef.current = onlineOrders; }, [onlineOrders]);
+  useEffect(() => { lastTeamMembersRef.current = teamMembers; }, [teamMembers]);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { isCustomerViewRef.current = isCustomerView; }, [isCustomerView]);
+  useEffect(() => { runFullSynchronousSetupRef.current = runFullSynchronousSetup; }, [runFullSynchronousSetup]);
+
   // Carregar usuários e credenciais do Supabase na inicialização, se houver
   useEffect(() => {
     async function initSupabaseSync() {
@@ -730,15 +736,49 @@ export default function App() {
 
   // Sincronização automática bilateral de TODO o ecossistema AP Moda Fitness com o Supabase
   const performSync = useCallback(async (isManual = false) => {
-    const config = getSupabaseConfig();
-    if (!config) return;
-
     if (systemOffline) {
       console.log('[Supabase Sync] Sistema offline. Sincronização suspensa.');
       if (isManual) {
         alert("Você está offline no momento. Ative a internet para realizar a sincronização na nuvem.");
       }
       return;
+    }
+
+    const prevUrl = localStorage.getItem('ap_supabase_url');
+    const prevKey = localStorage.getItem('ap_supabase_key');
+
+    // Sincroniza as credenciais de banco com o servidor central antes de qualquer sync, garantindo que TODOS usem o mesmo banco de dados se houver alteração em tempo real!
+    await initializeSupabaseConfig();
+
+    const config = getSupabaseConfig();
+    if (!config) return;
+
+    // Se houve alteração de banco no outro aparelho, recarrega os dados imediatamente
+    const newUrl = localStorage.getItem('ap_supabase_url');
+    const newKey = localStorage.getItem('ap_supabase_key');
+    if (prevUrl !== newUrl || prevKey !== newKey) {
+      console.log('[Supabase Sync] Detectado alteração nas credenciais em nuvem unificadas pelo servidor central!');
+      // Reseta as flags de fila dirty locais para que não misturem dados de instâncias diferentes
+      saveDirtyIds('ap_dirty_products', []);
+      saveDirtyIds('ap_dirty_clients', []);
+      saveDirtyIds('ap_dirty_sales', []);
+      saveDirtyIds('ap_dirty_transactions', []);
+      saveDirtyIds('ap_dirty_online_orders', []);
+      saveDirtyIds('ap_dirty_team_members', []);
+
+      if (currentUserRef.current) {
+        // Se houver usuário ativo, força re-sincronização de tudo do novo banco
+        await runFullSynchronousSetupRef.current(currentUserRef.current);
+        return;
+      } else if (isCustomerViewRef.current) {
+        // Se for visão de cliente externo, puxa e carrega catálogo de produtos em massa do novo banco
+        const dbProducts = await fetchProductsFromSupabase();
+        if (dbProducts) {
+          setProducts(dbProducts);
+          localStorage.setItem('ap_moda_products', JSON.stringify(dbProducts));
+        }
+        return;
+      }
     }
 
     if (isManual) {

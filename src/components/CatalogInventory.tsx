@@ -14,7 +14,8 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
@@ -39,6 +40,10 @@ export default function CatalogInventory({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  // States for size-specific colors
+  const [newSizeColors, setNewSizeColors] = useState<Record<string, string>>({});
+  const [editSizeColors, setEditSizeColors] = useState<Record<string, string>>({});
 
   // Product Sub-Tab Switcher (Inventário, Combos, Markup, Curva ABC)
   const [internalSubTab, setInternalSubTab] = useState<'inventario' | 'combos' | 'markup' | 'abc'>('inventario');

@@ -120,8 +120,12 @@ CREATE TABLE IF NOT EXISTS ap_products (
   videoUrl TEXT,
   colors JSONB,
   sizes JSONB,
+  size_colors JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garante que a coluna size_colors exista se a tabela ja foi criada anteriormente
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_colors JSONB;
 
 -- 3. Criação da Tabela de Cadastro de Clientes
 CREATE TABLE IF NOT EXISTS ap_clients (
@@ -362,7 +366,8 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
       description: p.description || '',
       videoUrl: p.videoUrl || '',
       colors: Array.isArray(p.colors) ? p.colors : [],
-      sizes: Array.isArray(p.sizes) ? p.sizes : []
+      sizes: Array.isArray(p.sizes) ? p.sizes : [],
+      sizeColors: p.size_colors || {}
     }));
   } catch (err) {
     console.error('Failed fetching products:', err);
@@ -374,7 +379,7 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
   const client = getSupabaseClient();
   if (!client || products.length === 0) return false;
   try {
-    const payloads = products.map(p => ({
+    const payloadsWithCol = products.map(p => ({
       id: p.id,
       name: p.name,
       sku: p.sku,
@@ -389,10 +394,38 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
       description: p.description || '',
       videoUrl: p.videoUrl || '',
       colors: p.colors || [],
-      sizes: p.sizes || []
+      sizes: p.sizes || [],
+      size_colors: p.sizeColors || {}
     }));
-    const { error } = await client.from('ap_products').upsert(payloads, { onConflict: 'id' });
+    const { error } = await client.from('ap_products').upsert(payloadsWithCol, { onConflict: 'id' });
     if (error) {
+      // Se a coluna ainda nao existe no Supabase, tenta enviar sem ela para nao quebrar a sincronizacao
+      if (error.message && (error.message.includes('size_colors') || error.message.includes('does not exist') || error.code === '42703')) {
+        console.warn('[Supabase Sync] Coluna size_colors nao encontrada, reenviando sem ela...');
+        const payloadsWithoutCol = products.map(p => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          category: p.category,
+          price: p.price,
+          cost: p.cost,
+          stock: p.stock,
+          minStock: p.minStock,
+          image: p.image,
+          images: p.images || [],
+          salesCount: p.salesCount || 0,
+          description: p.description || '',
+          videoUrl: p.videoUrl || '',
+          colors: p.colors || [],
+          sizes: p.sizes || []
+        }));
+        const { error: retryError } = await client.from('ap_products').upsert(payloadsWithoutCol, { onConflict: 'id' });
+        if (retryError) {
+          handleSchemaError(retryError, 'ap_products');
+          return false;
+        }
+        return true;
+      }
       handleSchemaError(error, 'ap_products');
       return false;
     }

@@ -39,6 +39,7 @@ export interface Product {
   videoUrl?: string;
   colors?: string[];
   sizes?: string[];
+  sizeColors?: Record<string, string[]>;
 }
 
 export interface SaleItem {
