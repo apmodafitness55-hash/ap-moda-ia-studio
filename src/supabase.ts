@@ -112,14 +112,16 @@ CREATE TABLE IF NOT EXISTS ap_team_members (
   password TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('Admin', 'Gerente', 'Vendedor', 'Parceiro', 'Entregador')),
   details TEXT,
-  birthDate TEXT,
+  "birthDate" TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  createdAt TEXT,
+  "createdAt" TEXT,
   avatar TEXT
 );
 
--- Garante que a coluna avatar exista se a tabela ja foi criada anteriormente
+-- Garante que a coluna avatar e colunas de datas existam com a grafia correta
 ALTER TABLE ap_team_members ADD COLUMN IF NOT EXISTS avatar TEXT;
+ALTER TABLE ap_team_members ADD COLUMN IF NOT EXISTS "birthDate" TEXT;
+ALTER TABLE ap_team_members ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
 
 -- 2. Criação da Tabela de Catálogo de Produtos
 CREATE TABLE IF NOT EXISTS ap_products (
@@ -130,20 +132,23 @@ CREATE TABLE IF NOT EXISTS ap_products (
   price NUMERIC NOT NULL,
   cost NUMERIC NOT NULL,
   stock INTEGER NOT NULL,
-  minStock INTEGER NOT NULL,
+  "minStock" INTEGER NOT NULL,
   image TEXT NOT NULL,
   images JSONB,
-  salesCount INTEGER DEFAULT 0,
+  "salesCount" INTEGER DEFAULT 0,
   description TEXT,
-  videoUrl TEXT,
+  "videoUrl" TEXT,
   colors JSONB,
   sizes JSONB,
   size_colors JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Garante que a coluna size_colors exista se a tabela ja foi criada anteriormente
+-- Garante que a coluna size_colors e as de grafia camelCase existam se a tabela ja foi criada anteriormente
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_colors JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "minStock" INTEGER;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "salesCount" INTEGER DEFAULT 0;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "videoUrl" TEXT;
 
 -- 3. Criação da Tabela de Cadastro de Clientes
 CREATE TABLE IF NOT EXISTS ap_clients (
@@ -198,18 +203,26 @@ ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "peso" NUMERIC;
 -- 4. Criação da Tabela de Vendas Realizadas (PDV e Canais)
 CREATE TABLE IF NOT EXISTS ap_sales (
   id TEXT PRIMARY KEY,
-  clientName TEXT NOT NULL,
-  clientDoc TEXT,
+  "clientName" TEXT NOT NULL,
+  "clientDoc" TEXT,
   channel TEXT NOT NULL,
   items JSONB NOT NULL,
   total NUMERIC NOT NULL,
-  costTotal NUMERIC NOT NULL,
+  "costTotal" NUMERIC NOT NULL,
   status TEXT NOT NULL,
-  createdAt TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
   payments JSONB,
   salesperson TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garante que colunas camelCase existam na tabela ap_sales
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "clientName" TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "clientDoc" TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "costTotal" NUMERIC DEFAULT 0;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS payments JSONB;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS salesperson TEXT;
 
 -- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro / Contas a Pagar e Receber)
 CREATE TABLE IF NOT EXISTS ap_transactions (
@@ -237,16 +250,23 @@ ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS total_installments INTEGER;
 -- 6. Criação da Tabela de Pedidos Online / Encomendas da Vitrine
 CREATE TABLE IF NOT EXISTS ap_online_orders (
   id TEXT PRIMARY KEY,
-  clientName TEXT NOT NULL,
+  "clientName" TEXT NOT NULL,
   total NUMERIC NOT NULL,
   status TEXT NOT NULL,
   items JSONB NOT NULL,
-  createdAt TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
   phone TEXT,
   address TEXT,
-  paymentMethod TEXT,
+  "paymentMethod" TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garante colunas de auto-healing em ap_online_orders
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "clientName" TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS address TEXT;
 
 -- 7. Criação da Tabela de Configurações do Sistema Geral (Google Workspace, Dados da Loja, Logo, etc.)
 CREATE TABLE IF NOT EXISTS ap_system_configs (
@@ -409,6 +429,79 @@ export function handleInsertError(err: any, tableName: string) {
 }
 
 /**
+ * Helper resiliente e auto-regenerativo genérico para inserções (upsert) no Supabase.
+ * Detecta automaticamente erros de coluna inexistente (PGRST204 ou código 42703), remove as propriedades ausentes do payload e tenta novamente de forma recursiva.
+ */
+export async function resilientUpsert(tableName: string, originalPayloads: any[], maxAttempts = 15): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || originalPayloads.length === 0) return false;
+
+  let payloads = JSON.parse(JSON.stringify(originalPayloads)); // Clona profundamente para evitar efeitos colaterais
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    const { error } = await client.from(tableName).upsert(payloads, { onConflict: 'id' });
+    if (!error) {
+      return true;
+    }
+
+    // Identifica erro de coluna inexistente (mismatch, does not exist, not found)
+    const isMissingColumnError = 
+      error.code === '42703' || 
+      (error.message && (
+        error.message.includes('does not exist') || 
+        error.message.includes('not found') || 
+        error.message.includes('column') ||
+        error.message.includes('mismatch')
+      ));
+
+    if (isMissingColumnError && error.message) {
+      const errMsg = error.message;
+      let offendingCol: string | null = null;
+      
+      const m1 = errMsg.match(/column\s+"?([a-zA-Z0-9_]+)"?/i);
+      if (m1) {
+        offendingCol = m1[1];
+      } else {
+        const m2 = errMsg.match(/column\s+\w+\.([a-zA-Z0-9_]+)/i);
+        if (m2) offendingCol = m2[1];
+        else {
+          const m3 = errMsg.match(/column\s+([a-zA-Z0-9_]+)\s+does\s+not\s+exist/i);
+          if (m3) offendingCol = m3[1];
+        }
+      }
+
+      if (offendingCol) {
+        console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Coluna "${offendingCol}" não existe no banco de dados. Autocompensando (removendo do payload e tentando novamente)...`);
+        payloads = payloads.map((p: any) => {
+          const newP = { ...p };
+          delete newP[offendingCol!];
+          
+          // Remove equivalentes em snake_case ou minúsculas caso aplique
+          const snakeCol = offendingCol!.replace(/([A-Z])/g, "_$1").toLowerCase();
+          if (snakeCol !== offendingCol) {
+            delete newP[snakeCol];
+          }
+          const lowerCol = offendingCol!.toLowerCase();
+          if (lowerCol !== offendingCol) {
+            delete newP[lowerCol];
+          }
+          return newP;
+        });
+        attempts++;
+        continue;
+      }
+    }
+
+    // Caso o erro seja persistente ou outro tipo de falha
+    handleInsertError(error, tableName);
+    handleSchemaError(error, tableName);
+    return false;
+  }
+  return false;
+}
+
+/**
  * ------------------- 1. TEAM MEMBERS SYNC -------------------
  */
 export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | null> {
@@ -430,8 +523,8 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
       password: item.password,
       role: item.role as any,
       details: item.details || '',
-      birthDate: item.birthDate || '',
-      createdAt: item.createdAt || item.created_at || (new Date().toISOString()),
+      birthDate: item.birthDate || item.birthdate || '',
+      createdAt: item.createdAt || item.createdat || item.created_at || (new Date().toISOString()),
       avatar: item.avatar || ''
     }));
   } catch (err) {
@@ -441,33 +534,18 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
 }
 
 export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  try {
-    const payloads = members.map(m => ({
-      id: m.id,
-      name: m.name,
-      login: m.login.toLowerCase().trim().replace(/\s+/g, ''),
-      password: m.password || '123',
-      role: m.role,
-      details: m.details || '',
-      birthDate: m.birthDate || '',
-      createdAt: m.createdAt || new Date().toISOString(),
-      avatar: m.avatar || ''
-    }));
-    const { error } = await client
-      .from('ap_team_members')
-      .upsert(payloads, { onConflict: 'id' });
-    if (error) {
-      handleInsertError(error, 'ap_team_members');
-      handleSchemaError(error, 'ap_team_members');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed bulk team sync:', err);
-    return false;
-  }
+  const payloads = members.map(m => ({
+    id: m.id,
+    name: m.name,
+    login: m.login.toLowerCase().trim().replace(/\s+/g, ''),
+    password: m.password || '123',
+    role: m.role,
+    details: m.details || '',
+    birthDate: m.birthDate || '',
+    createdAt: m.createdAt || new Date().toISOString(),
+    avatar: m.avatar || ''
+  }));
+  return resilientUpsert('ap_team_members', payloads);
 }
 
 export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean> {
@@ -510,15 +588,15 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
       price: Number(p.price),
       cost: Number(p.cost),
       stock: p.stock,
-      minStock: p.minStock,
+      minStock: p.minStock !== undefined ? p.minStock : (p.minstock !== undefined ? p.minstock : 0),
       image: p.image,
       images: Array.isArray(p.images) ? p.images : [],
-      salesCount: p.salesCount || 0,
+      salesCount: p.salesCount !== undefined ? p.salesCount : (p.salescount !== undefined ? p.salescount : 0),
       description: p.description || '',
-      videoUrl: p.videoUrl || '',
+      videoUrl: p.videoUrl || p.videourl || '',
       colors: Array.isArray(p.colors) ? p.colors : [],
       sizes: Array.isArray(p.sizes) ? p.sizes : [],
-      sizeColors: p.size_colors || {}
+      sizeColors: p.size_colors || p.sizeColors || {}
     }));
   } catch (err) {
     console.error('Failed fetching products:', err);
@@ -527,66 +605,25 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkProductsToSupabase(products: any[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client || products.length === 0) return false;
-  try {
-    const payloadsWithCol = products.map(p => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      category: p.category,
-      price: p.price,
-      cost: p.cost,
-      stock: p.stock,
-      minStock: p.minStock,
-      image: p.image,
-      images: p.images || [],
-      salesCount: p.salesCount || 0,
-      description: p.description || '',
-      videoUrl: p.videoUrl || '',
-      colors: p.colors || [],
-      sizes: p.sizes || [],
-      size_colors: p.sizeColors || {}
-    }));
-    const { error } = await client.from('ap_products').upsert(payloadsWithCol, { onConflict: 'id' });
-    if (error) {
-      // Se a coluna ainda nao existe no Supabase, tenta enviar sem ela para nao quebrar a sincronizacao
-      if (error.message && (error.message.includes('size_colors') || error.message.includes('does not exist') || error.code === '42703')) {
-        console.warn('[Supabase Sync] Coluna size_colors nao encontrada, reenviando sem ela...');
-        const payloadsWithoutCol = products.map(p => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          category: p.category,
-          price: p.price,
-          cost: p.cost,
-          stock: p.stock,
-          minStock: p.minStock,
-          image: p.image,
-          images: p.images || [],
-          salesCount: p.salesCount || 0,
-          description: p.description || '',
-          videoUrl: p.videoUrl || '',
-          colors: p.colors || [],
-          sizes: p.sizes || []
-        }));
-        const { error: retryError } = await client.from('ap_products').upsert(payloadsWithoutCol, { onConflict: 'id' });
-        if (retryError) {
-          handleInsertError(retryError, 'ap_products');
-          handleSchemaError(retryError, 'ap_products');
-          return false;
-        }
-        return true;
-      }
-      handleInsertError(error, 'ap_products');
-      handleSchemaError(error, 'ap_products');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed bulk products sync:', err);
-    return false;
-  }
+  const payloads = products.map(p => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    category: p.category,
+    price: p.price,
+    cost: p.cost,
+    stock: p.stock,
+    minStock: p.minStock,
+    image: p.image,
+    images: p.images || [],
+    salesCount: p.salesCount || 0,
+    description: p.description || '',
+    videoUrl: p.videoUrl || '',
+    colors: p.colors || [],
+    sizes: p.sizes || [],
+    size_colors: p.sizeColors || {}
+  }));
+  return resilientUpsert('ap_products', payloads);
 }
 
 
@@ -637,92 +674,34 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client || clientsList.length === 0) return false;
-  try {
-    let payloads = clientsList.map(c => ({
-      id: c.id,
-      name: c.name,
-      email: c.email || '',
-      phone: c.phone || '',
-      cpf: c.cpf || '',
-      birthDate: c.birthDate || '',
-      whatsapp: c.whatsapp || '',
-      addressStreet: c.addressStreet || '',
-      addressNum: c.addressNum || '',
-      addressComp: c.addressComp || '',
-      addressBairro: c.addressBairro || '',
-      addressCidade: c.addressCidade || '',
-      addressEstado: c.addressEstado || '',
-      addressCep: c.addressCep || '',
-      channel: c.channel || 'Balcão',
-      npsScore: c.npsScore || 0,
-      totalSpent: c.totalSpent || 0,
-      ordersCount: c.ordersCount || 0,
-      cashbackBalance: c.cashbackBalance || 0,
-      busto: c.busto || null,
-      cintura: c.cintura || null,
-      quadril: c.quadril || null,
-      coxa: c.coxa || null,
-      altura: c.altura || null,
-      peso: c.peso || null
-    }));
-
-    let attempts = 0;
-    const maxAttempts = 15;
-
-    while (attempts < maxAttempts) {
-      const { error } = await client.from('ap_clients').upsert(payloads, { onConflict: 'id' });
-      if (!error) {
-        return true;
-      }
-
-      const isMissingColumnError = 
-        error.code === '42703' || 
-        (error.message && (error.message.includes('does not exist') || error.message.includes('not found') || error.message.includes('column')));
-
-      if (isMissingColumnError && error.message) {
-        const errMsg = error.message;
-        let offendingCol: string | null = null;
-        
-        const m1 = errMsg.match(/column\s+"?([a-zA-Z0-9_]+)"?/i);
-        if (m1) {
-          offendingCol = m1[1];
-        } else {
-          const m2 = errMsg.match(/column\s+\w+\.([a-zA-Z0-9_]+)/i);
-          if (m2) offendingCol = m2[1];
-          else {
-            const m3 = errMsg.match(/column\s+([a-zA-Z0-9_]+)\s+does\s+not\s+exist/i);
-            if (m3) offendingCol = m3[1];
-          }
-        }
-
-        if (offendingCol) {
-          console.warn(`[Supabase Self-Healing] Coluna "${offendingCol}" não existe na tabela ap_clients. Removendo propriedade do payload e tentando novamente...`);
-          payloads = payloads.map(p => {
-            const newP = { ...p };
-            delete (newP as any)[offendingCol!];
-            
-            const snakeCol = offendingCol!.replace(/([A-Z])/g, "_$1").toLowerCase();
-            if (snakeCol !== offendingCol) {
-              delete (newP as any)[snakeCol];
-            }
-            return newP;
-          });
-          attempts++;
-          continue;
-        }
-      }
-
-      handleInsertError(error, 'ap_clients');
-      handleSchemaError(error, 'ap_clients');
-      return false;
-    }
-    return false;
-  } catch (err) {
-    console.error('Failed bulk clients sync:', err);
-    return false;
-  }
+  const payloads = clientsList.map(c => ({
+    id: c.id,
+    name: c.name,
+    email: c.email || '',
+    phone: c.phone || '',
+    cpf: c.cpf || '',
+    birthDate: c.birthDate || '',
+    whatsapp: c.whatsapp || '',
+    addressStreet: c.addressStreet || '',
+    addressNum: c.addressNum || '',
+    addressComp: c.addressComp || '',
+    addressBairro: c.addressBairro || '',
+    addressCidade: c.addressCidade || '',
+    addressEstado: c.addressEstado || '',
+    addressCep: c.addressCep || '',
+    channel: c.channel || 'Balcão',
+    npsScore: c.npsScore || 0,
+    totalSpent: c.totalSpent || 0,
+    ordersCount: c.ordersCount || 0,
+    cashbackBalance: c.cashbackBalance || 0,
+    busto: c.busto || null,
+    cintura: c.cintura || null,
+    quadril: c.quadril || null,
+    coxa: c.coxa || null,
+    altura: c.altura || null,
+    peso: c.peso || null
+  }));
+  return resilientUpsert('ap_clients', payloads);
 }
 
 
@@ -740,14 +719,14 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
     }
     return (data || []).map((s: any) => ({
       id: s.id,
-      clientName: s.clientName,
-      clientDoc: s.clientDoc || '',
+      clientName: s.clientName || s.clientname || '',
+      clientDoc: s.clientDoc || s.clientdoc || '',
       channel: s.channel,
       items: Array.isArray(s.items) ? s.items : [],
       total: Number(s.total),
-      costTotal: Number(s.costTotal || 0),
+      costTotal: Number(s.costTotal !== undefined ? s.costTotal : (s.costtotal !== undefined ? s.costtotal : 0)),
       status: s.status,
-      createdAt: s.createdAt,
+      createdAt: s.createdAt || s.createdat || s.created_at || '',
       payments: Array.isArray(s.payments) ? s.payments : [],
       salesperson: s.salesperson || ''
     }));
@@ -758,33 +737,20 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client || salesList.length === 0) return false;
-  try {
-    const payloads = salesList.map(s => ({
-      id: s.id,
-      clientName: s.clientName,
-      clientDoc: s.clientDoc || '',
-      channel: s.channel,
-      items: s.items || [],
-      total: s.total,
-      costTotal: s.costTotal || 0,
-      status: s.status,
-      createdAt: s.createdAt,
-      payments: s.payments || [],
-      salesperson: s.salesperson || ''
-    }));
-    const { error } = await client.from('ap_sales').upsert(payloads, { onConflict: 'id' });
-    if (error) {
-      handleInsertError(error, 'ap_sales');
-      handleSchemaError(error, 'ap_sales');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed bulk sales sync:', err);
-    return false;
-  }
+  const payloads = salesList.map(s => ({
+    id: s.id,
+    clientName: s.clientName,
+    clientDoc: s.clientDoc || '',
+    channel: s.channel,
+    items: s.items || [],
+    total: s.total,
+    costTotal: s.costTotal || 0,
+    status: s.status,
+    createdAt: s.createdAt,
+    payments: s.payments || [],
+    salesperson: s.salesperson || ''
+  }));
+  return resilientUpsert('ap_sales', payloads);
 }
 
 
@@ -808,10 +774,10 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
       amount: Number(t.amount),
       date: t.date,
       status: t.status || 'pago',
-      dueDate: t.due_date || t.date,
-      installmentsGroup: t.installments_group || undefined,
-      installmentNumber: t.installment_number || undefined,
-      totalInstallments: t.total_installments || undefined
+      dueDate: t.due_date || t.dueDate || t.date,
+      installmentsGroup: t.installments_group || t.installmentsGroup || undefined,
+      installmentNumber: t.installment_number !== undefined ? t.installment_number : (t.installmentNumber !== undefined ? t.installmentNumber : undefined),
+      totalInstallments: t.total_installments !== undefined ? t.total_installments : (t.totalInstallments !== undefined ? t.totalInstallments : undefined)
     }));
   } catch (err) {
     console.error('Failed fetching transactions:', err);
@@ -820,33 +786,20 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkTransactionsToSupabase(transactionsList: any[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client || transactionsList.length === 0) return false;
-  try {
-    const payloads = transactionsList.map(t => ({
-      id: t.id,
-      type: t.type,
-      category: t.category,
-      description: t.description,
-      amount: t.amount,
-      date: t.date,
-      status: t.status || 'pago',
-      due_date: t.dueDate || t.date,
-      installments_group: t.installmentsGroup || null,
-      installment_number: t.installmentNumber || null,
-      total_installments: t.totalInstallments || null
-    }));
-    const { error } = await client.from('ap_transactions').upsert(payloads, { onConflict: 'id' });
-    if (error) {
-       handleInsertError(error, 'ap_transactions');
-       handleSchemaError(error, 'ap_transactions');
-       return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed bulk transactions sync:', err);
-    return false;
-  }
+  const payloads = transactionsList.map(t => ({
+    id: t.id,
+    type: t.type,
+    category: t.category,
+    description: t.description,
+    amount: t.amount,
+    date: t.date,
+    status: t.status || 'pago',
+    due_date: t.dueDate || t.date,
+    installments_group: t.installmentsGroup || null,
+    installment_number: t.installmentNumber || null,
+    total_installments: t.totalInstallments || null
+  }));
+  return resilientUpsert('ap_transactions', payloads);
 }
 
 
@@ -864,14 +817,14 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
     }
     return (data || []).map((o: any) => ({
       id: o.id,
-      clientName: o.clientName,
+      clientName: o.clientName || o.clientname || '',
       total: Number(o.total),
       status: o.status,
       items: Array.isArray(o.items) ? o.items : [],
-      createdAt: o.createdAt,
+      createdAt: o.createdAt || o.createdat || o.created_at || '',
       phone: o.phone || '',
       address: o.address || '',
-      paymentMethod: o.paymentMethod || ''
+      paymentMethod: o.paymentMethod || o.paymentmethod || ''
     }));
   } catch (err) {
     console.error('Failed fetching online orders:', err);
@@ -880,31 +833,18 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client || ordersList.length === 0) return false;
-  try {
-    const payloads = ordersList.map(o => ({
-      id: o.id,
-      clientName: o.clientName,
-      total: o.total,
-      status: o.status,
-      items: o.items || [],
-      createdAt: o.createdAt,
-      phone: o.phone || '',
-      address: o.address || '',
-      paymentMethod: o.paymentMethod || ''
-    }));
-    const { error } = await client.from('ap_online_orders').upsert(payloads, { onConflict: 'id' });
-    if (error) {
-      handleInsertError(error, 'ap_online_orders');
-      handleSchemaError(error, 'ap_online_orders');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Failed bulk online orders sync:', err);
-    return false;
-  }
+  const payloads = ordersList.map(o => ({
+    id: o.id,
+    clientName: o.clientName,
+    total: o.total,
+    status: o.status,
+    items: o.items || [],
+    createdAt: o.createdAt,
+    phone: o.phone || '',
+    address: o.address || '',
+    paymentMethod: o.paymentMethod || ''
+  }));
+  return resilientUpsert('ap_online_orders', payloads);
 }
 
 
