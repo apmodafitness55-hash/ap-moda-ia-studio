@@ -45,6 +45,40 @@ import {
 import { Product, Client } from '../types';
 import { pushSystemConfigToSupabase } from '../supabase';
 
+const COLOR_HEXES: Record<string, string> = {
+  'fúcsia': '#d946ef',
+  'marrom': '#78350f',
+  'roxo imperial': '#6b21a8',
+  'verde militar': '#166534',
+  'vermelho duo': '#991b1b',
+  'preto': '#0f172a',
+  'branco': '#ffffff',
+  'pink glow': '#ec4899',
+  'azul celeste': '#0ea5e9',
+  'azul marinho': '#1e3a8a',
+  'azul': '#3b82f6',
+  'vermelho': '#ef4444',
+  'verde': '#22c55e',
+  'rosa': '#f472b6',
+  'amarelo': '#eab308',
+  'amarelo neon': '#ccff00',
+  'roxo': '#a855f7',
+  'cinza': '#6b7280'
+};
+
+const getColorHex = (name: string) => {
+  const norm = name.trim().toLowerCase();
+  if (COLOR_HEXES[norm]) return COLOR_HEXES[norm];
+  
+  // Custom hash logic to get a deterministic nice light color
+  let hash = 0;
+  for (let i = 0; i < norm.length; i++) {
+    hash = norm.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 65%, 55%)`;
+};
+
 interface PublicCatalogProps {
   products: Product[];
   onAddOnlineOrder?: (order: any) => void;
@@ -334,8 +368,15 @@ export default function PublicCatalog({
   // Handle open item details modal
   const handleOpenProduct = (product: Product) => {
     setSelectedProduct(product);
-    setSelectedColor(product.colors && product.colors.length > 0 ? product.colors[0] : 'Fúcsia');
-    setSelectedSize(product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M');
+    const defaultSize = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
+    let defaultColor = product.colors && product.colors.length > 0 ? product.colors[0] : 'Preto';
+    
+    if (product.sizeColors && product.sizeColors[defaultSize] && product.sizeColors[defaultSize].length > 0) {
+      defaultColor = product.sizeColors[defaultSize][0];
+    }
+    
+    setSelectedSize(defaultSize);
+    setSelectedColor(defaultColor);
     setProductQty(1);
     setDetailImageIdx(0);
     setIsVideoPlaying(false);
@@ -1879,57 +1920,79 @@ export default function PublicCatalog({
                   </button>
                 )}
 
-                {/* 1. HIGH-END PREMIUM INTERACTIVE VARIANT MATRIX STEPPER */}
-                <div className="space-y-2 border-t border-slate-50 pt-3">
-                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">Interative Cores & Tamanhos Disponíveis:</span>
-                  
-                  {/* Colors dynamic row selection */}
-                  <div className="space-y-2.5 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
-                    {[
-                      { name: 'Fúcsia', hex: '#d946ef' },
-                      { name: 'Marrom', hex: '#78350f' },
-                      { name: 'Roxo Imperial', hex: '#6b21a8' },
-                      { name: 'Verde Militar', hex: '#166534' },
-                      { name: 'Vermelho Duo', hex: '#991b1b' }
-                    ].map((colVar) => {
-                      const isColorActive = selectedColor === colVar.name;
-                      return (
-                        <div key={colVar.name} className="flex items-center justify-between py-1 border-b border-slate-50/60 last:border-none">
-                          {/* Left Variant color badge */}
-                          <div className="flex items-center gap-2">
-                            <span className="w-3.5 h-3.5 rounded-full border border-slate-200" style={{ backgroundColor: colVar.hex }} />
-                            <span className={`text-[11px] font-bold ${isColorActive ? 'text-slate-900 border-b-2 border-pink-600 pb-0.2' : 'text-slate-500'}`}>
-                              {colVar.name}
-                            </span>
-                          </div>
-
-                          {/* Right Interactive stepper trigger within sizes cell matrix list */}
-                          <div className="flex items-center gap-1.5">
-                            {['P', 'M', 'G'].map(sz => {
-                              const isActiveSize = isColorActive && selectedSize === sz;
-                              return (
-                                <button
-                                  key={sz}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedColor(colVar.name);
-                                    setSelectedSize(sz);
-                                  }}
-                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition font-mono
-                                    ${isActiveSize 
-                                      ? 'bg-pink-600 border-pink-600 text-white shadow-xs' 
-                                      : 'bg-white border-slate-200/80 hover:border-slate-350 text-slate-700'}`}
-                                >
-                                  {sz}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                        </div>
-                      );
-                    })}
+                {/* 1. HIGH-END PREMIUM INTERACTIVE VARIANT CONTROLS */}
+                <div className="space-y-4 border-t border-slate-50 pt-3">
+                  {/* Sizes Row */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">
+                      <Palette size={11} className="text-pink-600" />
+                      <span>1. Escolha o Tamanho:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedProduct.sizes && selectedProduct.sizes.length > 0 ? selectedProduct.sizes : ['M']).map(sz => {
+                        const isSelected = selectedSize === sz;
+                        return (
+                          <button
+                            key={sz}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSize(sz);
+                              // Auto-select first available color for this size if sizeColors is set
+                              if (selectedProduct.sizeColors && selectedProduct.sizeColors[sz]) {
+                                const availableColors = selectedProduct.sizeColors[sz];
+                                if (availableColors.length > 0 && !availableColors.includes(selectedColor)) {
+                                  setSelectedColor(availableColors[0]);
+                                }
+                              }
+                            }}
+                            className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-all font-mono min-w-[42px] text-center cursor-pointer active:scale-95
+                              ${isSelected 
+                                ? 'bg-pink-600 border-pink-600 text-white shadow-sm' 
+                                : 'bg-white border-slate-200/80 hover:border-slate-300 text-slate-700'}`}
+                          >
+                            {sz}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Colors Row filtered by Selected Size */}
+                  {(() => {
+                    const availableColors = (selectedProduct.sizeColors && selectedProduct.sizeColors[selectedSize] && selectedProduct.sizeColors[selectedSize].length > 0)
+                      ? selectedProduct.sizeColors[selectedSize]
+                      : (selectedProduct.colors && selectedProduct.colors.length > 0 ? selectedProduct.colors : ['Única']);
+
+                    // Double-check selectedColor is within availableColors options
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">
+                          <Palette size={11} className="text-pink-600" />
+                          <span>2. Escolha a Cor:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5">
+                          {availableColors.map(color => {
+                            const isSelected = selectedColor === color;
+                            const hex = getColorHex(color);
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => setSelectedColor(color)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer active:scale-95
+                                  ${isSelected 
+                                    ? 'bg-slate-900 border-slate-900 text-white shadow-xs' 
+                                    : 'bg-white border-slate-200/80 hover:border-slate-300 text-slate-700'}`}
+                              >
+                                <span className="w-3.5 h-3.5 rounded-full border border-slate-200 shadow-3xs" style={{ backgroundColor: hex }} />
+                                <span>{color}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Active Choice Overview Feedback */}

@@ -41,7 +41,7 @@ interface PDVTerminalProps {
 export default function PDVTerminal({ products, clients, onAddSale, onUpdateClients, onAddClient, setActiveTab, sellers = [] }: PDVTerminalProps) {
   const [selectedClientName, setSelectedClientName] = useState<string>('Maria Silva');
   const [selectedChannel, setSelectedChannel] = useState<SalesChannel>('Instagram');
-  const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
+  const [cart, setCart] = useState<{ product: Product; quantity: number; selectedSize?: string; selectedColor?: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [npsScore, setNpsScore] = useState<number>(10);
@@ -433,8 +433,19 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       return;
     }
 
+    const defaultSize = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
+    let defaultColor = product.colors && product.colors.length > 0 ? product.colors[0] : 'Única';
+    if (product.sizeColors && product.sizeColors[defaultSize] && product.sizeColors[defaultSize].length > 0) {
+      defaultColor = product.sizeColors[defaultSize][0];
+    }
+
     setCart(prev => {
-      const idx = prev.findIndex(item => item.product.id === product.id);
+      const idx = prev.findIndex(item => 
+        item.product.id === product.id && 
+        item.selectedSize === defaultSize && 
+        item.selectedColor === defaultColor
+      );
+
       if (idx > -1) {
         const currentQty = prev[idx].quantity;
         if (currentQty >= product.stock) {
@@ -445,20 +456,19 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
         updated[idx] = { ...updated[idx], quantity: currentQty + 1 };
         return updated;
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: 1, selectedSize: defaultSize, selectedColor: defaultColor }];
     });
   };
 
-  const updateQuantity = (productId: string, amount: number) => {
+  const updateQuantity = (idx: number, amount: number) => {
     setCart(prev => {
-      const idx = prev.findIndex(item => item.product.id === productId);
-      if (idx === -1) return prev;
+      if (idx === -1 || idx >= prev.length) return prev;
 
       const currentQty = prev[idx].quantity;
       const targetQty = currentQty + amount;
 
       if (targetQty <= 0) {
-        return prev.filter(item => item.product.id !== productId);
+        return prev.filter((_, i) => i !== idx);
       }
 
       if (targetQty > prev[idx].product.stock) {
@@ -472,8 +482,32 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     });
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+  const removeFromCart = (idx: number) => {
+    setCart(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateCartItemVariant = (index: number, sz: string, col: string | null) => {
+    setCart(prev => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+      
+      const item = updated[index];
+      let targetColor = col;
+      if (!targetColor) {
+        if (item.product.sizeColors && item.product.sizeColors[sz] && item.product.sizeColors[sz].length > 0) {
+          targetColor = item.product.sizeColors[sz][0];
+        } else {
+          targetColor = item.selectedColor || (item.product.colors && item.product.colors[0]) || '';
+        }
+      }
+      
+      updated[index] = {
+        ...item,
+        selectedSize: sz,
+        selectedColor: targetColor
+      };
+      return updated;
+    });
   };
 
   const handleCheckout = (e: React.FormEvent) => {
@@ -494,7 +528,9 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       name: item.product.name,
       quantity: item.quantity,
       price: item.product.price,
-      cost: item.product.cost
+      cost: item.product.cost,
+      selectedColor: item.selectedColor,
+      selectedSize: item.selectedSize
     }));
 
     // Find custom or existing client (by name or CPF)
@@ -708,29 +744,72 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
                 <p className="text-xs font-sans max-w-[180px]">Clique nas peças fitness ao lado para montar a venda</p>
               </div>
             ) : (
-              cart.map((item) => (
-                <div key={item.product.id} className="py-2.5 flex items-center justify-between gap-3 text-xs font-sans">
+              cart.map((item, idx) => (
+                <div key={idx} className="py-2.5 flex items-center justify-between gap-3 text-xs font-sans">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-slate-700 leading-tight truncate">{item.product.name}</p>
-                    <p className="text-[10px] text-pink-600 font-bold font-mono mt-0.5">{formatCurrency(item.product.price)}</p>
+                    
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {/* Size Select */}
+                      {item.product.sizes && item.product.sizes.length > 0 && (
+                        <select
+                          value={item.selectedSize || ''}
+                          onChange={(e) => {
+                            const newSz = e.target.value;
+                            updateCartItemVariant(idx, newSz, null);
+                          }}
+                          className="text-[9px] font-bold bg-slate-50 border border-slate-150 rounded px-1 py-0.5 text-slate-600 font-mono outline-hidden focus:border-pink-500"
+                        >
+                          {item.product.sizes.map(sz => (
+                            <option key={sz} value={sz}>T: {sz}</option>
+                          ))}
+                        </select>
+                      )}
+                      
+                      {/* Color Select filtered by selectedSize if sizeColors is present */}
+                      {(() => {
+                        const availableColors = (item.product.sizeColors && item.selectedSize && item.product.sizeColors[item.selectedSize])
+                          ? item.product.sizeColors[item.selectedSize]
+                          : (item.product.colors || []);
+                        if (availableColors.length === 0) return null;
+                        return (
+                          <select
+                            value={item.selectedColor || ''}
+                            onChange={(e) => {
+                              updateCartItemVariant(idx, item.selectedSize || '', e.target.value);
+                            }}
+                            className="text-[9px] font-bold bg-slate-50 border border-slate-150 rounded px-1 py-0.5 text-slate-600 outline-hidden focus:border-pink-500"
+                          >
+                            {availableColors.map(col => (
+                              <option key={col} value={col}>C: {col}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                    
+                    <p className="text-[10px] text-pink-600 font-bold font-mono mt-1">{formatCurrency(item.product.price)}</p>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <button 
-                      onClick={() => updateQuantity(item.product.id, -1)}
+                      type="button"
+                      onClick={() => updateQuantity(idx, -1)}
                       className="p-1 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                     >
                       <Minus size={10} />
                     </button>
                     <span className="font-mono font-bold text-slate-800 w-5 text-center">{item.quantity}</span>
                     <button 
-                      onClick={() => updateQuantity(item.product.id, 1)}
+                      type="button"
+                      onClick={() => updateQuantity(idx, 1)}
                       className="p-1 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                     >
                       <Plus size={10} />
                     </button>
                     <button 
-                      onClick={() => removeFromCart(item.product.id)}
+                      type="button"
+                      onClick={() => removeFromCart(idx)}
                       className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors ml-1 cursor-pointer"
                     >
                       <Trash2 size={13} />

@@ -204,8 +204,26 @@ export default function CatalogInventory({
       return;
     }
 
-    const colorsArray = newColors.split(',').map(s => s.trim()).filter(Boolean);
     const sizesArray = newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
+    // Build sizeColors list and aggregate colors
+    const finalSizeColors: Record<string, string[]> = {};
+    const sizeColorsList: string[] = [];
+    Object.entries(newSizeColors).forEach(([sz, val]) => {
+      if (sizesArray.includes(sz)) {
+        const arr = (val as string).split(',').map(s => s.trim()).filter(Boolean);
+        if (arr.length > 0) {
+          finalSizeColors[sz] = arr;
+          arr.forEach(c => {
+            if (!sizeColorsList.includes(c)) sizeColorsList.push(c);
+          });
+        }
+      }
+    });
+
+    const colorsArray = sizeColorsList.length > 0 
+      ? sizeColorsList 
+      : newColors.split(',').map(s => s.trim()).filter(Boolean);
 
     const newProd: Product = {
       id: `prod-${Date.now()}`,
@@ -222,7 +240,8 @@ export default function CatalogInventory({
       description: newDescription.trim(),
       videoUrl: newVideoUrl.trim(),
       colors: colorsArray,
-      sizes: sizesArray
+      sizes: sizesArray,
+      sizeColors: finalSizeColors
     };
 
     onAddProduct(newProd);
@@ -244,6 +263,7 @@ export default function CatalogInventory({
     setNewVideoUrl('');
     setNewColors('Preto, Pink Glow, Branco, Azul Celeste');
     setNewSizes('P, M, G, GG');
+    setNewSizeColors({});
   };
 
   const handleOpenEditModal = (p: Product) => {
@@ -263,6 +283,17 @@ export default function CatalogInventory({
     setEditVideoUrl(p.videoUrl || '');
     setEditColors(p.colors ? p.colors.join(', ') : 'Preto');
     setEditSizes(p.sizes ? p.sizes.join(', ') : 'P, M, G');
+    
+    // Map record string[] to record string for local input editing
+    const scObj: Record<string, string> = {};
+    if (p.sizeColors) {
+      Object.entries(p.sizeColors).forEach(([sz, arr]) => {
+        if (Array.isArray(arr)) {
+          scObj[sz] = arr.join(', ');
+        }
+      });
+    }
+    setEditSizeColors(scObj);
     setIsEditModalOpen(true);
   };
 
@@ -283,8 +314,26 @@ export default function CatalogInventory({
       return;
     }
 
-    const colorsArray = editColors.split(',').map(s => s.trim()).filter(Boolean);
     const sizesArray = editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
+    // Build sizeColors list and aggregate colors
+    const finalSizeColors: Record<string, string[]> = {};
+    const sizeColorsList: string[] = [];
+    Object.entries(editSizeColors).forEach(([sz, val]) => {
+      if (sizesArray.includes(sz)) {
+        const arr = (val as string).split(',').map(s => s.trim()).filter(Boolean);
+        if (arr.length > 0) {
+          finalSizeColors[sz] = arr;
+          arr.forEach(c => {
+            if (!sizeColorsList.includes(c)) sizeColorsList.push(c);
+          });
+        }
+      }
+    });
+
+    const colorsArray = sizeColorsList.length > 0 
+      ? sizeColorsList 
+      : editColors.split(',').map(s => s.trim()).filter(Boolean);
 
     onUpdateProduct({
       ...editingProduct,
@@ -300,7 +349,8 @@ export default function CatalogInventory({
       description: editDescription.trim(),
       videoUrl: editVideoUrl.trim(),
       colors: colorsArray,
-      sizes: sizesArray
+      sizes: sizesArray,
+      sizeColors: finalSizeColors
     });
 
     setIsEditModalOpen(false);
@@ -1094,7 +1144,7 @@ export default function CatalogInventory({
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="space-y-1">
-                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide">Cores Disponíveis</label>
+                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide">Cores Disponíveis (Gerais)</label>
                   <input 
                     type="text"
                     placeholder="Preto, Pink Glow, Azul Celeste"
@@ -1114,6 +1164,37 @@ export default function CatalogInventory({
                   />
                 </div>
               </div>
+
+              {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                <div className="space-y-2 mt-1 border border-slate-100 bg-slate-50/50 p-3 rounded-xl text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-700 font-bold uppercase text-[9px] tracking-widest">
+                    <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                    <span>CORES ESPECÍFICAS POR TAMANHO (OPCIONAL)</span>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Associe cores a cada tamanho. Se configurado, o cliente verá apenas as cores vinculadas ao selecionar o respectivo tamanho. Digite as cores separadas por vírgula.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => (
+                      <div key={sz} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                        <span className="font-extrabold text-[10px] text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md min-w-[28px] text-center">{sz}</span>
+                        <input
+                          type="text"
+                          placeholder="Ex: Azul Marinho, Preto, Vermelho"
+                          value={newSizeColors[sz] || ''}
+                          onChange={(e) => {
+                            setNewSizeColors(prev => ({
+                              ...prev,
+                              [sz]: e.target.value
+                            }));
+                          }}
+                          className="flex-1 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-slate-705 focus:outline-hidden focus:border-pink-500 transition-all text-[10px] font-medium font-mono"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1 text-xs">
                 <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Link de Vídeo MP4 ou YouTube (Showcase)</label>
@@ -1382,7 +1463,7 @@ export default function CatalogInventory({
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="space-y-1">
-                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Cores Disponíveis</label>
+                  <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Cores Disponíveis (Gerais)</label>
                   <input 
                     type="text"
                     placeholder="Preto, Pink Glow, Azul Celeste"
@@ -1402,6 +1483,37 @@ export default function CatalogInventory({
                   />
                 </div>
               </div>
+
+              {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                <div className="space-y-2 mt-1 border border-slate-100 bg-slate-50/50 p-3 rounded-xl text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-700 font-bold uppercase text-[9px] tracking-widest">
+                    <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                    <span>CORES ESPECÍFICAS POR TAMANHO (OPCIONAL)</span>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Associe cores a cada tamanho. Se configurado, o cliente verá apenas as cores vinculadas ao selecionar o respectivo tamanho. Digite as cores separadas por vírgula.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => (
+                      <div key={sz} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                        <span className="font-extrabold text-[10px] text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md min-w-[28px] text-center">{sz}</span>
+                        <input
+                          type="text"
+                          placeholder="Ex: Azul Marinho, Preto, Vermelho"
+                          value={editSizeColors[sz] || ''}
+                          onChange={(e) => {
+                            setEditSizeColors(prev => ({
+                              ...prev,
+                              [sz]: e.target.value
+                            }));
+                          }}
+                          className="flex-1 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-slate-705 focus:outline-hidden focus:border-pink-500 transition-all text-[10px] font-medium font-mono"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1 text-xs">
                 <label className="text-slate-500 font-bold uppercase text-[9px] tracking-wide block">Link de Vídeo MP4 ou YouTube (Showcase)</label>

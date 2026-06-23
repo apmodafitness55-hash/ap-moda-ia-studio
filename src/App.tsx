@@ -736,6 +736,11 @@ export default function App() {
 
   // Sincronização automática bilateral de TODO o ecossistema AP Moda Fitness com o Supabase
   const performSync = useCallback(async (isManual = false) => {
+    if (isSyncingRef.current && !isManual) {
+      console.log('[Supabase Sync] Sincronização concorrente ignorada para evitar colisões.');
+      return;
+    }
+
     if (systemOffline) {
       console.log('[Supabase Sync] Sistema offline. Sincronização suspensa.');
       if (isManual) {
