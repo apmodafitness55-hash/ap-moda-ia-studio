@@ -125,9 +125,9 @@ app.get('/api/supabase-config', (req, res) => {
     console.error('[Config Server] Erro ao ler arquivo de configuração do Supabase:', err);
   }
 
-  // Fallback to environment variables or defaults
-  const fallbackUrl = process.env.SUPABASE_URL || 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
-  const fallbackKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
+  // Fallback to environment variables (Vite-prefixed, standard or anon key) or defaults
+  const fallbackUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+  const fallbackKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
   
   res.json({ url: fallbackUrl, key: fallbackKey });
 });

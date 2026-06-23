@@ -12,22 +12,35 @@ export interface TeamMember {
   avatar?: string;
 }
 
-// Retrieves configuration dynamically from localStorage, falling back to default shared credentials, and self-heals placeholder text
+// Retrieves configuration dynamically from Vite environment variables (with fallback to localStorage, and default shared credentials)
 export function getSupabaseConfig() {
-  let url = localStorage.getItem('ap_supabase_url');
-  let key = localStorage.getItem('ap_supabase_key');
+  const metaEnv = (import.meta as any).env || {};
+  let url = (metaEnv.VITE_SUPABASE_URL || '').trim();
+  let key = (metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_KEY || '').trim();
+
+  // If Vite env-vars are placeholders, generic labels, or empty, fallback to localStorage
+  if (!url || url.includes('suachave') || url.includes('sua-url')) {
+    url = (localStorage.getItem('ap_supabase_url') || '').trim();
+  }
+  if (!key || key.includes('suachave') || key.includes('suashare')) {
+    key = (localStorage.getItem('ap_supabase_key') || '').trim();
+  }
   
   const defaultUrl = 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
   const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
   
-  if (!url || url.includes('suachave') || url.includes('sua-url') || url.trim() === '') {
+  if (!url || url.includes('suachave') || url.includes('sua-url') || url === '') {
     url = defaultUrl;
-    localStorage.setItem('ap_supabase_url', defaultUrl);
+    if (!metaEnv.VITE_SUPABASE_URL) {
+      localStorage.setItem('ap_supabase_url', defaultUrl);
+    }
   }
   
-  if (!key || key.includes('suachave') || key.includes('suashare') || key.trim() === '') {
+  if (!key || key.includes('suachave') || key.includes('suashare') || key === '') {
     key = defaultKey;
-    localStorage.setItem('ap_supabase_key', defaultKey);
+    if (!metaEnv.VITE_SUPABASE_ANON_KEY && !metaEnv.VITE_SUPABASE_KEY) {
+      localStorage.setItem('ap_supabase_key', defaultKey);
+    }
   }
   
   return { url, key };
@@ -348,6 +361,21 @@ function handleSchemaError(err: any, tableName: string) {
   }
 }
 
+// Loud visual alert handler for any database insert/upsert failures to fulfill prompt requirement 3
+export function handleInsertError(err: any, tableName: string) {
+  console.error(`[Supabase WRITE Error] Falha de gravação na tabela "${tableName}":`, err);
+  if (err) {
+    const errorMsg = `🚨 ERRO DO SUPABASE AO GRAVAR DADOS! 🚨\n\n` +
+      `• Tabela de Destino: "${tableName}"\n` +
+      `• Mensagem de Erro: "${err.message || err}"\n` +
+      `• Código PostgreSQL: ${err.code || 'sem código'}\n` +
+      `• Detalhes do Servidor: ${err.details || 'sem detalhes adicionais'}\n` +
+      `• Dica de Diagnóstico: ${err.hint || 'nenhuma'}\n\n` +
+      `Verifique se as permissões de acesso (RLS) estão corretas ou re-execute o script SQL de configuração no console do Supabase para corrigir!`;
+    alert(errorMsg);
+  }
+}
+
 /**
  * ------------------- 1. TEAM MEMBERS SYNC -------------------
  */
@@ -399,6 +427,7 @@ export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Prom
       .from('ap_team_members')
       .upsert(payloads, { onConflict: 'id' });
     if (error) {
+      handleInsertError(error, 'ap_team_members');
       handleSchemaError(error, 'ap_team_members');
       return false;
     }
@@ -511,11 +540,13 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
         }));
         const { error: retryError } = await client.from('ap_products').upsert(payloadsWithoutCol, { onConflict: 'id' });
         if (retryError) {
+          handleInsertError(retryError, 'ap_products');
           handleSchemaError(retryError, 'ap_products');
           return false;
         }
         return true;
       }
+      handleInsertError(error, 'ap_products');
       handleSchemaError(error, 'ap_products');
       return false;
     }
@@ -606,6 +637,7 @@ export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boo
     }));
     const { error } = await client.from('ap_clients').upsert(payloads, { onConflict: 'id' });
     if (error) {
+      handleInsertError(error, 'ap_clients');
       handleSchemaError(error, 'ap_clients');
       return false;
     }
@@ -667,6 +699,7 @@ export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean
     }));
     const { error } = await client.from('ap_sales').upsert(payloads, { onConflict: 'id' });
     if (error) {
+      handleInsertError(error, 'ap_sales');
       handleSchemaError(error, 'ap_sales');
       return false;
     }
@@ -718,6 +751,7 @@ export async function syncBulkTransactionsToSupabase(transactionsList: any[]): P
     }));
     const { error } = await client.from('ap_transactions').upsert(payloads, { onConflict: 'id' });
     if (error) {
+      handleInsertError(error, 'ap_transactions');
       handleSchemaError(error, 'ap_transactions');
       return false;
     }
@@ -775,6 +809,7 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
     }));
     const { error } = await client.from('ap_online_orders').upsert(payloads, { onConflict: 'id' });
     if (error) {
+      handleInsertError(error, 'ap_online_orders');
       handleSchemaError(error, 'ap_online_orders');
       return false;
     }
@@ -884,6 +919,7 @@ export async function pushSystemConfigToSupabase(key: string, value: string): Pr
   try {
     const { error } = await client.from('ap_system_configs').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) {
+      handleInsertError(error, 'ap_system_configs');
       handleSchemaError(error, 'ap_system_configs');
       return false;
     }
