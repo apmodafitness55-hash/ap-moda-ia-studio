@@ -2051,6 +2051,7 @@ export default function App() {
         return (
           <FinanceCashflow 
             transactions={transactions}
+            setTransactions={setTransactions}
             onAddTransaction={handleAddTransaction}
           />
         );

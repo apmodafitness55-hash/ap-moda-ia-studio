@@ -101,4 +101,9 @@ export interface Transaction {
   description: string;
   amount: number;
   date: string;
+  status?: 'pago' | 'pendente'; // 'pago' (liquidado) ou 'pendente' (a pagar/a receber)
+  dueDate?: string; // Data de vencimento
+  installmentsGroup?: string; // ID do grupo/parcelamento se for parcelado
+  installmentNumber?: number; // Número da parcela (ex: 1)
+  totalInstallments?: number; // Total de parcelas (ex: 3)
 }

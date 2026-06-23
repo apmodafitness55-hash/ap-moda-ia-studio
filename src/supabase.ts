@@ -191,7 +191,7 @@ CREATE TABLE IF NOT EXISTS ap_sales (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro)
+-- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro / Contas a Pagar e Receber)
 CREATE TABLE IF NOT EXISTS ap_transactions (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL CHECK (type IN ('Inflow', 'Outflow')),
@@ -199,8 +199,20 @@ CREATE TABLE IF NOT EXISTS ap_transactions (
   description TEXT NOT NULL,
   amount NUMERIC NOT NULL,
   date TEXT NOT NULL,
+  status TEXT DEFAULT 'pago',
+  due_date TEXT,
+  installments_group TEXT,
+  installment_number INTEGER,
+  total_installments INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Autocompensação (Self-healing) se a tabela já foi criada no passado
+ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pago';
+ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS due_date TEXT;
+ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS installments_group TEXT;
+ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS installment_number INTEGER;
+ALTER TABLE ap_transactions ADD COLUMN IF NOT EXISTS total_installments INTEGER;
 
 -- 6. Criação da Tabela de Pedidos Online / Encomendas da Vitrine
 CREATE TABLE IF NOT EXISTS ap_online_orders (
@@ -729,7 +741,12 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
       category: t.category,
       description: t.description,
       amount: Number(t.amount),
-      date: t.date
+      date: t.date,
+      status: t.status || 'pago',
+      dueDate: t.due_date || t.date,
+      installmentsGroup: t.installments_group || undefined,
+      installmentNumber: t.installment_number || undefined,
+      totalInstallments: t.total_installments || undefined
     }));
   } catch (err) {
     console.error('Failed fetching transactions:', err);
@@ -747,13 +764,18 @@ export async function syncBulkTransactionsToSupabase(transactionsList: any[]): P
       category: t.category,
       description: t.description,
       amount: t.amount,
-      date: t.date
+      date: t.date,
+      status: t.status || 'pago',
+      due_date: t.dueDate || t.date,
+      installments_group: t.installmentsGroup || null,
+      installment_number: t.installmentNumber || null,
+      total_installments: t.totalInstallments || null
     }));
     const { error } = await client.from('ap_transactions').upsert(payloads, { onConflict: 'id' });
     if (error) {
-      handleInsertError(error, 'ap_transactions');
-      handleSchemaError(error, 'ap_transactions');
-      return false;
+       handleInsertError(error, 'ap_transactions');
+       handleSchemaError(error, 'ap_transactions');
+       return false;
     }
     return true;
   } catch (err) {
