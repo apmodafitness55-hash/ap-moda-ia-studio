@@ -152,20 +152,20 @@ CREATE TABLE IF NOT EXISTS ap_clients (
   email TEXT,
   phone TEXT,
   cpf TEXT,
-  birthDate TEXT,
+  "birthDate" TEXT,
   whatsapp TEXT,
-  addressStreet TEXT,
-  addressNum TEXT,
-  addressComp TEXT,
-  addressBairro TEXT,
-  addressCidade TEXT,
-  addressEstado TEXT,
-  addressCep TEXT,
+  "addressStreet" TEXT,
+  "addressNum" TEXT,
+  "addressComp" TEXT,
+  "addressBairro" TEXT,
+  "addressCidade" TEXT,
+  "addressEstado" TEXT,
+  "addressCep" TEXT,
   channel TEXT NOT NULL,
-  npsScore INTEGER,
-  totalSpent NUMERIC DEFAULT 0,
-  ordersCount INTEGER DEFAULT 0,
-  cashbackBalance NUMERIC DEFAULT 0,
+  "npsScore" INTEGER,
+  "totalSpent" NUMERIC DEFAULT 0,
+  "ordersCount" INTEGER DEFAULT 0,
+  "cashbackBalance" NUMERIC DEFAULT 0,
   busto NUMERIC,
   cintura NUMERIC,
   quadril NUMERIC,
@@ -174,6 +174,26 @@ CREATE TABLE IF NOT EXISTS ap_clients (
   peso NUMERIC,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Autocompensação (Self-healing) se a tabela ap_clients já existia de versões anteriores no Supabase
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "birthDate" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressStreet" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressNum" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressComp" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressBairro" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressCidade" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressEstado" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "addressCep" TEXT;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "npsScore" INTEGER;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "totalSpent" NUMERIC DEFAULT 0;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "ordersCount" INTEGER DEFAULT 0;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "cashbackBalance" NUMERIC DEFAULT 0;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "busto" NUMERIC;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "cintura" NUMERIC;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "quadril" NUMERIC;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "coxa" NUMERIC;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "altura" NUMERIC;
+ALTER TABLE ap_clients ADD COLUMN IF NOT EXISTS "peso" NUMERIC;
 
 -- 4. Criação da Tabela de Vendas Realizadas (PDV e Canais)
 CREATE TABLE IF NOT EXISTS ap_sales (
@@ -588,21 +608,21 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
       email: c.email || '',
       phone: c.phone || '',
       cpf: c.cpf || '',
-      birthDate: c.birthDate || '',
+      birthDate: c.birthDate || c.birthdate || '',
       whatsapp: c.whatsapp || '',
-      addressStreet: c.addressStreet || '',
-      addressNum: c.addressNum || '',
-      addressComp: c.addressComp || '',
-      addressBairro: c.addressBairro || '',
-      addressCidade: c.addressCidade || '',
-      addressEstado: c.addressEstado || '',
-      addressCep: c.addressCep || '',
+      addressStreet: c.addressStreet || c.addressstreet || '',
+      addressNum: c.addressNum || c.addressnum || '',
+      addressComp: c.addressComp || c.addresscomp || '',
+      addressBairro: c.addressBairro || c.addressbairro || '',
+      addressCidade: c.addressCidade || c.addresscidade || '',
+      addressEstado: c.addressEstado || c.addressestado || '',
+      addressCep: c.addressCep || c.addresscep || '',
       channel: c.channel || 'Balcão',
-      npsScore: c.npsScore || 0,
-      totalSpent: Number(c.totalSpent || 0),
-      ordersCount: c.ordersCount || 0,
+      npsScore: c.npsScore !== undefined ? c.npsScore : (c.npsscore !== undefined ? c.npsscore : 0),
+      totalSpent: Number(c.totalSpent !== undefined ? c.totalSpent : (c.totalspent !== undefined ? c.totalspent : 0)),
+      ordersCount: c.ordersCount !== undefined ? c.ordersCount : (c.orderscount !== undefined ? c.orderscount : 0),
       createdAt: c.created_at || new Date().toISOString(),
-      cashbackBalance: Number(c.cashbackBalance || 0),
+      cashbackBalance: Number(c.cashbackBalance !== undefined ? c.cashbackBalance : (c.cashbackbalance !== undefined ? c.cashbackbalance : 0)),
       busto: c.busto ? Number(c.busto) : undefined,
       cintura: c.cintura ? Number(c.cintura) : undefined,
       quadril: c.quadril ? Number(c.quadril) : undefined,
@@ -620,7 +640,7 @@ export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boo
   const client = getSupabaseClient();
   if (!client || clientsList.length === 0) return false;
   try {
-    const payloads = clientsList.map(c => ({
+    let payloads = clientsList.map(c => ({
       id: c.id,
       name: c.name,
       email: c.email || '',
@@ -647,13 +667,58 @@ export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boo
       altura: c.altura || null,
       peso: c.peso || null
     }));
-    const { error } = await client.from('ap_clients').upsert(payloads, { onConflict: 'id' });
-    if (error) {
+
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    while (attempts < maxAttempts) {
+      const { error } = await client.from('ap_clients').upsert(payloads, { onConflict: 'id' });
+      if (!error) {
+        return true;
+      }
+
+      const isMissingColumnError = 
+        error.code === '42703' || 
+        (error.message && (error.message.includes('does not exist') || error.message.includes('not found') || error.message.includes('column')));
+
+      if (isMissingColumnError && error.message) {
+        const errMsg = error.message;
+        let offendingCol: string | null = null;
+        
+        const m1 = errMsg.match(/column\s+"?([a-zA-Z0-9_]+)"?/i);
+        if (m1) {
+          offendingCol = m1[1];
+        } else {
+          const m2 = errMsg.match(/column\s+\w+\.([a-zA-Z0-9_]+)/i);
+          if (m2) offendingCol = m2[1];
+          else {
+            const m3 = errMsg.match(/column\s+([a-zA-Z0-9_]+)\s+does\s+not\s+exist/i);
+            if (m3) offendingCol = m3[1];
+          }
+        }
+
+        if (offendingCol) {
+          console.warn(`[Supabase Self-Healing] Coluna "${offendingCol}" não existe na tabela ap_clients. Removendo propriedade do payload e tentando novamente...`);
+          payloads = payloads.map(p => {
+            const newP = { ...p };
+            delete (newP as any)[offendingCol!];
+            
+            const snakeCol = offendingCol!.replace(/([A-Z])/g, "_$1").toLowerCase();
+            if (snakeCol !== offendingCol) {
+              delete (newP as any)[snakeCol];
+            }
+            return newP;
+          });
+          attempts++;
+          continue;
+        }
+      }
+
       handleInsertError(error, 'ap_clients');
       handleSchemaError(error, 'ap_clients');
       return false;
     }
-    return true;
+    return false;
   } catch (err) {
     console.error('Failed bulk clients sync:', err);
     return false;
