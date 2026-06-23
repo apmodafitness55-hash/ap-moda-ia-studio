@@ -43,7 +43,17 @@ import {
   Percent
 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
-import { SUPABASE_SQL_SETUP, pushSystemConfigToSupabase, saveSupabaseConfigToServer } from '../supabase';
+import { 
+  SUPABASE_SQL_SETUP, 
+  pushSystemConfigToSupabase, 
+  saveSupabaseConfigToServer,
+  syncBulkTeamMembersToSupabase,
+  syncBulkProductsToSupabase,
+  syncBulkClientsToSupabase,
+  syncBulkSalesToSupabase,
+  syncBulkTransactionsToSupabase,
+  syncBulkOnlineOrdersToSupabase
+} from '../supabase';
 import { Product, Sale, Client, Transaction } from '../types';
 import { getCardMachinesConfig, saveCardMachinesConfig, CardMachineConfig, DEFAULT_CARD_MACHINES } from '../lib/cardMachines';
 
@@ -296,6 +306,7 @@ export default function SettingsSystem({
   const [supabaseKey, setSupabaseKey] = useState(() => localStorage.getItem('ap_supabase_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss');
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [isSyncingTeam, setIsSyncingTeam] = useState(false);
+  const [isForceSyncingAll, setIsForceSyncingAll] = useState(false);
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
   const [imgbbKey, setImgbbKey] = useState(() => {
     const saved = localStorage.getItem('ap_imgbb_key');
@@ -793,6 +804,88 @@ export default function SettingsSystem({
     }
   };
 
+  const handleForceSyncAllData = async () => {
+    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
+      alert('⚠️ Por favor, valide e salve a configuração do Supabase antes de forçar o envio.');
+      return;
+    }
+    
+    const confirmPush = confirm(
+      "🔥 ATENÇÃO: Carregar Todo o Banco de Dados para o Supabase!\n\n" +
+      "Isso irá carregar TODOS os seus dados salvos neste aparelho (produtos, clientes, histórico de vendas, fluxo de caixa e logins) para a sua nuvem Supabase.\n\n" +
+      "Isso é essencial se você acabou de configurar um novo Supabase vazio, pois assim os dados locais deste aparelho serão enviados para a nuvem e todos os outros celulares, tablets ou notebooks conectados passarão a enxergar esses mesmos produtos e vendas imediatamente.\n\n" +
+      "Deseja prosseguir com o envio em massa para a nuvem?"
+    );
+    if (!confirmPush) return;
+
+    setIsForceSyncingAll(true);
+    try {
+      // 1. Sincronizar Equipe/Logins
+      if (teamMembers && teamMembers.length > 0) {
+        await syncBulkTeamMembersToSupabase(teamMembers);
+      }
+      
+      // 2. Sincronizar Produtos
+      if (products && products.length > 0) {
+        await syncBulkProductsToSupabase(products);
+      }
+      
+      // 3. Sincronizar Clientes
+      if (clients && clients.length > 0) {
+        await syncBulkClientsToSupabase(clients);
+      }
+      
+      // 4. Sincronizar Vendas
+      if (sales && sales.length > 0) {
+        await syncBulkSalesToSupabase(sales);
+      }
+      
+      // 5. Sincronizar Transações Financeiras (Caixa)
+      if (transactions && transactions.length > 0) {
+        await syncBulkTransactionsToSupabase(transactions);
+      }
+
+      // 6. Sincronizar Pedidos Online
+      const rawOrders = localStorage.getItem('ap_moda_online_orders');
+      const onlineOrdersList = rawOrders ? JSON.parse(rawOrders) : [];
+      if (onlineOrdersList && onlineOrdersList.length > 0) {
+        await syncBulkOnlineOrdersToSupabase(onlineOrdersList);
+      }
+
+      // 7. Enviar as configurações gerais
+      const configs = [
+        { key: 'ap_store_name', value: storeName },
+        { key: 'ap_store_cnpj', value: storeCnpj },
+        { key: 'ap_store_address', value: storeAddress },
+        { key: 'ap_store_phone', value: storePhone },
+        { key: 'ap_store_footer', value: storeFooter },
+        { key: 'ap_store_logo', value: storeLogoUrl }
+      ];
+      for (const conf of configs) {
+        if (conf.value) {
+          await pushSystemConfigToSupabase(conf.key, conf.value);
+        }
+      }
+
+      registerAuditLog('Carga Total Supabase', 'Todos os dados locais foram exportados para a nuvem.');
+      alert(
+        "✨ SUCESSO NO ACESSO E CARGA EM NUVEM!\n\n" +
+        "Todas as suas informações locais foram enviadas com sucesso para as tabelas do seu Supabase:\n" +
+        `• ${products.length} Produtos do Catálogo\n` +
+        `• ${clients.length} Clientes (CRM)\n` +
+        `• ${sales.length} Vendas Registradas\n` +
+        `• ${transactions.length} Lançamentos do Fluxo de Caixa\n` +
+        `• ${teamMembers.length} Funcionários e Logins de Segurança\n\n` +
+        "Excelente! Agora todos os outros dispositivos conectados com o mesmo link sincronizarão exatamente estas mesmas informações!"
+      );
+    } catch (err: any) {
+      console.error('Erro ao forçar sincronia total:', err);
+      alert(`⚠️ Falha ao forçar sincronização total: ${err.message || 'Erro de rede ou permissão.'}\n\nSe certifique de que copiou o Script SQL e executou com sucesso no seu console do Supabase (SQL Editor) antes de sincronizar.`);
+    } finally {
+      setIsForceSyncingAll(false);
+    }
+  };
+
   const handleCopySQLScript = () => {
     try {
       navigator.clipboard.writeText(SUPABASE_SQL_SETUP);
@@ -1281,6 +1374,26 @@ export default function SettingsSystem({
                     <span>Copiar SQL</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Sincronização Geral Completa (Primeira Carga) */}
+              <div className="bg-emerald-50/45 border border-emerald-100/60 p-2.5 rounded-xl space-y-1.5 mt-2">
+                <span className="font-bold text-emerald-800 flex items-center gap-1 text-[10px]">
+                  <Upload size={11} className="text-emerald-600" />
+                  <span>📤 Primeira Conexão? Enviar Dados deste Aparelho para a Nuvem</span>
+                </span>
+                <p className="text-[9px] text-slate-500 leading-normal">
+                  Se você acabou de configurar ou alterar seu Supabase, envie todos os produtos, clientes, histórico de vendas e fluxo de caixa salvos neste aparelho de uma só vez para o seu Supabase vazio.
+                </p>
+                <button
+                  type="button"
+                  disabled={isForceSyncingAll}
+                  onClick={handleForceSyncAllData}
+                  className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer text-[9.5px] disabled:opacity-55 shadow-xs"
+                >
+                  <RefreshCw size={10} className={isForceSyncingAll ? 'animate-spin' : ''} />
+                  <span>{isForceSyncingAll ? 'Enviando tudo em lote...' : 'Carregar Todos os Dados Locais para o Supabase'}</span>
+                </button>
               </div>
             </div>
           </div>
