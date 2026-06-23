@@ -9,6 +9,7 @@ export interface TeamMember {
   details?: string;
   birthDate?: string;
   createdAt?: string;
+  avatar?: string;
 }
 
 // Retrieves configuration dynamically from localStorage, falling back to default shared credentials, and self-heals placeholder text
@@ -100,8 +101,12 @@ CREATE TABLE IF NOT EXISTS ap_team_members (
   details TEXT,
   birthDate TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  createdAt TEXT
+  createdAt TEXT,
+  avatar TEXT
 );
+
+-- Garante que a coluna avatar exista se a tabela ja foi criada anteriormente
+ALTER TABLE ap_team_members ADD COLUMN IF NOT EXISTS avatar TEXT;
 
 -- 2. Criação da Tabela de Catálogo de Produtos
 CREATE TABLE IF NOT EXISTS ap_products (
@@ -366,7 +371,8 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
       role: item.role as any,
       details: item.details || '',
       birthDate: item.birthDate || '',
-      createdAt: item.createdAt || item.created_at || (new Date().toISOString())
+      createdAt: item.createdAt || item.created_at || (new Date().toISOString()),
+      avatar: item.avatar || ''
     }));
   } catch (err) {
     console.error('Failed to download members:', err);
@@ -386,7 +392,8 @@ export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Prom
       role: m.role,
       details: m.details || '',
       birthDate: m.birthDate || '',
-      createdAt: m.createdAt || new Date().toISOString()
+      createdAt: m.createdAt || new Date().toISOString(),
+      avatar: m.avatar || ''
     }));
     const { error } = await client
       .from('ap_team_members')

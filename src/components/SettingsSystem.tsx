@@ -344,6 +344,7 @@ export default function SettingsSystem({
   const [memberFormRole, setMemberFormRole] = useState<'Admin' | 'Gerente' | 'Vendedor' | 'Parceiro' | 'Entregador'>('Vendedor');
   const [memberFormDetails, setMemberFormDetails] = useState('');
   const [memberFormBirthDate, setMemberFormBirthDate] = useState('');
+  const [memberFormAvatar, setMemberFormAvatar] = useState('');
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   
   const [teamSearchText, setTeamSearchText] = useState('');
@@ -377,7 +378,8 @@ export default function SettingsSystem({
             password: memberFormPassword.trim(),
             role: memberFormRole,
             details: memberFormDetails.trim(),
-            birthDate: memberFormBirthDate.trim() || undefined
+            birthDate: memberFormBirthDate.trim() || undefined,
+            avatar: memberFormAvatar.trim() || undefined
           };
         }
         return m;
@@ -393,7 +395,8 @@ export default function SettingsSystem({
         role: memberFormRole,
         details: memberFormDetails.trim(),
         birthDate: memberFormBirthDate.trim() || undefined,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        avatar: memberFormAvatar.trim() || undefined
       };
       updatedList = [...teamMembers, newMember];
       registerAuditLog('Colaborador Cadastrado', `Novo funcionário registrado: ${memberFormName} (${memberFormRole})`);
@@ -408,6 +411,7 @@ export default function SettingsSystem({
     setMemberFormRole('Vendedor');
     setMemberFormDetails('');
     setMemberFormBirthDate('');
+    setMemberFormAvatar('');
     setEditingMemberId(null);
     alert('Informações salvas e sincronizadas com sucesso no portal de logins!');
   };
@@ -420,6 +424,7 @@ export default function SettingsSystem({
     setMemberFormRole(m.role);
     setMemberFormDetails(m.details || '');
     setMemberFormBirthDate(m.birthDate || '');
+    setMemberFormAvatar(m.avatar || '');
   };
 
   const handleDeleteMemberClick = (m: any) => {
@@ -429,14 +434,15 @@ export default function SettingsSystem({
       registerAuditLog('Colaborador Deletado', `Removido funcionário: ${m.name} (${m.role})`);
       
       if (editingMemberId === m.id) {
-        // Reset form too
-        setMemberFormName('');
-        setMemberFormLogin('');
-        setMemberFormPassword('');
-        setMemberFormRole('Vendedor');
-        setMemberFormDetails('');
-        setMemberFormBirthDate('');
-        setEditingMemberId(null);
+         // Reset form too
+         setMemberFormName('');
+         setMemberFormLogin('');
+         setMemberFormPassword('');
+         setMemberFormRole('Vendedor');
+         setMemberFormDetails('');
+         setMemberFormBirthDate('');
+         setMemberFormAvatar('');
+         setEditingMemberId(null);
       }
     }
   };
@@ -2104,6 +2110,80 @@ export default function SettingsSystem({
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Foto de Perfil (URL da Imagem)</label>
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      placeholder="https://exemplo.com/sua-foto.jpg"
+                      value={memberFormAvatar}
+                      onChange={(e) => setMemberFormAvatar(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:border-pink-500 font-mono transition-all"
+                    />
+                    
+                    <div className="flex flex-wrap items-center gap-1 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="text-[8px] text-slate-400 block w-full uppercase tracking-wider font-extrabold mb-0.5">Modelos de Foto Rápidos:</span>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Mulher elegante (Administração / Diretoria)"
+                      >
+                        👩‍💼 Adm/Exec
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Mulher Gerente de Loja de Moda"
+                      >
+                        👩 Gerente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Vendedora Sorridente"
+                      >
+                        👩‍⚕️ Vendedor A
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Vendedora Estilo Fashion"
+                      >
+                        👩‍🦰 Vendedor B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Homem Modelo para Equipes"
+                      >
+                        👨 Parceira/Parceiro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFormAvatar('https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&q=80')}
+                        className="text-[9px] bg-white border border-slate-150 px-1.5 py-0.5 rounded-lg text-slate-600 hover:border-pink-500 hover:text-pink-600 cursor-pointer transition-all"
+                        title="Modelo para Equipe de Entregas"
+                      >
+                        🏍️ Motoboy
+                      </button>
+                      {memberFormAvatar && (
+                        <button
+                          type="button"
+                          onClick={() => setMemberFormAvatar('')}
+                          className="text-[9px] bg-rose-50 hover:bg-rose-100 border border-rose-100 px-1.5 py-0.5 rounded-lg text-rose-600 cursor-pointer ml-auto font-bold"
+                        >
+                          Apagar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-slate-500 font-semibold mb-1 text-[10px] uppercase tracking-wider">Aniversário (Dia/Mês)</label>
@@ -2247,8 +2327,19 @@ export default function SettingsSystem({
                         return (
                           <tr key={m.id} className={`hover:bg-slate-50 transition-colors ${editingMemberId === m.id ? 'bg-pink-50/40' : ''}`}>
                             <td className="p-3">
-                              <div className="font-bold text-slate-800">{m.name}</div>
-                              <div className="text-[9px] font-mono text-slate-400 mt-0.5">REGISTRO: {m.id}</div>
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-pink-100 text-pink-600 font-extrabold text-[10px] flex items-center justify-center uppercase shrink-0 overflow-hidden border border-slate-100">
+                                  {m.avatar ? (
+                                    <img src={m.avatar} alt={m.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    m.name ? m.name.slice(0, 2) : 'AP'
+                                  )}
+                                </div>
+                                <div className="leading-tight text-left">
+                                  <div className="font-bold text-slate-800">{m.name}</div>
+                                  <div className="text-[9px] font-mono text-slate-400 mt-0.5">ID: {m.id}</div>
+                                </div>
+                              </div>
                             </td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded border text-[9px] font-extrabold uppercase tracking-wide inline-flex items-center ${getRoleBadgeStyle(m.role)}`}>
