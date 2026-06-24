@@ -65,7 +65,8 @@ import {
   fetchOnlineOrdersFromSupabase,
   syncBulkOnlineOrdersToSupabase,
   syncSystemConfigsWithSupabase,
-  getTolerantValue
+  getTolerantValue,
+  clearAllSupabaseData
 } from './supabase';
 
 export default function App() {
@@ -1306,7 +1307,8 @@ export default function App() {
               colors: Array.isArray(getTolerantValue(newRec, 'colors')) ? getTolerantValue(newRec, 'colors') : [],
               sizes: Array.isArray(getTolerantValue(newRec, 'sizes')) ? getTolerantValue(newRec, 'sizes') : [],
               sizeColors: getTolerantValue(newRec, 'sizeColors', {}),
-              colorStocks: getTolerantValue(newRec, 'colorStocks', {})
+              colorStocks: getTolerantValue(newRec, 'colorStocks', {}),
+              sizeColorStocks: getTolerantValue(newRec, 'sizeColorStocks', {})
             };
             if (!prev.some(p => p.id === mapped.id)) {
               updated = [mapped, ...prev];
@@ -1329,7 +1331,8 @@ export default function App() {
               colors: Array.isArray(getTolerantValue(newRec, 'colors')) ? getTolerantValue(newRec, 'colors') : [],
               sizes: Array.isArray(getTolerantValue(newRec, 'sizes')) ? getTolerantValue(newRec, 'sizes') : [],
               sizeColors: getTolerantValue(newRec, 'sizeColors', {}),
-              colorStocks: getTolerantValue(newRec, 'colorStocks', {})
+              colorStocks: getTolerantValue(newRec, 'colorStocks', {}),
+              sizeColorStocks: getTolerantValue(newRec, 'sizeColorStocks', {})
             };
             updated = prev.map(p => p.id === mapped.id ? mapped : p);
           } else if (eventType === 'DELETE' && oldRec) {
@@ -1677,10 +1680,26 @@ export default function App() {
       return prevProducts.map(prod => {
         const itemSold = newSale.items.find(it => it.productId === prod.id);
         if (itemSold) {
+          const sz = (itemSold as any).selectedSize;
+          const col = (itemSold as any).selectedColor;
+          
+          let updatedColorStocks = prod.colorStocks ? { ...prod.colorStocks } : {};
+          let updatedSizeColorStocks = prod.sizeColorStocks ? JSON.parse(JSON.stringify(prod.sizeColorStocks)) : {};
+
+          if (sz && col && updatedSizeColorStocks[sz] && updatedSizeColorStocks[sz][col] !== undefined) {
+            updatedSizeColorStocks[sz][col] = Math.max(0, updatedSizeColorStocks[sz][col] - itemSold.quantity);
+          }
+
+          if (col && updatedColorStocks[col] !== undefined) {
+            updatedColorStocks[col] = Math.max(0, updatedColorStocks[col] - itemSold.quantity);
+          }
+
           return {
             ...prod,
             stock: Math.max(0, prod.stock - itemSold.quantity),
-            salesCount: prod.salesCount + itemSold.quantity
+            salesCount: prod.salesCount + itemSold.quantity,
+            colorStocks: updatedColorStocks,
+            sizeColorStocks: updatedSizeColorStocks
           };
         }
         return prod;
@@ -1841,7 +1860,7 @@ export default function App() {
     setTransactions(prev => [newTx, ...prev]);
   };
 
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     const adminUser = teamMembers.find(m => m.role === 'Admin');
     const adminPassword = adminUser ? adminUser.password : 'ApB1695*';
     
@@ -1857,6 +1876,17 @@ export default function App() {
     }
 
     if (confirm('ATENÇÃO: Você confirmou a senha com sucesso! Deseja realmente apagar COMPLETAMENTE todos os produtos, clientes, vendas, despesas, caixa, equipe (mantendo apenas administradores) e pedidos do sistema para iniciar o trabalho do zero (Produção)?')) {
+      
+      // Clear all cloud data from Supabase if connected
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          await clearAllSupabaseData();
+        } catch (err) {
+          console.error('Erro ao formatar banco de dados na nuvem:', err);
+        }
+      }
+
       const cleanTeam = teamMembers.filter(m => m.role === 'Admin');
       setTeamMembers(cleanTeam);
       localStorage.setItem('ap_moda_team_users', JSON.stringify(cleanTeam));
@@ -1875,6 +1905,15 @@ export default function App() {
       localStorage.setItem('ap_moda_delivery_riders', JSON.stringify([]));
       localStorage.setItem('ap_moda_suppliers', JSON.stringify([]));
       localStorage.setItem('ap_moda_supplier_purchases', JSON.stringify([]));
+      
+      // Clear dirty arrays
+      localStorage.removeItem('ap_dirty_products');
+      localStorage.removeItem('ap_dirty_clients');
+      localStorage.removeItem('ap_dirty_sales');
+      localStorage.removeItem('ap_dirty_transactions');
+      localStorage.removeItem('ap_dirty_online_orders');
+      localStorage.removeItem('ap_dirty_team_members');
+
       setProducts([]);
       setClients([]);
       setSales([]);
@@ -1882,7 +1921,7 @@ export default function App() {
       setOnlineOrders([]);
       setSellers([]);
       setMotoboys([]);
-      alert('Tudo limpo! O sistema está zerado e com todos os dados fantasmas excluídos, pronto para o seu uso oficial.');
+      alert('Tudo limpo! O sistema está zerado e com todos os dados fantasmas excluídos tanto localmente quanto na nuvem Supabase, pronto para o seu uso oficial.');
       window.location.reload();
     }
   };

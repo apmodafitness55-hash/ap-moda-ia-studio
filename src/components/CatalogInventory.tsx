@@ -64,6 +64,10 @@ export default function CatalogInventory({
   const [newColorStocks, setNewColorStocks] = useState<Record<string, number>>({});
   const [editColorStocks, setEditColorStocks] = useState<Record<string, number>>({});
 
+  // States for size-color specific stocks
+  const [newSizeColorStocks, setNewSizeColorStocks] = useState<Record<string, Record<string, number>>>({});
+  const [editSizeColorStocks, setEditSizeColorStocks] = useState<Record<string, Record<string, number>>>({});
+
   // Product Sub-Tab Switcher (Inventário, Combos, Markup, Curva ABC)
   const [internalSubTab, setInternalSubTab] = useState<'inventario' | 'combos' | 'markup' | 'abc'>('inventario');
 
@@ -175,28 +179,54 @@ export default function CatalogInventory({
   const [editColors, setEditColors] = useState('');
   const [editSizes, setEditSizes] = useState('');
 
-  // Sync total stock based on color-specific stocks
+  // Sync total stock based on color-specific stocks and size-color specific stocks
   React.useEffect(() => {
+    const sizes = newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
     const colors = newColors.split(',').map(c => c.trim()).filter(Boolean);
-    if (colors.length > 0) {
-      const hasDefinedStock = colors.some(color => newColorStocks[color] !== undefined);
-      if (hasDefinedStock) {
+
+    if (sizes.length > 0) {
+      let total = 0;
+      sizes.forEach(sz => {
+        const availableCols = newSizeColors[sz]
+          ? newSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
+          : colors;
+          
+        availableCols.forEach(col => {
+          total += (newSizeColorStocks[sz]?.[col] || 0);
+        });
+      });
+      setNewStock(total);
+    } else {
+      if (colors.length > 0) {
         const total = colors.reduce((sum, color) => sum + (newColorStocks[color] || 0), 0);
         setNewStock(total);
       }
     }
-  }, [newColors, newColorStocks]);
+  }, [newColors, newSizes, newSizeColors, newColorStocks, newSizeColorStocks]);
 
   React.useEffect(() => {
+    const sizes = editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
     const colors = editColors.split(',').map(c => c.trim()).filter(Boolean);
-    if (colors.length > 0) {
-      const hasDefinedStock = colors.some(color => editColorStocks[color] !== undefined);
-      if (hasDefinedStock) {
+
+    if (sizes.length > 0) {
+      let total = 0;
+      sizes.forEach(sz => {
+        const availableCols = editSizeColors[sz]
+          ? editSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
+          : colors;
+          
+        availableCols.forEach(col => {
+          total += (editSizeColorStocks[sz]?.[col] || 0);
+        });
+      });
+      setEditStock(total);
+    } else {
+      if (colors.length > 0) {
         const total = colors.reduce((sum, color) => sum + (editColorStocks[color] || 0), 0);
         setEditStock(total);
       }
     }
-  }, [editColors, editColorStocks]);
+  }, [editColors, editSizes, editSizeColors, editColorStocks, editSizeColorStocks]);
 
   // Dynamic categories compile
   const productCategoriesOnly = useMemo(() => {
@@ -268,9 +298,23 @@ export default function CatalogInventory({
       : newColors.split(',').map(s => s.trim()).filter(Boolean);
 
     const finalColorStocks: Record<string, number> = {};
-    colorsArray.forEach(color => {
-      finalColorStocks[color] = newColorStocks[color] !== undefined ? newColorStocks[color] : 0;
-    });
+    const finalSizeColorStocks: Record<string, Record<string, number>> = {};
+
+    if (sizesArray.length > 0) {
+      sizesArray.forEach(sz => {
+        finalSizeColorStocks[sz] = {};
+        const availableCols = finalSizeColors[sz] || colorsArray;
+        availableCols.forEach(col => {
+          const qty = newSizeColorStocks[sz]?.[col] || 0;
+          finalSizeColorStocks[sz][col] = qty;
+          finalColorStocks[col] = (finalColorStocks[col] || 0) + qty;
+        });
+      });
+    } else {
+      colorsArray.forEach(color => {
+        finalColorStocks[color] = newColorStocks[color] !== undefined ? newColorStocks[color] : 0;
+      });
+    }
 
     const newProd: Product = {
       id: `prod-${Date.now()}`,
@@ -289,7 +333,8 @@ export default function CatalogInventory({
       colors: colorsArray,
       sizes: sizesArray,
       sizeColors: finalSizeColors,
-      colorStocks: finalColorStocks
+      colorStocks: finalColorStocks,
+      sizeColorStocks: finalSizeColorStocks
     };
 
     onAddProduct(newProd);
@@ -313,6 +358,7 @@ export default function CatalogInventory({
     setNewSizes('P, M, G, GG');
     setNewSizeColors({});
     setNewColorStocks({});
+    setNewSizeColorStocks({});
   };
 
   const handleOpenEditModal = (p: Product) => {
@@ -344,6 +390,7 @@ export default function CatalogInventory({
     }
     setEditSizeColors(scObj);
     setEditColorStocks(p.colorStocks || {});
+    setEditSizeColorStocks(p.sizeColorStocks || {});
     setIsEditModalOpen(true);
   };
 
@@ -386,9 +433,23 @@ export default function CatalogInventory({
       : editColors.split(',').map(s => s.trim()).filter(Boolean);
 
     const finalColorStocks: Record<string, number> = {};
-    colorsArray.forEach(color => {
-      finalColorStocks[color] = editColorStocks[color] !== undefined ? editColorStocks[color] : 0;
-    });
+    const finalSizeColorStocks: Record<string, Record<string, number>> = {};
+
+    if (sizesArray.length > 0) {
+      sizesArray.forEach(sz => {
+        finalSizeColorStocks[sz] = {};
+        const availableCols = finalSizeColors[sz] || colorsArray;
+        availableCols.forEach(col => {
+          const qty = editSizeColorStocks[sz]?.[col] || 0;
+          finalSizeColorStocks[sz][col] = qty;
+          finalColorStocks[col] = (finalColorStocks[col] || 0) + qty;
+        });
+      });
+    } else {
+      colorsArray.forEach(color => {
+        finalColorStocks[color] = editColorStocks[color] !== undefined ? editColorStocks[color] : 0;
+      });
+    }
 
     onUpdateProduct({
       ...editingProduct,
@@ -406,7 +467,8 @@ export default function CatalogInventory({
       colors: colorsArray,
       sizes: sizesArray,
       sizeColors: finalSizeColors,
-      colorStocks: finalColorStocks
+      colorStocks: finalColorStocks,
+      sizeColorStocks: finalSizeColorStocks
     });
 
     setIsEditModalOpen(false);
@@ -1233,40 +1295,98 @@ export default function CatalogInventory({
                 </div>
               </div>
 
-              {newColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
-                <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+              {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 ? (
+                <div className="space-y-3 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs animate-fadeIn">
                   <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
                     <Sparkles size={11} className="text-pink-600 animate-pulse" />
-                    <span>Estoque por Cor</span>
+                    <span>Estoque por Tamanho e Cor</span>
                   </div>
                   <p className="text-[9px] text-slate-400 leading-normal">
-                    Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque inicial do produto automaticamente.
+                    Informe a quantidade de peças para cada combinação de tamanho e cor. O estoque total será calculado automaticamente.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                    {newColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
-                      <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
-                          <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                  
+                  <div className="space-y-3 pt-1">
+                    {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const sizeColorsArr = newSizeColors[sz]
+                        ? newSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
+                        : newColors.split(',').map(c => c.trim()).filter(Boolean);
+
+                      if (sizeColorsArr.length === 0) return null;
+
+                      return (
+                        <div key={sz} className="border border-slate-100 bg-white p-2.5 rounded-lg shadow-2xs">
+                          <div className="font-extrabold text-[10px] text-slate-800 bg-slate-150 px-2 py-0.5 rounded-md inline-block mb-2">
+                            TAMANHO {sz}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {sizeColorsArr.map(color => (
+                              <div key={color} className="flex items-center justify-between gap-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0" style={{ backgroundColor: colorToHex(color) }} />
+                                  <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  value={newSizeColorStocks[sz]?.[color] !== undefined ? newSizeColorStocks[sz][color] : 0}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value) || 0);
+                                    setNewSizeColorStocks(prev => ({
+                                      ...prev,
+                                      [sz]: {
+                                        ...(prev[sz] || {}),
+                                        [color]: val
+                                      }
+                                    }));
+                                  }}
+                                  className="w-16 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={newColorStocks[color] !== undefined ? newColorStocks[color] : 0}
-                          onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            setNewColorStocks(prev => ({
-                              ...prev,
-                              [color]: val
-                            }));
-                          }}
-                          className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
+              ) : (
+                newColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                  <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+                    <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
+                      <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                      <span>Estoque por Cor</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 leading-normal">
+                      Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque inicial do produto automaticamente.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {newColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
+                        <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
+                            <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={newColorStocks[color] !== undefined ? newColorStocks[color] : 0}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setNewColorStocks(prev => ({
+                                ...prev,
+                                [color]: val
+                              }));
+                            }}
+                            className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
               )}
 
               {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
@@ -1590,40 +1710,98 @@ export default function CatalogInventory({
                 </div>
               </div>
 
-              {editColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
-                <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+              {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 ? (
+                <div className="space-y-3 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs animate-fadeIn">
                   <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
                     <Sparkles size={11} className="text-pink-600 animate-pulse" />
-                    <span>Estoque por Cor</span>
+                    <span>Estoque por Tamanho e Cor</span>
                   </div>
                   <p className="text-[9px] text-slate-400 leading-normal">
-                    Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque do produto automaticamente.
+                    Informe a quantidade de peças para cada combinação de tamanho e cor. O estoque total será calculado automaticamente.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                    {editColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
-                      <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
-                          <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                  
+                  <div className="space-y-3 pt-1">
+                    {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const sizeColorsArr = editSizeColors[sz]
+                        ? editSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
+                        : editColors.split(',').map(c => c.trim()).filter(Boolean);
+
+                      if (sizeColorsArr.length === 0) return null;
+
+                      return (
+                        <div key={sz} className="border border-slate-100 bg-white p-2.5 rounded-lg shadow-2xs">
+                          <div className="font-extrabold text-[10px] text-slate-800 bg-slate-150 px-2 py-0.5 rounded-md inline-block mb-2">
+                            TAMANHO {sz}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {sizeColorsArr.map(color => (
+                              <div key={color} className="flex items-center justify-between gap-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0" style={{ backgroundColor: colorToHex(color) }} />
+                                  <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  value={editSizeColorStocks[sz]?.[color] !== undefined ? editSizeColorStocks[sz][color] : 0}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value) || 0);
+                                    setEditSizeColorStocks(prev => ({
+                                      ...prev,
+                                      [sz]: {
+                                        ...(prev[sz] || {}),
+                                        [color]: val
+                                      }
+                                    }));
+                                  }}
+                                  className="w-16 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={editColorStocks[color] !== undefined ? editColorStocks[color] : 0}
-                          onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            setEditColorStocks(prev => ({
-                              ...prev,
-                              [color]: val
-                            }));
-                          }}
-                          className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
+              ) : (
+                editColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                  <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+                    <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
+                      <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                      <span>Estoque por Cor</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 leading-normal">
+                      Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque do produto automaticamente.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {editColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
+                        <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
+                            <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={editColorStocks[color] !== undefined ? editColorStocks[color] : 0}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setEditColorStocks(prev => ({
+                                ...prev,
+                                [color]: val
+                              }));
+                            }}
+                            className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
               )}
 
               {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (

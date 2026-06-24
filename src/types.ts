@@ -41,6 +41,7 @@ export interface Product {
   sizes?: string[];
   sizeColors?: Record<string, string[]>;
   colorStocks?: Record<string, number>;
+  sizeColorStocks?: Record<string, Record<string, number>>;
 }
 
 export interface SaleItem {

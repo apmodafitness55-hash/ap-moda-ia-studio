@@ -465,6 +465,19 @@ export default function PublicCatalog({
   const handleAddToCart = () => {
     if (!selectedProduct) return;
 
+    // Determine max available stock for selected combination
+    let maxStockAvailable = selectedProduct.stock;
+    if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
+      maxStockAvailable = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
+    } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
+      maxStockAvailable = selectedProduct.colorStocks[selectedColor];
+    }
+
+    if (maxStockAvailable <= 0) {
+      alert(`Desculpe, o tamanho ${selectedSize} na cor ${selectedColor} está fora de estoque.`);
+      return;
+    }
+
     setCart(prev => {
       const existingIdx = prev.findIndex(item => 
         item.product.id === selectedProduct.id && 
@@ -474,15 +487,22 @@ export default function PublicCatalog({
 
       if (existingIdx > -1) {
         const updated = [...prev];
-        updated[existingIdx].quantity += productQty;
+        const newQty = updated[existingIdx].quantity + productQty;
+        if (newQty > maxStockAvailable) {
+          alert(`Desculpe, só há ${maxStockAvailable} unidades disponíveis desta combinação.`);
+          updated[existingIdx].quantity = maxStockAvailable;
+        } else {
+          updated[existingIdx].quantity = newQty;
+        }
         return updated;
       }
 
+      const finalQty = Math.min(productQty, maxStockAvailable);
       return [...prev, {
         product: selectedProduct,
         color: selectedColor,
         size: selectedSize,
-        quantity: productQty,
+        quantity: finalQty,
         priceAtTime: selectedProduct.price
       }];
     });
@@ -497,11 +517,29 @@ export default function PublicCatalog({
     const defaultCol = product.colors && product.colors.length > 0 ? product.colors[0] : 'Única';
     const defaultSz = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
     
+    let maxStockAvailable = product.stock;
+    if (product.sizeColorStocks && product.sizeColorStocks[defaultSz] && product.sizeColorStocks[defaultSz][defaultCol] !== undefined) {
+      maxStockAvailable = product.sizeColorStocks[defaultSz][defaultCol];
+    } else if (product.colorStocks && product.colorStocks[defaultCol] !== undefined) {
+      maxStockAvailable = product.colorStocks[defaultCol];
+    }
+
+    if (maxStockAvailable <= 0) {
+      alert(`Desculpe, o tamanho ${defaultSz} na cor ${defaultCol} está fora de estoque.`);
+      return;
+    }
+
     setCart(prev => {
       const idx = prev.findIndex(item => item.product.id === product.id && item.color === defaultCol && item.size === defaultSz);
       if (idx > -1) {
         const updated = [...prev];
-        updated[idx].quantity += 1;
+        const newQty = updated[idx].quantity + 1;
+        if (newQty > maxStockAvailable) {
+          alert(`Limite de estoque de ${maxStockAvailable} un. atingido para esta combinação.`);
+          updated[idx].quantity = maxStockAvailable;
+        } else {
+          updated[idx].quantity = newQty;
+        }
         return updated;
       }
       return [...prev, {
@@ -518,9 +556,21 @@ export default function PublicCatalog({
   const handleUpdateItemQty = (idx: number, amount: number) => {
     setCart(prev => {
       const updated = [...prev];
-      const newQty = updated[idx].quantity + amount;
+      const item = updated[idx];
+      
+      let maxStockAvailable = item.product.stock;
+      if (item.product.sizeColorStocks && item.product.sizeColorStocks[item.size] && item.product.sizeColorStocks[item.size][item.color] !== undefined) {
+        maxStockAvailable = item.product.sizeColorStocks[item.size][item.color];
+      } else if (item.product.colorStocks && item.product.colorStocks[item.color] !== undefined) {
+        maxStockAvailable = item.product.colorStocks[item.color];
+      }
+
+      const newQty = item.quantity + amount;
       if (newQty <= 0) {
         updated.splice(idx, 1);
+      } else if (newQty > maxStockAvailable) {
+        alert(`Desculpe, só há ${maxStockAvailable} unidades disponíveis desta combinação.`);
+        updated[idx].quantity = maxStockAvailable;
       } else {
         updated[idx].quantity = newQty;
       }
@@ -1998,19 +2048,28 @@ export default function PublicCatalog({
                 {/* Active Choice Overview Feedback */}
                 <div className="bg-pink-50/40 p-2.5 rounded-xl border border-pink-100/40 text-[11px] text-pink-955 font-bold flex justify-between items-center">
                   <span>Selecionado: {selectedColor} — Tamanho {selectedSize}</span>
-                  {selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined ? (
-                    selectedProduct.colorStocks[selectedColor] > 0 ? (
-                      <span className="text-[10px] text-emerald-600 font-bold">
-                        {selectedProduct.colorStocks[selectedColor]} un. disponíveis! 🔥
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-rose-500 font-bold animate-pulse">
-                        Sem estoque para esta cor ⚠️
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-[10px] text-pink-600">Disponível em Estoque! 🔥</span>
-                  )}
+                  {(() => {
+                    let available = selectedProduct.stock;
+                    if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
+                      available = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
+                    } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
+                      available = selectedProduct.colorStocks[selectedColor];
+                    }
+
+                    if (available > 0) {
+                      return (
+                        <span className="text-[10px] text-emerald-600 font-bold">
+                          {available} un. disponíveis! 🔥
+                        </span>
+                      );
+                    } else {
+                      return (
+                        <span className="text-[10px] text-rose-500 font-bold animate-pulse">
+                          Esgotado nesta variação ⚠️
+                        </span>
+                      );
+                    }
+                  })()}
                 </div>
 
                 {/* Counter units selector */}

@@ -141,11 +141,15 @@ CREATE TABLE IF NOT EXISTS ap_products (
   colors JSONB,
   sizes JSONB,
   size_colors JSONB,
+  color_stocks JSONB,
+  size_color_stocks JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Garante que a coluna size_colors e as de grafia camelCase existam se a tabela ja foi criada anteriormente
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_colors JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS color_stocks JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_color_stocks JSONB;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "minStock" INTEGER;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "salesCount" INTEGER DEFAULT 0;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "videoUrl" TEXT;
@@ -634,7 +638,8 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
       colors: Array.isArray(getTolerantValue(p, 'colors')) ? getTolerantValue(p, 'colors') : [],
       sizes: Array.isArray(getTolerantValue(p, 'sizes')) ? getTolerantValue(p, 'sizes') : [],
       sizeColors: getTolerantValue(p, 'sizeColors', {}),
-      colorStocks: getTolerantValue(p, 'colorStocks', {})
+      colorStocks: getTolerantValue(p, 'colorStocks', {}),
+      sizeColorStocks: getTolerantValue(p, 'sizeColorStocks', {})
     }));
   } catch (err) {
     console.error('Failed fetching products:', err);
@@ -660,7 +665,8 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
     colors: p.colors || [],
     sizes: p.sizes || [],
     size_colors: p.sizeColors || {},
-    color_stocks: p.colorStocks || {}
+    color_stocks: p.colorStocks || {},
+    size_color_stocks: p.sizeColorStocks || {}
   }));
   return resilientUpsert('ap_products', payloads);
 }
@@ -1017,6 +1023,37 @@ export async function pingSupabaseOnLogin(userName: string, userRole: string): P
     return false;
   } catch (err: any) {
     console.warn('[Supabase Keep-Alive Connection Refused] Falha ao acordar o servidor na nuvem:', err.message || err);
+    return false;
+  }
+}
+
+/**
+ * Exclui de forma definitiva os registros das tabelas de produtos, clientes, vendas, despesas e pedidos no Supabase.
+ * Para a equipe, preserva os usuários que possuam função Admin.
+ */
+export async function clearAllSupabaseData(): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) {
+    console.log('[Supabase Clear] Sem conexão de banco de dados ativa.');
+    return false;
+  }
+  try {
+    console.log('[Supabase Clear] Formatando tabelas na nuvem (limpando dados fantasmas)...');
+    
+    // Deleta com filtro genérico para satisfazer requisitos de segurança do Supabase que barram deletes incondicionais
+    await client.from('ap_products').delete().neq('id', 'dummy_nonexistent_id_value');
+    await client.from('ap_clients').delete().neq('id', 'dummy_nonexistent_id_value');
+    await client.from('ap_sales').delete().neq('id', 'dummy_nonexistent_id_value');
+    await client.from('ap_transactions').delete().neq('id', 'dummy_nonexistent_id_value');
+    await client.from('ap_online_orders').delete().neq('id', 'dummy_nonexistent_id_value');
+    
+    // Para funcionários, deleta tudo que não for Admin (evita trancar os admins atuais para fora)
+    await client.from('ap_team_members').delete().neq('role', 'Admin');
+    
+    console.log('[Supabase Clear] Todas as tabelas foram limpas na nuvem com sucesso!');
+    return true;
+  } catch (err) {
+    console.error('[Supabase Clear Error] Falha crítica ao limpar banco na nuvem:', err);
     return false;
   }
 }

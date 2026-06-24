@@ -427,6 +427,16 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     });
   }, [products, searchQuery, selectedCategory]);
 
+  const getPDVItemMaxStock = (product: Product, size: string, color: string) => {
+    if (product.sizeColorStocks && product.sizeColorStocks[size] && product.sizeColorStocks[size][color] !== undefined) {
+      return product.sizeColorStocks[size][color];
+    }
+    if (product.colorStocks && product.colorStocks[color] !== undefined) {
+      return product.colorStocks[color];
+    }
+    return product.stock;
+  };
+
   const addToCart = (product: Product) => {
     if (product.stock <= 0) {
       alert(`O produto "${product.name}" está temporariamente esgotado! Recarregue o estoque no menu "Catálogo & Estoque".`);
@@ -439,6 +449,12 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       defaultColor = product.sizeColors[defaultSize][0];
     }
 
+    const maxStock = getPDVItemMaxStock(product, defaultSize, defaultColor);
+    if (maxStock <= 0) {
+      alert(`A combinação Tamanho ${defaultSize} e Cor ${defaultColor} deste produto está fora de estoque.`);
+      return;
+    }
+
     setCart(prev => {
       const idx = prev.findIndex(item => 
         item.product.id === product.id && 
@@ -448,8 +464,8 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
 
       if (idx > -1) {
         const currentQty = prev[idx].quantity;
-        if (currentQty >= product.stock) {
-          alert(`Você atingiu o limite de estoque disponível (${product.stock} peças) para este produto.`);
+        if (currentQty >= maxStock) {
+          alert(`Você atingiu o limite de estoque disponível (${maxStock} peças) para a combinação Tamanho ${defaultSize} e Cor ${defaultColor}.`);
           return prev;
         }
         const updated = [...prev];
@@ -464,15 +480,17 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     setCart(prev => {
       if (idx === -1 || idx >= prev.length) return prev;
 
-      const currentQty = prev[idx].quantity;
+      const item = prev[idx];
+      const currentQty = item.quantity;
       const targetQty = currentQty + amount;
 
       if (targetQty <= 0) {
         return prev.filter((_, i) => i !== idx);
       }
 
-      if (targetQty > prev[idx].product.stock) {
-        alert(`Não é possível vender mais peças. Carga limite de estoque: ${prev[idx].product.stock}`);
+      const maxStock = getPDVItemMaxStock(item.product, item.selectedSize || 'M', item.selectedColor || 'Única');
+      if (targetQty > maxStock) {
+        alert(`Não é possível vender mais peças. Carga limite de estoque para ${item.selectedSize}/${item.selectedColor}: ${maxStock}`);
         return prev;
       }
 
@@ -501,11 +519,22 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
         }
       }
       
-      updated[index] = {
-        ...item,
-        selectedSize: sz,
-        selectedColor: targetColor
-      };
+      const maxStock = getPDVItemMaxStock(item.product, sz, targetColor);
+      if (item.quantity > maxStock) {
+        alert(`Aviso: O estoque disponível para Tamanho ${sz} e Cor ${targetColor} é de apenas ${maxStock} unidades. Ajustando quantidade...`);
+        updated[index] = {
+          ...item,
+          selectedSize: sz,
+          selectedColor: targetColor,
+          quantity: Math.max(1, maxStock)
+        };
+      } else {
+        updated[index] = {
+          ...item,
+          selectedSize: sz,
+          selectedColor: targetColor
+        };
+      }
       return updated;
     });
   };
