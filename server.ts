@@ -21,9 +21,9 @@ app.use(express.json({ limit: '10mb' }));
 // Lazy-initialized Gemini Client to prevent crashes during container start
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('A chave de API GEMINI_API_KEY não foi configurada nas variáveis de ambiente. Defina-a em no painel Ajustes > Segredos do AI Studio.');
+    throw new Error('A chave de API GEMINI_API_KEY ou VITE_GEMINI_API_KEY não foi configurada nas variáveis de ambiente. Defina-a em no painel Ajustes > Segredos do AI Studio.');
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({

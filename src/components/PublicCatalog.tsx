@@ -1998,7 +1998,19 @@ export default function PublicCatalog({
                 {/* Active Choice Overview Feedback */}
                 <div className="bg-pink-50/40 p-2.5 rounded-xl border border-pink-100/40 text-[11px] text-pink-955 font-bold flex justify-between items-center">
                   <span>Selecionado: {selectedColor} — Tamanho {selectedSize}</span>
-                  <span className="text-[10px] text-pink-600">Disponível em Estoque! 🔥</span>
+                  {selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined ? (
+                    selectedProduct.colorStocks[selectedColor] > 0 ? (
+                      <span className="text-[10px] text-emerald-600 font-bold">
+                        {selectedProduct.colorStocks[selectedColor]} un. disponíveis! 🔥
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-rose-500 font-bold animate-pulse">
+                        Sem estoque para esta cor ⚠️
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[10px] text-pink-600">Disponível em Estoque! 🔥</span>
+                  )}
                 </div>
 
                 {/* Counter units selector */}

@@ -64,7 +64,8 @@ import {
   syncBulkTransactionsToSupabase,
   fetchOnlineOrdersFromSupabase,
   syncBulkOnlineOrdersToSupabase,
-  syncSystemConfigsWithSupabase
+  syncSystemConfigsWithSupabase,
+  getTolerantValue
 } from './supabase';
 
 export default function App() {
@@ -217,6 +218,32 @@ export default function App() {
       setIsDriverPortalOpen(false);
     }
   }, [currentUser]);
+
+  // Keep logged in user session (currentUser) updated in real-time if their team member profile changes
+  useEffect(() => {
+    if (currentUser && teamMembers && teamMembers.length > 0) {
+      const match = teamMembers.find(m => m.id === currentUser.id || m.login === currentUser.login);
+      if (match) {
+        if (
+          match.name !== currentUser.name ||
+          match.role !== currentUser.role ||
+          match.details !== currentUser.details ||
+          match.avatar !== currentUser.avatar ||
+          match.password !== currentUser.password
+        ) {
+          console.log('[User Session Sync] Atualizando sessão do usuário logado baseado nas alterações do perfil do colaborador:', match.name);
+          setCurrentUser({
+            ...currentUser,
+            name: match.name,
+            role: match.role,
+            details: match.details,
+            avatar: match.avatar,
+            password: match.password
+          });
+        }
+      }
+    }
+  }, [teamMembers, currentUser]);
 
   // Tema Escuro System Mode
   const [darkMode, setDarkMode] = useState(() => {
@@ -1263,44 +1290,46 @@ export default function App() {
           let updated = [...prev];
           if (eventType === 'INSERT' && newRec) {
             const mapped = {
-              id: newRec.id,
-              name: newRec.name,
-              sku: newRec.sku,
-              category: newRec.category,
-              price: Number(newRec.price),
-              cost: Number(newRec.cost),
-              stock: Number(newRec.stock),
-              minStock: Number(newRec.minStock),
-              image: newRec.image,
-              images: Array.isArray(newRec.images) ? newRec.images : [],
-              salesCount: Number(newRec.salesCount || 0),
-              description: newRec.description || '',
-              videoUrl: newRec.videoUrl || '',
-              colors: Array.isArray(newRec.colors) ? newRec.colors : [],
-              sizes: Array.isArray(newRec.sizes) ? newRec.sizes : [],
-              sizeColors: newRec.size_colors || {}
+              id: getTolerantValue(newRec, 'id'),
+              name: getTolerantValue(newRec, 'name'),
+              sku: getTolerantValue(newRec, 'sku'),
+              category: getTolerantValue(newRec, 'category'),
+              price: Number(getTolerantValue(newRec, 'price', 0)),
+              cost: Number(getTolerantValue(newRec, 'cost', 0)),
+              stock: Number(getTolerantValue(newRec, 'stock', 0)),
+              minStock: Number(getTolerantValue(newRec, 'minStock', 0)),
+              image: getTolerantValue(newRec, 'image'),
+              images: Array.isArray(getTolerantValue(newRec, 'images')) ? getTolerantValue(newRec, 'images') : [],
+              salesCount: Number(getTolerantValue(newRec, 'salesCount', 0)),
+              description: getTolerantValue(newRec, 'description', ''),
+              videoUrl: getTolerantValue(newRec, 'videoUrl', ''),
+              colors: Array.isArray(getTolerantValue(newRec, 'colors')) ? getTolerantValue(newRec, 'colors') : [],
+              sizes: Array.isArray(getTolerantValue(newRec, 'sizes')) ? getTolerantValue(newRec, 'sizes') : [],
+              sizeColors: getTolerantValue(newRec, 'sizeColors', {}),
+              colorStocks: getTolerantValue(newRec, 'colorStocks', {})
             };
             if (!prev.some(p => p.id === mapped.id)) {
               updated = [mapped, ...prev];
             }
           } else if (eventType === 'UPDATE' && newRec) {
             const mapped = {
-              id: newRec.id,
-              name: newRec.name,
-              sku: newRec.sku,
-              category: newRec.category,
-              price: Number(newRec.price),
-              cost: Number(newRec.cost),
-              stock: Number(newRec.stock),
-              minStock: Number(newRec.minStock),
-              image: newRec.image,
-              images: Array.isArray(newRec.images) ? newRec.images : [],
-              salesCount: Number(newRec.salesCount || 0),
-              description: newRec.description || '',
-              videoUrl: newRec.videoUrl || '',
-              colors: Array.isArray(newRec.colors) ? newRec.colors : [],
-              sizes: Array.isArray(newRec.sizes) ? newRec.sizes : [],
-              sizeColors: newRec.size_colors || {}
+              id: getTolerantValue(newRec, 'id'),
+              name: getTolerantValue(newRec, 'name'),
+              sku: getTolerantValue(newRec, 'sku'),
+              category: getTolerantValue(newRec, 'category'),
+              price: Number(getTolerantValue(newRec, 'price', 0)),
+              cost: Number(getTolerantValue(newRec, 'cost', 0)),
+              stock: Number(getTolerantValue(newRec, 'stock', 0)),
+              minStock: Number(getTolerantValue(newRec, 'minStock', 0)),
+              image: getTolerantValue(newRec, 'image'),
+              images: Array.isArray(getTolerantValue(newRec, 'images')) ? getTolerantValue(newRec, 'images') : [],
+              salesCount: Number(getTolerantValue(newRec, 'salesCount', 0)),
+              description: getTolerantValue(newRec, 'description', ''),
+              videoUrl: getTolerantValue(newRec, 'videoUrl', ''),
+              colors: Array.isArray(getTolerantValue(newRec, 'colors')) ? getTolerantValue(newRec, 'colors') : [],
+              sizes: Array.isArray(getTolerantValue(newRec, 'sizes')) ? getTolerantValue(newRec, 'sizes') : [],
+              sizeColors: getTolerantValue(newRec, 'sizeColors', {}),
+              colorStocks: getTolerantValue(newRec, 'colorStocks', {})
             };
             updated = prev.map(p => p.id === mapped.id ? mapped : p);
           } else if (eventType === 'DELETE' && oldRec) {

@@ -198,6 +198,7 @@ export default function SettingsSystem({
 
   // Load / Save Store settings to localStorage
   const [storeName, setStoreName] = useState(() => localStorage.getItem('ap_store_name') || 'AP Moda Fitness');
+  const [storeSlogan, setStoreSlogan] = useState(() => localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida');
   const [storeCnpj, setStoreCnpj] = useState(() => localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
   const [storeAddress, setStoreAddress] = useState(() => localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
   const [storePhone, setStorePhone] = useState(() => localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
@@ -208,6 +209,7 @@ export default function SettingsSystem({
     const handleStorageSynced = () => {
       console.log('[SettingsSystem] Cloud-sync change detected! Sincronizando dados locais do localStorage com a interface.');
       setStoreName(localStorage.getItem('ap_store_name') || 'AP Moda Fitness');
+      setStoreSlogan(localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida');
       setStoreCnpj(localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
       setStoreAddress(localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
       setStorePhone(localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
@@ -459,6 +461,7 @@ export default function SettingsSystem({
   const handleSaveStoreSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ap_store_name', storeName);
+    localStorage.setItem('ap_store_slogan', storeSlogan);
     localStorage.setItem('ap_store_cnpj', storeCnpj);
     localStorage.setItem('ap_store_address', storeAddress);
     localStorage.setItem('ap_store_phone', storePhone);
@@ -470,6 +473,7 @@ export default function SettingsSystem({
     
     // Immediate push to cloud
     await pushSystemConfigToSupabase('ap_store_name', storeName);
+    await pushSystemConfigToSupabase('ap_store_slogan', storeSlogan);
     await pushSystemConfigToSupabase('ap_store_cnpj', storeCnpj);
     await pushSystemConfigToSupabase('ap_store_address', storeAddress);
     await pushSystemConfigToSupabase('ap_store_phone', storePhone);
@@ -1048,6 +1052,18 @@ export default function SettingsSystem({
                     className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-405 font-semibold mb-1">Lema / Slogan da Empresa</label>
+                <input
+                  type="text"
+                  required
+                  value={storeSlogan}
+                  onChange={(e) => setStoreSlogan(e.target.value)}
+                  placeholder="Ex: Onde o seu limite vira ponto de partida"
+                  className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden"
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

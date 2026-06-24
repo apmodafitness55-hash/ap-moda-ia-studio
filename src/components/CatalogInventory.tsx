@@ -29,6 +29,21 @@ interface CatalogInventoryProps {
   setActiveSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
 }
 
+const colorToHex = (colorName: string): string => {
+  const norm = colorName.toLowerCase().trim();
+  if (norm.includes('preto') || norm.includes('black')) return '#1e293b';
+  if (norm.includes('branco') || norm.includes('white')) return '#f8fafc';
+  if (norm.includes('rosa') || norm.includes('pink') || norm.includes('pink glow')) return '#db2777';
+  if (norm.includes('azul') || norm.includes('blue')) return '#2563eb';
+  if (norm.includes('verde') || norm.includes('green')) return '#16a34a';
+  if (norm.includes('vermelho') || norm.includes('red')) return '#dc2626';
+  if (norm.includes('amarelo') || norm.includes('yellow')) return '#ca8a04';
+  if (norm.includes('cinza') || norm.includes('gray')) return '#4b5563';
+  if (norm.includes('laranja') || norm.includes('orange')) return '#ea580c';
+  if (norm.includes('roxo') || norm.includes('purple')) return '#7c3aed';
+  return '#cbd5e1'; // fallback gray
+};
+
 export default function CatalogInventory({ 
   products, 
   onAddProduct, 
@@ -44,6 +59,10 @@ export default function CatalogInventory({
   // States for size-specific colors
   const [newSizeColors, setNewSizeColors] = useState<Record<string, string>>({});
   const [editSizeColors, setEditSizeColors] = useState<Record<string, string>>({});
+
+  // States for color-specific stocks
+  const [newColorStocks, setNewColorStocks] = useState<Record<string, number>>({});
+  const [editColorStocks, setEditColorStocks] = useState<Record<string, number>>({});
 
   // Product Sub-Tab Switcher (Inventário, Combos, Markup, Curva ABC)
   const [internalSubTab, setInternalSubTab] = useState<'inventario' | 'combos' | 'markup' | 'abc'>('inventario');
@@ -156,6 +175,29 @@ export default function CatalogInventory({
   const [editColors, setEditColors] = useState('');
   const [editSizes, setEditSizes] = useState('');
 
+  // Sync total stock based on color-specific stocks
+  React.useEffect(() => {
+    const colors = newColors.split(',').map(c => c.trim()).filter(Boolean);
+    if (colors.length > 0) {
+      const hasDefinedStock = colors.some(color => newColorStocks[color] !== undefined);
+      if (hasDefinedStock) {
+        const total = colors.reduce((sum, color) => sum + (newColorStocks[color] || 0), 0);
+        setNewStock(total);
+      }
+    }
+  }, [newColors, newColorStocks]);
+
+  React.useEffect(() => {
+    const colors = editColors.split(',').map(c => c.trim()).filter(Boolean);
+    if (colors.length > 0) {
+      const hasDefinedStock = colors.some(color => editColorStocks[color] !== undefined);
+      if (hasDefinedStock) {
+        const total = colors.reduce((sum, color) => sum + (editColorStocks[color] || 0), 0);
+        setEditStock(total);
+      }
+    }
+  }, [editColors, editColorStocks]);
+
   // Dynamic categories compile
   const productCategoriesOnly = useMemo(() => {
     const list = new Set(products.map(p => p.category).filter(Boolean));
@@ -225,6 +267,11 @@ export default function CatalogInventory({
       ? sizeColorsList 
       : newColors.split(',').map(s => s.trim()).filter(Boolean);
 
+    const finalColorStocks: Record<string, number> = {};
+    colorsArray.forEach(color => {
+      finalColorStocks[color] = newColorStocks[color] !== undefined ? newColorStocks[color] : 0;
+    });
+
     const newProd: Product = {
       id: `prod-${Date.now()}`,
       name: newName.trim(),
@@ -241,7 +288,8 @@ export default function CatalogInventory({
       videoUrl: newVideoUrl.trim(),
       colors: colorsArray,
       sizes: sizesArray,
-      sizeColors: finalSizeColors
+      sizeColors: finalSizeColors,
+      colorStocks: finalColorStocks
     };
 
     onAddProduct(newProd);
@@ -264,6 +312,7 @@ export default function CatalogInventory({
     setNewColors('Preto, Pink Glow, Branco, Azul Celeste');
     setNewSizes('P, M, G, GG');
     setNewSizeColors({});
+    setNewColorStocks({});
   };
 
   const handleOpenEditModal = (p: Product) => {
@@ -294,6 +343,7 @@ export default function CatalogInventory({
       });
     }
     setEditSizeColors(scObj);
+    setEditColorStocks(p.colorStocks || {});
     setIsEditModalOpen(true);
   };
 
@@ -335,6 +385,11 @@ export default function CatalogInventory({
       ? sizeColorsList 
       : editColors.split(',').map(s => s.trim()).filter(Boolean);
 
+    const finalColorStocks: Record<string, number> = {};
+    colorsArray.forEach(color => {
+      finalColorStocks[color] = editColorStocks[color] !== undefined ? editColorStocks[color] : 0;
+    });
+
     onUpdateProduct({
       ...editingProduct,
       name: editName.trim(),
@@ -350,7 +405,8 @@ export default function CatalogInventory({
       videoUrl: editVideoUrl.trim(),
       colors: colorsArray,
       sizes: sizesArray,
-      sizeColors: finalSizeColors
+      sizeColors: finalSizeColors,
+      colorStocks: finalColorStocks
     });
 
     setIsEditModalOpen(false);
@@ -494,6 +550,16 @@ export default function CatalogInventory({
                       <div>
                         <span className="font-semibold text-slate-800 text-xs block leading-tight">{p.name}</span>
                         <span className="text-[10px] text-slate-400 font-normal mt-1 block">Vendidos: {p.salesCount} un</span>
+                        {p.colorStocks && Object.keys(p.colorStocks).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5 max-w-[260px]">
+                            {Object.entries(p.colorStocks).map(([color, qty]) => (
+                              <span key={color} className="inline-flex items-center gap-1 bg-slate-50 text-slate-500 border border-slate-100 rounded-md px-1.5 py-0.5 text-[9px] font-medium font-mono leading-none">
+                                <span className="w-1.5 h-1.5 rounded-full border border-slate-200" style={{ backgroundColor: colorToHex(color) }} />
+                                {color}: <strong className="text-slate-700 font-bold">{qty}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </td>
 
@@ -1114,9 +1180,11 @@ export default function CatalogInventory({
                     type="number"
                     required
                     value={newStock}
-                    onChange={(e) => setNewStock(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:border-pink-500 transition-all font-medium font-mono"
+                    readOnly
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 focus:outline-hidden transition-all font-medium font-mono cursor-not-allowed"
+                    title="Calculado automaticamente como a soma das quantidades por cor abaixo"
                   />
+                  <p className="text-[8px] text-pink-600 font-semibold leading-none">Soma das quantidades por cor abaixo</p>
                 </div>
 
                 <div className="space-y-1">
@@ -1164,6 +1232,42 @@ export default function CatalogInventory({
                   />
                 </div>
               </div>
+
+              {newColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+                  <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
+                    <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                    <span>Estoque por Cor</span>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque inicial do produto automaticamente.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {newColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
+                      <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
+                          <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={newColorStocks[color] !== undefined ? newColorStocks[color] : 0}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                            setNewColorStocks(prev => ({
+                              ...prev,
+                              [color]: val
+                            }));
+                          }}
+                          className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
                 <div className="space-y-2 mt-1 border border-slate-100 bg-slate-50/50 p-3 rounded-xl text-xs">
@@ -1433,9 +1537,11 @@ export default function CatalogInventory({
                     type="number"
                     required
                     value={editStock}
-                    onChange={(e) => setEditStock(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:border-pink-500 transition-all font-medium font-mono text-xs"
+                    readOnly
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 focus:outline-hidden transition-all font-medium font-mono text-xs cursor-not-allowed"
+                    title="Calculado automaticamente como a soma das quantidades por cor abaixo"
                   />
+                  <p className="text-[8px] text-pink-600 font-semibold leading-none">Soma das quantidades por cor abaixo</p>
                 </div>
 
                 <div className="space-y-1">
@@ -1483,6 +1589,42 @@ export default function CatalogInventory({
                   />
                 </div>
               </div>
+
+              {editColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                <div className="space-y-2 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs">
+                  <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
+                    <Sparkles size={11} className="text-pink-600 animate-pulse" />
+                    <span>Estoque por Cor</span>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Informe a quantidade de peças para cada cor informada acima. A soma total irá definir o estoque do produto automaticamente.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {editColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
+                      <div key={color} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-150 shadow-2xs">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0 animate-pulse" style={{ backgroundColor: colorToHex(color) }} />
+                          <span className="font-semibold text-[10px] text-slate-700 truncate">{color}</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={editColorStocks[color] !== undefined ? editColorStocks[color] : 0}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                            setEditColorStocks(prev => ({
+                              ...prev,
+                              [color]: val
+                            }));
+                          }}
+                          className="w-16 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-slate-705 text-[10px] font-medium font-mono focus:outline-hidden focus:border-pink-500 text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
                 <div className="space-y-2 mt-1 border border-slate-100 bg-slate-50/50 p-3 rounded-xl text-xs">

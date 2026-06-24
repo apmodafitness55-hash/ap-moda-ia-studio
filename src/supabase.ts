@@ -429,6 +429,43 @@ export function handleInsertError(err: any, tableName: string) {
 }
 
 /**
+ * Retorna um valor do objeto item de forma tolerante a maiúsculas/minúsculas, camelCase, snake_case e variações de letras.
+ */
+export function getTolerantValue(item: any, camelKey: string, fallback: any = undefined): any {
+  if (!item) return fallback;
+  
+  // 1. Direct match
+  if (item[camelKey] !== undefined && item[camelKey] !== null) {
+    return item[camelKey];
+  }
+  
+  // 2. Direct lowercase match
+  const lowerKey = camelKey.toLowerCase();
+  if (item[lowerKey] !== undefined && item[lowerKey] !== null) {
+    return item[lowerKey];
+  }
+  
+  // 3. Direct snake_case match
+  const snakeKey = camelKey.replace(/([A-Z])/g, "_$1").toLowerCase();
+  if (item[snakeKey] !== undefined && item[snakeKey] !== null) {
+    return item[snakeKey];
+  }
+
+  // 4. Case-insensitive search over all keys
+  const camelKeyLower = camelKey.toLowerCase().replace(/_/g, '');
+  for (const k of Object.keys(item)) {
+    const kNormalized = k.toLowerCase().replace(/_/g, '');
+    if (kNormalized === camelKeyLower) {
+      if (item[k] !== undefined && item[k] !== null) {
+        return item[k];
+      }
+    }
+  }
+  
+  return fallback;
+}
+
+/**
  * Helper resiliente e auto-regenerativo genérico para inserções (upsert) no Supabase.
  * Detecta automaticamente erros de coluna inexistente (PGRST204 ou código 42703), remove as propriedades ausentes do payload e tenta novamente de forma recursiva.
  */
@@ -517,15 +554,15 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
       return null;
     }
     return (data || []).map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      login: item.login,
-      password: item.password,
-      role: item.role as any,
-      details: item.details || '',
-      birthDate: item.birthDate || item.birthdate || '',
-      createdAt: item.createdAt || item.createdat || item.created_at || (new Date().toISOString()),
-      avatar: item.avatar || ''
+      id: getTolerantValue(item, 'id'),
+      name: getTolerantValue(item, 'name'),
+      login: getTolerantValue(item, 'login'),
+      password: getTolerantValue(item, 'password'),
+      role: getTolerantValue(item, 'role') as any,
+      details: getTolerantValue(item, 'details', ''),
+      birthDate: getTolerantValue(item, 'birthDate', ''),
+      createdAt: getTolerantValue(item, 'createdAt', new Date().toISOString()),
+      avatar: getTolerantValue(item, 'avatar', '')
     }));
   } catch (err) {
     console.error('Failed to download members:', err);
@@ -581,22 +618,23 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
       return null;
     }
     return (data || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      category: p.category,
-      price: Number(p.price),
-      cost: Number(p.cost),
-      stock: p.stock,
-      minStock: p.minStock !== undefined ? p.minStock : (p.minstock !== undefined ? p.minstock : 0),
-      image: p.image,
-      images: Array.isArray(p.images) ? p.images : [],
-      salesCount: p.salesCount !== undefined ? p.salesCount : (p.salescount !== undefined ? p.salescount : 0),
-      description: p.description || '',
-      videoUrl: p.videoUrl || p.videourl || '',
-      colors: Array.isArray(p.colors) ? p.colors : [],
-      sizes: Array.isArray(p.sizes) ? p.sizes : [],
-      sizeColors: p.size_colors || p.sizeColors || {}
+      id: getTolerantValue(p, 'id'),
+      name: getTolerantValue(p, 'name'),
+      sku: getTolerantValue(p, 'sku'),
+      category: getTolerantValue(p, 'category'),
+      price: Number(getTolerantValue(p, 'price', 0)),
+      cost: Number(getTolerantValue(p, 'cost', 0)),
+      stock: Number(getTolerantValue(p, 'stock', 0)),
+      minStock: Number(getTolerantValue(p, 'minStock', 0)),
+      image: getTolerantValue(p, 'image'),
+      images: Array.isArray(getTolerantValue(p, 'images')) ? getTolerantValue(p, 'images') : [],
+      salesCount: Number(getTolerantValue(p, 'salesCount', 0)),
+      description: getTolerantValue(p, 'description', ''),
+      videoUrl: getTolerantValue(p, 'videoUrl', ''),
+      colors: Array.isArray(getTolerantValue(p, 'colors')) ? getTolerantValue(p, 'colors') : [],
+      sizes: Array.isArray(getTolerantValue(p, 'sizes')) ? getTolerantValue(p, 'sizes') : [],
+      sizeColors: getTolerantValue(p, 'sizeColors', {}),
+      colorStocks: getTolerantValue(p, 'colorStocks', {})
     }));
   } catch (err) {
     console.error('Failed fetching products:', err);
@@ -621,7 +659,8 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
     videoUrl: p.videoUrl || '',
     colors: p.colors || [],
     sizes: p.sizes || [],
-    size_colors: p.sizeColors || {}
+    size_colors: p.sizeColors || {},
+    color_stocks: p.colorStocks || {}
   }));
   return resilientUpsert('ap_products', payloads);
 }
@@ -640,32 +679,32 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
       return null;
     }
     return (data || []).map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      email: c.email || '',
-      phone: c.phone || '',
-      cpf: c.cpf || '',
-      birthDate: c.birthDate || c.birthdate || '',
-      whatsapp: c.whatsapp || '',
-      addressStreet: c.addressStreet || c.addressstreet || '',
-      addressNum: c.addressNum || c.addressnum || '',
-      addressComp: c.addressComp || c.addresscomp || '',
-      addressBairro: c.addressBairro || c.addressbairro || '',
-      addressCidade: c.addressCidade || c.addresscidade || '',
-      addressEstado: c.addressEstado || c.addressestado || '',
-      addressCep: c.addressCep || c.addresscep || '',
-      channel: c.channel || 'Balcão',
-      npsScore: c.npsScore !== undefined ? c.npsScore : (c.npsscore !== undefined ? c.npsscore : 0),
-      totalSpent: Number(c.totalSpent !== undefined ? c.totalSpent : (c.totalspent !== undefined ? c.totalspent : 0)),
-      ordersCount: c.ordersCount !== undefined ? c.ordersCount : (c.orderscount !== undefined ? c.orderscount : 0),
-      createdAt: c.created_at || new Date().toISOString(),
-      cashbackBalance: Number(c.cashbackBalance !== undefined ? c.cashbackBalance : (c.cashbackbalance !== undefined ? c.cashbackbalance : 0)),
-      busto: c.busto ? Number(c.busto) : undefined,
-      cintura: c.cintura ? Number(c.cintura) : undefined,
-      quadril: c.quadril ? Number(c.quadril) : undefined,
-      coxa: c.coxa ? Number(c.coxa) : undefined,
-      altura: c.altura ? Number(c.altura) : undefined,
-      peso: c.peso ? Number(c.peso) : undefined
+      id: getTolerantValue(c, 'id'),
+      name: getTolerantValue(c, 'name'),
+      email: getTolerantValue(c, 'email', ''),
+      phone: getTolerantValue(c, 'phone', ''),
+      cpf: getTolerantValue(c, 'cpf', ''),
+      birthDate: getTolerantValue(c, 'birthDate', ''),
+      whatsapp: getTolerantValue(c, 'whatsapp', ''),
+      addressStreet: getTolerantValue(c, 'addressStreet', ''),
+      addressNum: getTolerantValue(c, 'addressNum', ''),
+      addressComp: getTolerantValue(c, 'addressComp', ''),
+      addressBairro: getTolerantValue(c, 'addressBairro', ''),
+      addressCidade: getTolerantValue(c, 'addressCidade', ''),
+      addressEstado: getTolerantValue(c, 'addressEstado', ''),
+      addressCep: getTolerantValue(c, 'addressCep', ''),
+      channel: getTolerantValue(c, 'channel', 'Balcão'),
+      npsScore: Number(getTolerantValue(c, 'npsScore', 0)),
+      totalSpent: Number(getTolerantValue(c, 'totalSpent', 0)),
+      ordersCount: Number(getTolerantValue(c, 'ordersCount', 0)),
+      createdAt: getTolerantValue(c, 'createdAt', new Date().toISOString()),
+      cashbackBalance: Number(getTolerantValue(c, 'cashbackBalance', 0)),
+      busto: getTolerantValue(c, 'busto') !== undefined ? Number(getTolerantValue(c, 'busto')) : undefined,
+      cintura: getTolerantValue(c, 'cintura') !== undefined ? Number(getTolerantValue(c, 'cintura')) : undefined,
+      quadril: getTolerantValue(c, 'quadril') !== undefined ? Number(getTolerantValue(c, 'quadril')) : undefined,
+      coxa: getTolerantValue(c, 'coxa') !== undefined ? Number(getTolerantValue(c, 'coxa')) : undefined,
+      altura: getTolerantValue(c, 'altura') !== undefined ? Number(getTolerantValue(c, 'altura')) : undefined,
+      peso: getTolerantValue(c, 'peso') !== undefined ? Number(getTolerantValue(c, 'peso')) : undefined
     }));
   } catch (err) {
     console.error('Failed fetching clients:', err);
@@ -718,17 +757,17 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
       return null;
     }
     return (data || []).map((s: any) => ({
-      id: s.id,
-      clientName: s.clientName || s.clientname || '',
-      clientDoc: s.clientDoc || s.clientdoc || '',
-      channel: s.channel,
-      items: Array.isArray(s.items) ? s.items : [],
-      total: Number(s.total),
-      costTotal: Number(s.costTotal !== undefined ? s.costTotal : (s.costtotal !== undefined ? s.costtotal : 0)),
-      status: s.status,
-      createdAt: s.createdAt || s.createdat || s.created_at || '',
-      payments: Array.isArray(s.payments) ? s.payments : [],
-      salesperson: s.salesperson || ''
+      id: getTolerantValue(s, 'id'),
+      clientName: getTolerantValue(s, 'clientName', ''),
+      clientDoc: getTolerantValue(s, 'clientDoc', ''),
+      channel: getTolerantValue(s, 'channel', 'Balcão'),
+      items: Array.isArray(getTolerantValue(s, 'items')) ? getTolerantValue(s, 'items') : [],
+      total: Number(getTolerantValue(s, 'total', 0)),
+      costTotal: Number(getTolerantValue(s, 'costTotal', 0)),
+      status: getTolerantValue(s, 'status'),
+      createdAt: getTolerantValue(s, 'createdAt', ''),
+      payments: Array.isArray(getTolerantValue(s, 'payments')) ? getTolerantValue(s, 'payments') : [],
+      salesperson: getTolerantValue(s, 'salesperson', '')
     }));
   } catch (err) {
     console.error('Failed fetching sales:', err);
@@ -767,17 +806,17 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
       return null;
     }
     return (data || []).map((t: any) => ({
-      id: t.id,
-      type: t.type,
-      category: t.category,
-      description: t.description,
-      amount: Number(t.amount),
-      date: t.date,
-      status: t.status || 'pago',
-      dueDate: t.due_date || t.dueDate || t.date,
-      installmentsGroup: t.installments_group || t.installmentsGroup || undefined,
-      installmentNumber: t.installment_number !== undefined ? t.installment_number : (t.installmentNumber !== undefined ? t.installmentNumber : undefined),
-      totalInstallments: t.total_installments !== undefined ? t.total_installments : (t.totalInstallments !== undefined ? t.totalInstallments : undefined)
+      id: getTolerantValue(t, 'id'),
+      type: getTolerantValue(t, 'type'),
+      category: getTolerantValue(t, 'category'),
+      description: getTolerantValue(t, 'description'),
+      amount: Number(getTolerantValue(t, 'amount', 0)),
+      date: getTolerantValue(t, 'date'),
+      status: getTolerantValue(t, 'status', 'pago'),
+      dueDate: getTolerantValue(t, 'dueDate') || getTolerantValue(t, 'dueDate', getTolerantValue(t, 'date')),
+      installmentsGroup: getTolerantValue(t, 'installmentsGroup'),
+      installmentNumber: getTolerantValue(t, 'installmentNumber') !== undefined ? Number(getTolerantValue(t, 'installmentNumber')) : undefined,
+      totalInstallments: getTolerantValue(t, 'totalInstallments') !== undefined ? Number(getTolerantValue(t, 'totalInstallments')) : undefined
     }));
   } catch (err) {
     console.error('Failed fetching transactions:', err);
@@ -816,15 +855,15 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
       return null;
     }
     return (data || []).map((o: any) => ({
-      id: o.id,
-      clientName: o.clientName || o.clientname || '',
-      total: Number(o.total),
-      status: o.status,
-      items: Array.isArray(o.items) ? o.items : [],
-      createdAt: o.createdAt || o.createdat || o.created_at || '',
-      phone: o.phone || '',
-      address: o.address || '',
-      paymentMethod: o.paymentMethod || o.paymentmethod || ''
+      id: getTolerantValue(o, 'id'),
+      clientName: getTolerantValue(o, 'clientName', ''),
+      total: Number(getTolerantValue(o, 'total', 0)),
+      status: getTolerantValue(o, 'status'),
+      items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
+      createdAt: getTolerantValue(o, 'createdAt', ''),
+      phone: getTolerantValue(o, 'phone', ''),
+      address: getTolerantValue(o, 'address', ''),
+      paymentMethod: getTolerantValue(o, 'paymentMethod', '')
     }));
   } catch (err) {
     console.error('Failed fetching online orders:', err);
@@ -853,6 +892,7 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
  */
 const CRITICAL_CONFIG_KEYS = [
   'ap_store_name',
+  'ap_store_slogan',
   'ap_store_cnpj',
   'ap_store_address',
   'ap_store_phone',

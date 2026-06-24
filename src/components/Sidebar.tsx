@@ -483,7 +483,7 @@ export default function Sidebar({
                 )}
               </div>
               <div className="min-w-0">
-                <h1 className="text-white font-bold text-sm tracking-wide truncate">AP Moda Fitness</h1>
+                <h1 className="text-white font-bold text-sm tracking-wide truncate">{localStorage.getItem('ap_store_name') || 'AP Moda Fitness'}</h1>
                 <p className="text-slate-400 text-[9px] font-mono tracking-wider font-semibold uppercase truncate">Gestão Completa</p>
               </div>
             </div>
@@ -498,7 +498,7 @@ export default function Sidebar({
 
           {/* Slogan */}
           <div className="text-[8px] text-slate-500 font-extrabold font-mono tracking-wider mb-3 leading-tight select-none uppercase">
-            Onde o seu limite vira ponto de partida
+            {localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida'}
           </div>
 
           {/* Dynamic Theme row matching video: Neon, Verde, Roxo, Claro */}

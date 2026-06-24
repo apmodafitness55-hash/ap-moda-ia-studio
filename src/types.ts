@@ -40,6 +40,7 @@ export interface Product {
   colors?: string[];
   sizes?: string[];
   sizeColors?: Record<string, string[]>;
+  colorStocks?: Record<string, number>;
 }
 
 export interface SaleItem {
