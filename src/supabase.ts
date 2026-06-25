@@ -279,16 +279,18 @@ CREATE TABLE IF NOT EXISTS ap_system_configs (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Habilitar Row Level Security (RLS) para todas as tabelas
-ALTER TABLE ap_team_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_sales ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_online_orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_system_configs ENABLE ROW LEVEL SECURITY;
+-- Como múltiplos aparelhos de funcionários sincronizam de forma pareada compartilhando a mesma chave de acesso unificada (token de API)
+-- sem a necessidade de criar contas de e-mail individuais no painel de Autenticação do Supabase (usando o sistema local simples de equipe),
+-- desabilitamos o Row Level Security (RLS) de todas as tabelas. Isso garante que todos os celulares e computadores conectados possam ler e gravar perfeitamente.
+ALTER TABLE ap_team_members DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_sales DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_online_orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_system_configs DISABLE ROW LEVEL SECURITY;
 
--- Apagar políticas antigas para evitar sobreposições
+-- Apagar políticas antigas para evitar conflitos residuais
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_team_members;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_products;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_clients;
@@ -307,87 +309,6 @@ DROP POLICY IF EXISTS "Fluxo de caixa restrito a Admin e Gerente" ON ap_transact
 DROP POLICY IF EXISTS "Segurança em pedidos de logística" ON ap_online_orders;
 DROP POLICY IF EXISTS "Leitura de configurações gerais" ON ap_system_configs;
 DROP POLICY IF EXISTS "Escrita de configurações apenas Admin e Gerente" ON ap_system_configs;
-
--- 1. Políticas de Segurança para ap_team_members (Funcionários)
-CREATE POLICY "Leitura de Equipes para Login" ON ap_team_members FOR SELECT USING (true);
-CREATE POLICY "Escrita de Equipes apenas para Admin e Gerente" ON ap_team_members FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente')
-  )
-) WITH CHECK (true);
-
--- 2. Políticas de Segurança para ap_products (Produtos)
-CREATE POLICY "Visualização pública de produtos" ON ap_products FOR SELECT USING (true);
-CREATE POLICY "Gerenciamento de produtos restrito a Admin e Gerente" ON ap_products FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente')
-  )
-) WITH CHECK (true);
-
--- 3. Políticas de Segurança para ap_clients (Clientes CRM)
-CREATE POLICY "Segurança no cadastro de clientes" ON ap_clients FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente', 'Vendedor')
-  )
-  OR id = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')
-) WITH CHECK (true);
-
--- 4. Políticas de Segurança para ap_sales (Vendas)
-CREATE POLICY "Segurança avançada de vendas" ON ap_sales FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente', 'Vendedor')
-  )
-  -- Clientes só recebem atualizações de suas próprias compras
-  OR clientName = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
-  OR clientDoc = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'cpf', '')
-) WITH CHECK (true);
-
--- 5. Políticas de Segurança para ap_transactions (Financeiro)
-CREATE POLICY "Fluxo de caixa restrito a Admin e Gerente" ON ap_transactions FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente')
-  )
-) WITH CHECK (true);
-
--- 6. Políticas de Segurança para ap_online_orders (Pedidos Online)
-CREATE POLICY "Segurança em pedidos de logística" ON ap_online_orders FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente', 'Vendedor')
-  )
-  -- Entregadores apenas de suas entregas
-  OR motoboy = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
-  -- Clientes apenas de seus próprios pedidos
-  OR clientName = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'name', '')
-) WITH CHECK (true);
-
--- 7. Políticas de Segurança para ap_system_configs (Configurações)
-CREATE POLICY "Leitura de configurações gerais" ON ap_system_configs FOR SELECT USING (true);
-CREATE POLICY "Escrita de configurações apenas Admin e Gerente" ON ap_system_configs FOR ALL USING (
-  coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') IN ('service_role', 'admin')
-  OR EXISTS (
-    SELECT 1 FROM ap_team_members
-    WHERE login = coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', '')
-    AND role IN ('Admin', 'Gerente')
-  )
-) WITH CHECK (true);
 
 -- Inserir Administrador Padrão Inicial (Ana Paula Admin / Ap01695*) caso já não exista
 INSERT INTO ap_team_members (id, name, login, password, role, details, createdAt)

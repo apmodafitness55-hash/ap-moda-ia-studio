@@ -47,15 +47,24 @@ import { pushSystemConfigToSupabase } from '../supabase';
 
 const COLOR_HEXES: Record<string, string> = {
   'fúcsia': '#d946ef',
+  'fucsia': '#d946ef',
+  'magenta': '#d946ef',
   'marrom': '#78350f',
   'roxo imperial': '#6b21a8',
-  'verde militar': '#166534',
+  'verde militar': '#15803d',
+  'militar': '#15803d',
   'vermelho duo': '#991b1b',
+  'vinho': '#991b1b',
+  'bordô': '#991b1b',
+  'bordo': '#991b1b',
   'preto': '#0f172a',
+  'black': '#0f172a',
   'branco': '#ffffff',
+  'white': '#ffffff',
   'pink glow': '#ec4899',
   'azul celeste': '#0ea5e9',
   'azul marinho': '#1e3a8a',
+  'marinho': '#1e3a8a',
   'azul': '#3b82f6',
   'vermelho': '#ef4444',
   'verde': '#22c55e',
@@ -63,13 +72,44 @@ const COLOR_HEXES: Record<string, string> = {
   'amarelo': '#eab308',
   'amarelo neon': '#ccff00',
   'roxo': '#a855f7',
-  'cinza': '#6b7280'
+  'lilas': '#7c3aed',
+  'lilás': '#7c3aed',
+  'violeta': '#7c3aed',
+  'cinza': '#64748b',
+  'gray': '#64748b',
+  'grey': '#64748b',
+  'chumbo': '#475569',
+  'grafite': '#334155',
+  'bege': '#d97706',
+  'beige': '#d97706',
+  'caqui': '#d97706',
+  'creme': '#d97706',
+  'coral': '#f97316',
+  'salmao': '#f97316',
+  'salmão': '#f97316'
 };
 
 const getColorHex = (name: string) => {
   const norm = name.trim().toLowerCase();
   if (COLOR_HEXES[norm]) return COLOR_HEXES[norm];
   
+  // Try sub-matches for compound color names like "verde militar" or "azul marinho"
+  if (norm.includes('preto') || norm.includes('black')) return '#0f172a';
+  if (norm.includes('branco') || norm.includes('white')) return '#ffffff';
+  if (norm.includes('rosa') || norm.includes('pink')) return '#ec4899';
+  if (norm.includes('fucsia') || norm.includes('fúcsia') || norm.includes('magenta')) return '#d946ef';
+  if (norm.includes('marinho')) return '#1e3a8a';
+  if (norm.includes('azul')) return '#3b82f6';
+  if (norm.includes('militar') || norm.includes('verde')) return '#15803d';
+  if (norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô') || norm.includes('vermelho')) return '#991b1b';
+  if (norm.includes('amarelo')) return '#eab308';
+  if (norm.includes('cinza') || norm.includes('gray') || norm.includes('grey') || norm.includes('chumbo') || norm.includes('grafite')) return '#64748b';
+  if (norm.includes('laranja')) return '#ea580c';
+  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('lilas') || norm.includes('lilás')) return '#7c3aed';
+  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#d97706';
+  if (norm.includes('marrom')) return '#78350f';
+  if (norm.includes('coral') || norm.includes('salmao') || norm.includes('salmão')) return '#f97316';
+
   // Custom hash logic to get a deterministic nice light color
   let hash = 0;
   for (let i = 0; i < norm.length; i++) {

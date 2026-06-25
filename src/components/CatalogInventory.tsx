@@ -31,17 +31,29 @@ interface CatalogInventoryProps {
 
 const colorToHex = (colorName: string): string => {
   const norm = colorName.toLowerCase().trim();
-  if (norm.includes('preto') || norm.includes('black')) return '#1e293b';
-  if (norm.includes('branco') || norm.includes('white')) return '#f8fafc';
+  if (norm === 'preto' || norm === 'black') return '#1e293b';
+  if (norm === 'branco' || norm === 'white') return '#f8fafc';
   if (norm.includes('rosa') || norm.includes('pink') || norm.includes('pink glow')) return '#db2777';
-  if (norm.includes('azul') || norm.includes('blue')) return '#2563eb';
-  if (norm.includes('verde') || norm.includes('green')) return '#16a34a';
-  if (norm.includes('vermelho') || norm.includes('red')) return '#dc2626';
-  if (norm.includes('amarelo') || norm.includes('yellow')) return '#ca8a04';
-  if (norm.includes('cinza') || norm.includes('gray')) return '#4b5563';
+  if (norm.includes('fucsia') || norm.includes('fúcsia')) return '#d946ef';
+  if (norm.includes('magenta')) return '#d946ef';
+  if (norm.includes('azul') || norm.includes('blue') || norm.includes('marinho')) return '#1e40af';
+  if (norm.includes('verde') || norm.includes('green') || norm.includes('militar')) return '#15803d';
+  if (norm.includes('vermelho') || norm.includes('red') || norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô')) return '#991b1b';
+  if (norm.includes('amarelo') || norm.includes('yellow')) return '#eab308';
+  if (norm.includes('cinza') || norm.includes('gray') || norm.includes('grey') || norm.includes('chumbo') || norm.includes('grafite')) return '#64748b';
   if (norm.includes('laranja') || norm.includes('orange')) return '#ea580c';
-  if (norm.includes('roxo') || norm.includes('purple')) return '#7c3aed';
-  return '#cbd5e1'; // fallback gray
+  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('violeta') || norm.includes('lilas') || norm.includes('lilás')) return '#7c3aed';
+  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#d97706';
+  if (norm.includes('marrom') || norm.includes('brown')) return '#78350f';
+  if (norm.includes('coral') || norm.includes('salmao') || norm.includes('salmão')) return '#f97316';
+  
+  // Custom hash logic to get a deterministic nice light color instead of a fallback grey
+  let hash = 0;
+  for (let i = 0; i < norm.length; i++) {
+    hash = norm.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 65%, 55%)`;
 };
 
 export default function CatalogInventory({ 
