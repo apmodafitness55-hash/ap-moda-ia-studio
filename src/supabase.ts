@@ -12,35 +12,22 @@ export interface TeamMember {
   avatar?: string;
 }
 
-// Retrieves configuration dynamically from Vite environment variables (with fallback to localStorage, and default shared credentials)
+// Retrieves configuration dynamically from Vite environment variables (no default mock fallbacks)
 export function getSupabaseConfig() {
   const metaEnv = (import.meta as any).env || {};
   let url = (metaEnv.VITE_SUPABASE_URL || '').trim();
   let key = (metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_KEY || '').trim();
 
-  // If Vite env-vars are placeholders, generic labels, or empty, fallback to localStorage
-  if (!url || url.includes('suachave') || url.includes('sua-url')) {
+  // Fallback ONLY to user-defined localStorage values if Vite environment variables are not active/present
+  if (!url) {
     url = (localStorage.getItem('ap_supabase_url') || '').trim();
   }
-  if (!key || key.includes('suachave') || key.includes('suashare')) {
+  if (!key) {
     key = (localStorage.getItem('ap_supabase_key') || '').trim();
   }
   
-  const defaultUrl = 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
-  const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
-  
-  if (!url || url.includes('suachave') || url.includes('sua-url') || url === '') {
-    url = defaultUrl;
-    if (!metaEnv.VITE_SUPABASE_URL) {
-      localStorage.setItem('ap_supabase_url', defaultUrl);
-    }
-  }
-  
-  if (!key || key.includes('suachave') || key.includes('suashare') || key === '') {
-    key = defaultKey;
-    if (!metaEnv.VITE_SUPABASE_ANON_KEY && !metaEnv.VITE_SUPABASE_KEY) {
-      localStorage.setItem('ap_supabase_key', defaultKey);
-    }
+  if (!url || !key) {
+    return null;
   }
   
   return { url, key };
@@ -86,12 +73,14 @@ export async function saveSupabaseConfigToServer(url: string, key: string) {
 // Instantiates a fresh Supabase Client
 export function getSupabaseClient() {
   const conf = getSupabaseConfig();
-  if (!conf) return null;
+  if (!conf) {
+    throw new Error('Chaves de API do Supabase não configuradas nas variáveis de ambiente ativas (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).');
+  }
   try {
     return createClient(conf.url, conf.key);
   } catch (err) {
     console.error('Error instantiating Supabase client:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -143,6 +132,9 @@ CREATE TABLE IF NOT EXISTS ap_products (
   size_colors JSONB,
   color_stocks JSONB,
   size_color_stocks JSONB,
+  "sizeColors" JSONB,
+  "colorStocks" JSONB,
+  "sizeColorStocks" JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -150,6 +142,9 @@ CREATE TABLE IF NOT EXISTS ap_products (
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_colors JSONB;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS color_stocks JSONB;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS size_color_stocks JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "sizeColors" JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "colorStocks" JSONB;
+ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "sizeColorStocks" JSONB;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "minStock" INTEGER;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "salesCount" INTEGER DEFAULT 0;
 ALTER TABLE ap_products ADD COLUMN IF NOT EXISTS "videoUrl" TEXT;
@@ -391,107 +386,21 @@ export function getTolerantValue(item: any, camelKey: string, fallback: any = un
 }
 
 /**
- * Helper resiliente e auto-regenerativo genérico para inserções (upsert) no Supabase.
- * Detecta automaticamente erros de coluna inexistente (PGRST204 ou código 42703), tenta mapear dinamicamente para formatos alternativos de escrita (minúsculas, snake_case, camelCase) antes de descartá-los para evitar perda de dados.
+ * Helper resiliente para inserções (upsert) no Supabase.
+ * Se houver erro, dispara o tratamento com handleInsertError e handleSchemaError e retorna false.
  */
-export async function resilientUpsert(tableName: string, originalPayloads: any[], maxAttempts = 15): Promise<boolean> {
+export async function resilientUpsert(tableName: string, originalPayloads: any[]): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client || originalPayloads.length === 0) return false;
 
-  let payloads = JSON.parse(JSON.stringify(originalPayloads)); // Clona profundamente para evitar efeitos colaterais
-  let attempts = 0;
-  const failedColumns = new Set<string>();
-
-  while (attempts < maxAttempts) {
-    const { error } = await client.from(tableName).upsert(payloads, { onConflict: 'id' });
-    if (!error) {
-      return true;
-    }
-
-    // Identifica erro de coluna inexistente (mismatch, does not exist, not found)
-    const isMissingColumnError = 
-      error.code === '42703' || 
-      (error.message && (
-        error.message.includes('does not exist') || 
-        error.message.includes('not found') || 
-        error.message.includes('column') ||
-        error.message.includes('mismatch')
-      ));
-
-    if (isMissingColumnError && error.message) {
-      const errMsg = error.message;
-      let offendingCol: string | null = null;
-      
-      const m1 = errMsg.match(/column\s+"?([a-zA-Z0-9_]+)"?/i);
-      if (m1) {
-        offendingCol = m1[1];
-      } else {
-        const m2 = errMsg.match(/column\s+\w+\.([a-zA-Z0-9_]+)/i);
-        if (m2) offendingCol = m2[1];
-        else {
-          const m3 = errMsg.match(/column\s+([a-zA-Z0-9_]+)\s+does\s+not\s+exist/i);
-          if (m3) offendingCol = m3[1];
-        }
-      }
-
-      if (offendingCol) {
-        failedColumns.add(offendingCol);
-        
-        const lowerCol = offendingCol.toLowerCase();
-        const snakeCol = offendingCol.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/_+/g, "_");
-        const camelCol = offendingCol.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-
-        console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Coluna "${offendingCol}" não existe no banco de dados. Tentando autocompensaçao por mapeamento flexível...`);
-        
-        let mappedToAlternative = false;
-
-        payloads = payloads.map((p: any) => {
-          const newP = { ...p };
-          if (newP[offendingCol!] !== undefined) {
-            const val = newP[offendingCol!];
-            
-            // Procura alternativa que ainda não falhou
-            let alternativeKey: string | null = null;
-            if (lowerCol !== offendingCol && !failedColumns.has(lowerCol)) {
-              alternativeKey = lowerCol;
-            } else if (snakeCol !== offendingCol && !failedColumns.has(snakeCol)) {
-              alternativeKey = snakeCol;
-            } else if (camelCol !== offendingCol && !failedColumns.has(camelCol)) {
-              alternativeKey = camelCol;
-            }
-
-            if (alternativeKey) {
-              console.log(`[Supabase Self-Healing] Tabela "${tableName}": Remapeando valor de "${offendingCol}" para a coluna alternativa "${alternativeKey}"...`);
-              newP[alternativeKey] = val;
-              mappedToAlternative = true;
-            }
-            delete newP[offendingCol!];
-          }
-          return newP;
-        });
-
-        if (!mappedToAlternative) {
-          console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Sem alternativas válidas restantes para a coluna "${offendingCol}". Removendo do payload para garantir escrita resiliente.`);
-          payloads = payloads.map((p: any) => {
-            const newP = { ...p };
-            delete newP[offendingCol!];
-            delete newP[lowerCol];
-            delete newP[snakeCol];
-            delete newP[camelCol];
-            return newP;
-          });
-        }
-
-        attempts++;
-        continue;
-      }
-    }
-
-    // Caso o erro seja persistente ou outro tipo de falha
-    handleInsertError(error, tableName);
-    handleSchemaError(error, tableName);
-    return false;
+  const payloads = JSON.parse(JSON.stringify(originalPayloads)); // Clona profundamente para evitar efeitos colaterais
+  const { error } = await client.from(tableName).upsert(payloads, { onConflict: 'id' });
+  if (!error) {
+    return true;
   }
+
+  handleInsertError(error, tableName);
+  handleSchemaError(error, tableName);
   return false;
 }
 
@@ -508,7 +417,7 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
       .order('id', { ascending: true });
     if (error) {
       handleSchemaError(error, 'ap_team_members');
-      return null;
+      throw error;
     }
     return (data || []).map((item: any) => ({
       id: getTolerantValue(item, 'id'),
@@ -523,7 +432,7 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
     }));
   } catch (err) {
     console.error('Failed to download members:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -591,7 +500,7 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
     const { data, error } = await client.from('ap_products').select('*');
     if (error) {
       handleSchemaError(error, 'ap_products');
-      return null;
+      throw error;
     }
     return (data || []).map((p: any) => ({
       id: getTolerantValue(p, 'id'),
@@ -615,30 +524,30 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
     }));
   } catch (err) {
     console.error('Failed fetching products:', err);
-    return null;
+    throw err;
   }
 }
 
 export async function syncBulkProductsToSupabase(products: any[]): Promise<boolean> {
   const payloads = products.map(p => ({
-    id: getTolerantValue(p, 'id'),
-    name: getTolerantValue(p, 'name'),
-    sku: getTolerantValue(p, 'sku'),
-    category: getTolerantValue(p, 'category'),
-    price: Number(getTolerantValue(p, 'price', 0)),
-    cost: Number(getTolerantValue(p, 'cost', 0)),
-    stock: Number(getTolerantValue(p, 'stock', 0)),
-    minStock: Number(getTolerantValue(p, 'minStock', 0)),
-    image: getTolerantValue(p, 'image'),
-    images: Array.isArray(getTolerantValue(p, 'images')) ? getTolerantValue(p, 'images') : [],
-    salesCount: Number(getTolerantValue(p, 'salesCount', 0)),
-    description: getTolerantValue(p, 'description', ''),
-    videoUrl: getTolerantValue(p, 'videoUrl', ''),
-    colors: Array.isArray(getTolerantValue(p, 'colors')) ? getTolerantValue(p, 'colors') : [],
-    sizes: Array.isArray(getTolerantValue(p, 'sizes')) ? getTolerantValue(p, 'sizes') : [],
-    size_colors: getTolerantValue(p, 'sizeColors', {}),
-    color_stocks: getTolerantValue(p, 'colorStocks', {}),
-    size_color_stocks: getTolerantValue(p, 'sizeColorStocks', {})
+    id: p.id,
+    name: p.name || '',
+    sku: p.sku || '',
+    category: p.category || '',
+    price: Number(p.price || 0),
+    cost: Number(p.cost || 0),
+    stock: Number(p.stock || 0),
+    minStock: Number(p.minStock || 0),
+    image: p.image || '',
+    images: Array.isArray(p.images) ? p.images : [],
+    salesCount: Number(p.salesCount || 0),
+    description: p.description || '',
+    videoUrl: p.videoUrl || '',
+    colors: Array.isArray(p.colors) ? p.colors : [],
+    sizes: Array.isArray(p.sizes) ? p.sizes : [],
+    sizeColors: p.sizeColors || p.size_colors || {},
+    colorStocks: p.colorStocks || p.color_stocks || {},
+    sizeColorStocks: p.sizeColorStocks || p.size_color_stocks || {}
   }));
   return resilientUpsert('ap_products', payloads);
 }
@@ -654,7 +563,7 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
     const { data, error } = await client.from('ap_clients').select('*');
     if (error) {
       handleSchemaError(error, 'ap_clients');
-      return null;
+      throw error;
     }
     return (data || []).map((c: any) => ({
       id: getTolerantValue(c, 'id'),
@@ -686,7 +595,7 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
     }));
   } catch (err) {
     console.error('Failed fetching clients:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -732,7 +641,7 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
     const { data, error } = await client.from('ap_sales').select('*');
     if (error) {
       handleSchemaError(error, 'ap_sales');
-      return null;
+      throw error;
     }
     return (data || []).map((s: any) => ({
       id: getTolerantValue(s, 'id'),
@@ -749,23 +658,23 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
     }));
   } catch (err) {
     console.error('Failed fetching sales:', err);
-    return null;
+    throw err;
   }
 }
 
 export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean> {
   const payloads = salesList.map(s => ({
-    id: getTolerantValue(s, 'id'),
-    clientName: getTolerantValue(s, 'clientName'),
-    clientDoc: getTolerantValue(s, 'clientDoc', ''),
-    channel: getTolerantValue(s, 'channel'),
-    items: Array.isArray(getTolerantValue(s, 'items')) ? getTolerantValue(s, 'items') : [],
-    total: Number(getTolerantValue(s, 'total', 0)),
-    costTotal: Number(getTolerantValue(s, 'costTotal', 0)),
-    status: getTolerantValue(s, 'status'),
-    createdAt: getTolerantValue(s, 'createdAt'),
-    payments: Array.isArray(getTolerantValue(s, 'payments')) ? getTolerantValue(s, 'payments') : [],
-    salesperson: getTolerantValue(s, 'salesperson', '')
+    id: s.id,
+    clientName: s.clientName !== undefined ? s.clientName : (s.client_name || ''),
+    clientDoc: s.clientDoc !== undefined ? s.clientDoc : (s.client_doc || ''),
+    channel: s.channel || 'Balcão',
+    items: Array.isArray(s.items) ? s.items : [],
+    total: Number(s.total || 0),
+    costTotal: s.costTotal !== undefined ? Number(s.costTotal) : (s.cost_total !== undefined && s.cost_total !== null ? Number(s.cost_total) : 0),
+    status: s.status || '',
+    createdAt: s.createdAt !== undefined ? s.createdAt : (s.created_at || ''),
+    payments: Array.isArray(s.payments) ? s.payments : [],
+    salesperson: s.salesperson || ''
   }));
   return resilientUpsert('ap_sales', payloads);
 }
@@ -781,7 +690,7 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
     const { data, error } = await client.from('ap_transactions').select('*');
     if (error) {
       handleSchemaError(error, 'ap_transactions');
-      return null;
+      throw error;
     }
     return (data || []).map((t: any) => ({
       id: getTolerantValue(t, 'id'),
@@ -798,23 +707,23 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
     }));
   } catch (err) {
     console.error('Failed fetching transactions:', err);
-    return null;
+    throw err;
   }
 }
 
 export async function syncBulkTransactionsToSupabase(transactionsList: any[]): Promise<boolean> {
   const payloads = transactionsList.map(t => ({
-    id: getTolerantValue(t, 'id'),
-    type: getTolerantValue(t, 'type'),
-    category: getTolerantValue(t, 'category'),
-    description: getTolerantValue(t, 'description'),
-    amount: Number(getTolerantValue(t, 'amount', 0)),
-    date: getTolerantValue(t, 'date'),
-    status: getTolerantValue(t, 'status', 'pago'),
-    due_date: getTolerantValue(t, 'dueDate') || getTolerantValue(t, 'date'),
-    installments_group: getTolerantValue(t, 'installmentsGroup', null),
-    installment_number: getTolerantValue(t, 'installmentNumber', null),
-    total_installments: getTolerantValue(t, 'totalInstallments', null)
+    id: t.id,
+    type: t.type || '',
+    category: t.category || '',
+    description: t.description || '',
+    amount: Number(t.amount || 0),
+    date: t.date || '',
+    status: t.status || 'pago',
+    due_date: t.dueDate || t.due_date || t.date || '',
+    installments_group: t.installmentsGroup !== undefined ? t.installmentsGroup : (t.installments_group || null),
+    installment_number: t.installmentNumber !== undefined && t.installmentNumber !== null ? Number(t.installmentNumber) : (t.installment_number !== undefined && t.installment_number !== null ? Number(t.installment_number) : null),
+    total_installments: t.totalInstallments !== undefined && t.totalInstallments !== null ? Number(t.totalInstallments) : (t.total_installments !== undefined && t.total_installments !== null ? Number(t.total_installments) : null)
   }));
   return resilientUpsert('ap_transactions', payloads);
 }
@@ -830,7 +739,7 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
     const { data, error } = await client.from('ap_online_orders').select('*');
     if (error) {
       handleSchemaError(error, 'ap_online_orders');
-      return null;
+      throw error;
     }
     return (data || []).map((o: any) => ({
       id: getTolerantValue(o, 'id'),
@@ -845,7 +754,7 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
     }));
   } catch (err) {
     console.error('Failed fetching online orders:', err);
-    return null;
+    throw err;
   }
 }
 
