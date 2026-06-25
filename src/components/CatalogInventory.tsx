@@ -288,26 +288,24 @@ export default function CatalogInventory({
       return;
     }
 
+    const generalColors = newColors.split(',').map(s => s.trim()).filter(Boolean);
     const sizesArray = newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
     // Build sizeColors list and aggregate colors
     const finalSizeColors: Record<string, string[]> = {};
-    const sizeColorsList: string[] = [];
     Object.entries(newSizeColors).forEach(([sz, val]) => {
       if (sizesArray.includes(sz)) {
-        const arr = (val as string).split(',').map(s => s.trim()).filter(Boolean);
+        const arr = (val as string)
+          .split(',')
+          .map(s => s.trim())
+          .filter(c => generalColors.includes(c));
         if (arr.length > 0) {
           finalSizeColors[sz] = arr;
-          arr.forEach(c => {
-            if (!sizeColorsList.includes(c)) sizeColorsList.push(c);
-          });
         }
       }
     });
 
-    const colorsArray = sizeColorsList.length > 0 
-      ? sizeColorsList 
-      : newColors.split(',').map(s => s.trim()).filter(Boolean);
+    const colorsArray = generalColors;
 
     const finalColorStocks: Record<string, number> = {};
     const finalSizeColorStocks: Record<string, Record<string, number>> = {};
@@ -423,26 +421,24 @@ export default function CatalogInventory({
       return;
     }
 
+    const generalColors = editColors.split(',').map(s => s.trim()).filter(Boolean);
     const sizesArray = editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
     // Build sizeColors list and aggregate colors
     const finalSizeColors: Record<string, string[]> = {};
-    const sizeColorsList: string[] = [];
     Object.entries(editSizeColors).forEach(([sz, val]) => {
       if (sizesArray.includes(sz)) {
-        const arr = (val as string).split(',').map(s => s.trim()).filter(Boolean);
+        const arr = (val as string)
+          .split(',')
+          .map(s => s.trim())
+          .filter(c => generalColors.includes(c));
         if (arr.length > 0) {
           finalSizeColors[sz] = arr;
-          arr.forEach(c => {
-            if (!sizeColorsList.includes(c)) sizeColorsList.push(c);
-          });
         }
       }
     });
 
-    const colorsArray = sizeColorsList.length > 0 
-      ? sizeColorsList 
-      : editColors.split(',').map(s => s.trim()).filter(Boolean);
+    const colorsArray = generalColors;
 
     const finalColorStocks: Record<string, number> = {};
     const finalSizeColorStocks: Record<string, Record<string, number>> = {};
@@ -1319,9 +1315,10 @@ export default function CatalogInventory({
                   
                   <div className="space-y-3 pt-1">
                     {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const generalColors = newColors.split(',').map(c => c.trim()).filter(Boolean);
                       const sizeColorsArr = newSizeColors[sz]
-                        ? newSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
-                        : newColors.split(',').map(c => c.trim()).filter(Boolean);
+                        ? newSizeColors[sz].split(',').map(c => c.trim()).filter(c => generalColors.includes(c))
+                        : generalColors;
 
                       if (sizeColorsArr.length === 0) return null;
 
@@ -1734,9 +1731,10 @@ export default function CatalogInventory({
                   
                   <div className="space-y-3 pt-1">
                     {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const generalColors = editColors.split(',').map(c => c.trim()).filter(Boolean);
                       const sizeColorsArr = editSizeColors[sz]
-                        ? editSizeColors[sz].split(',').map(c => c.trim()).filter(Boolean)
-                        : editColors.split(',').map(c => c.trim()).filter(Boolean);
+                        ? editSizeColors[sz].split(',').map(c => c.trim()).filter(c => generalColors.includes(c))
+                        : generalColors;
 
                       if (sizeColorsArr.length === 0) return null;
 

@@ -529,6 +529,25 @@ export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean>
   }
 }
 
+export async function deleteProductFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { error } = await client
+      .from('ap_products')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      handleSchemaError(error, 'ap_products');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed deleting product:', err);
+    return false;
+  }
+}
+
 
 /**
  * ------------------- 2. PRODUCTS SYNC -------------------

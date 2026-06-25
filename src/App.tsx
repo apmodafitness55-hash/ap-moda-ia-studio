@@ -56,6 +56,7 @@ import {
   pingSupabaseOnLogin,
   fetchProductsFromSupabase,
   syncBulkProductsToSupabase,
+  deleteProductFromSupabase,
   fetchClientsFromSupabase,
   syncBulkClientsToSupabase,
   fetchSalesFromSupabase,
@@ -279,6 +280,7 @@ export default function App() {
 
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const isSyncingRef = useRef(false);
+  const isUpdatingFromSyncRef = useRef(false);
 
   const [isCloudSyncingOnLogin, setIsCloudSyncingOnLogin] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{
@@ -348,7 +350,7 @@ export default function App() {
   // Sync to localStorage & automatically track local mutations as dirty
   useEffect(() => {
     localStorage.setItem('ap_moda_products', JSON.stringify(products));
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevProductsRef.current || [];
       const prevMap = new Map(prevList.map(p => [p.id, p]));
       const dirtyIds = getDirtyIds('ap_dirty_products');
@@ -373,7 +375,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('ap_moda_clients', JSON.stringify(clients));
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevClientsRef.current || [];
       const prevMap = new Map(prevList.map(c => [c.id, c]));
       const dirtyIds = getDirtyIds('ap_dirty_clients');
@@ -398,7 +400,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('ap_moda_sales', JSON.stringify(sales));
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevSalesRef.current || [];
       const prevMap = new Map(prevList.map(s => [s.id, s]));
       const dirtyIds = getDirtyIds('ap_dirty_sales');
@@ -423,7 +425,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('ap_moda_transactions', JSON.stringify(transactions));
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevTransactionsRef.current || [];
       const prevMap = new Map(prevList.map(t => [t.id, t]));
       const dirtyIds = getDirtyIds('ap_dirty_transactions');
@@ -448,7 +450,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('ap_moda_online_orders', JSON.stringify(onlineOrders));
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevOnlineOrdersRef.current || [];
       const prevMap = new Map(prevList.map(o => [o.id, o]));
       const dirtyIds = getDirtyIds('ap_dirty_online_orders');
@@ -472,7 +474,7 @@ export default function App() {
   }, [onlineOrders, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
-    if (!isSyncingRef.current) {
+    if (!isUpdatingFromSyncRef.current) {
       const prevList = prevTeamMembersRef.current || [];
       const prevMap = new Map(prevList.map(m => [m.id, m]));
       const dirtyIds = getDirtyIds('ap_dirty_team_members');
@@ -507,10 +509,70 @@ export default function App() {
     });
 
     isSyncingRef.current = true; // Lock standard background delta computations while writing initial database copies
+    isUpdatingFromSyncRef.current = true;
 
     try {
       // 1. Acorda / testa o banco de dados
       await pingSupabaseOnLogin(user.name, user.role);
+
+      // BEFORE DOWNLOADING: Sync any local changes (dirty items) that are pending to Supabase!
+      // This protects local data from being overwritten on page reload/re-login.
+      const config = getSupabaseConfig();
+      if (config && !systemOffline) {
+        // A. Team members
+        const dirtyMembers = getDirtyIds('ap_dirty_team_members');
+        if (dirtyMembers.length > 0) {
+          const toUpload = lastTeamMembersRef.current.filter((m: any) => dirtyMembers.includes(m.id));
+          if (toUpload.length > 0) {
+            await syncBulkTeamMembersToSupabase(toUpload);
+          }
+        }
+
+        // B. Products
+        const dirtyProducts = getDirtyIds('ap_dirty_products');
+        if (dirtyProducts.length > 0) {
+          const toUpload = lastProductsRef.current.filter((p: any) => dirtyProducts.includes(p.id));
+          if (toUpload.length > 0) {
+            await syncBulkProductsToSupabase(toUpload);
+          }
+        }
+
+        // C. Clients
+        const dirtyClients = getDirtyIds('ap_dirty_clients');
+        if (dirtyClients.length > 0) {
+          const toUpload = lastClientsRef.current.filter((c: any) => dirtyClients.includes(c.id));
+          if (toUpload.length > 0) {
+            await syncBulkClientsToSupabase(toUpload);
+          }
+        }
+
+        // D. Sales
+        const dirtySales = getDirtyIds('ap_dirty_sales');
+        if (dirtySales.length > 0) {
+          const toUpload = lastSalesRef.current.filter((s: any) => dirtySales.includes(s.id));
+          if (toUpload.length > 0) {
+            await syncBulkSalesToSupabase(toUpload);
+          }
+        }
+
+        // E. Transactions
+        const dirtyTransactions = getDirtyIds('ap_dirty_transactions');
+        if (dirtyTransactions.length > 0) {
+          const toUpload = lastTransactionsRef.current.filter((t: any) => dirtyTransactions.includes(t.id));
+          if (toUpload.length > 0) {
+            await syncBulkTransactionsToSupabase(toUpload);
+          }
+        }
+
+        // F. Online Orders
+        const dirtyOrders = getDirtyIds('ap_dirty_online_orders');
+        if (dirtyOrders.length > 0) {
+          const toUpload = lastOnlineOrdersRef.current.filter((o: any) => dirtyOrders.includes(o.id));
+          if (toUpload.length > 0) {
+            await syncBulkOnlineOrdersToSupabase(toUpload);
+          }
+        }
+      }
 
       setSyncProgress(prev => ({
         ...prev,
@@ -648,6 +710,7 @@ export default function App() {
       }));
     } finally {
       isSyncingRef.current = false;
+      isUpdatingFromSyncRef.current = false;
     }
   }, []);
 
@@ -763,6 +826,103 @@ export default function App() {
     };
   }, []);
 
+  // Intercepting and immediate-upload list wrappers for children components
+  const handleUpdateClientsList = useCallback(async (updatedList: Client[] | ((prev: Client[]) => Client[])) => {
+    setClients(prev => {
+      const newList = typeof updatedList === 'function' ? updatedList(prev) : updatedList;
+      const prevMap = new Map(prev.map(c => [c.id, c]));
+      const changedClients = newList.filter(c => {
+        const prevC = prevMap.get(c.id);
+        return !prevC || JSON.stringify(prevC) !== JSON.stringify(c);
+      });
+
+      if (changedClients.length > 0) {
+        const config = getSupabaseConfig();
+        if (config && !systemOffline) {
+          syncBulkClientsToSupabase(changedClients).then(success => {
+            if (success) {
+              const remaining = getDirtyIds('ap_dirty_clients').filter(id => !changedClients.some(cc => cc.id === id));
+              saveDirtyIds('ap_dirty_clients', remaining);
+            }
+          }).catch(e => console.error('Immediate clients update sync failed:', e));
+        }
+      }
+      return newList;
+    });
+  }, [systemOffline, getDirtyIds, saveDirtyIds]);
+
+  const handleUpdateProductsList = useCallback(async (updatedList: Product[] | ((prev: Product[]) => Product[])) => {
+    setProducts(prev => {
+      const newList = typeof updatedList === 'function' ? updatedList(prev) : updatedList;
+      const prevMap = new Map(prev.map(p => [p.id, p]));
+      const changedProducts = newList.filter(p => {
+        const prevP = prevMap.get(p.id);
+        return !prevP || JSON.stringify(prevP) !== JSON.stringify(p);
+      });
+
+      if (changedProducts.length > 0) {
+        const config = getSupabaseConfig();
+        if (config && !systemOffline) {
+          syncBulkProductsToSupabase(changedProducts).then(success => {
+            if (success) {
+              const remaining = getDirtyIds('ap_dirty_products').filter(id => !changedProducts.some(cp => cp.id === id));
+              saveDirtyIds('ap_dirty_products', remaining);
+            }
+          }).catch(e => console.error('Immediate products update sync failed:', e));
+        }
+      }
+      return newList;
+    });
+  }, [systemOffline, getDirtyIds, saveDirtyIds]);
+
+  const handleUpdateSalesList = useCallback(async (updatedList: Sale[] | ((prev: Sale[]) => Sale[])) => {
+    setSales(prev => {
+      const newList = typeof updatedList === 'function' ? updatedList(prev) : updatedList;
+      const prevMap = new Map(prev.map(s => [s.id, s]));
+      const changedSales = newList.filter(s => {
+        const prevS = prevMap.get(s.id);
+        return !prevS || JSON.stringify(prevS) !== JSON.stringify(s);
+      });
+
+      if (changedSales.length > 0) {
+        const config = getSupabaseConfig();
+        if (config && !systemOffline) {
+          syncBulkSalesToSupabase(changedSales).then(success => {
+            if (success) {
+              const remaining = getDirtyIds('ap_dirty_sales').filter(id => !changedSales.some(cs => cs.id === id));
+              saveDirtyIds('ap_dirty_sales', remaining);
+            }
+          }).catch(e => console.error('Immediate sales update sync failed:', e));
+        }
+      }
+      return newList;
+    });
+  }, [systemOffline, getDirtyIds, saveDirtyIds]);
+
+  const handleUpdateTransactionsList = useCallback(async (updatedList: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
+    setTransactions(prev => {
+      const newList = typeof updatedList === 'function' ? updatedList(prev) : updatedList;
+      const prevMap = new Map(prev.map(t => [t.id, t]));
+      const changedTransactions = newList.filter(t => {
+        const prevT = prevMap.get(t.id);
+        return !prevT || JSON.stringify(prevT) !== JSON.stringify(t);
+      });
+
+      if (changedTransactions.length > 0) {
+        const config = getSupabaseConfig();
+        if (config && !systemOffline) {
+          syncBulkTransactionsToSupabase(changedTransactions).then(success => {
+            if (success) {
+              const remaining = getDirtyIds('ap_dirty_transactions').filter(id => !changedTransactions.some(ct => ct.id === id));
+              saveDirtyIds('ap_dirty_transactions', remaining);
+            }
+          }).catch(e => console.error('Immediate transactions update sync failed:', e));
+        }
+      }
+      return newList;
+    });
+  }, [systemOffline, getDirtyIds, saveDirtyIds]);
+
   // Sincronização automática bilateral de TODO o ecossistema AP Moda Fitness com o Supabase
   const performSync = useCallback(async (isManual = false) => {
     if (isSyncingRef.current && !isManual) {
@@ -821,6 +981,7 @@ export default function App() {
 
     // Set syncing flag so local change listener useEffects ignore these updates
     isSyncingRef.current = true;
+    isUpdatingFromSyncRef.current = true;
 
     try {
       console.log('[Supabase Sync] Sincronizando dados bilateralmente com a nuvem Supabase...');
@@ -1130,6 +1291,7 @@ export default function App() {
       // Allow React to bundle and update state before disabling syncing lock
       setTimeout(() => {
         isSyncingRef.current = false;
+        isUpdatingFromSyncRef.current = false;
       }, 300);
     }
   }, [systemOffline, getDirtyIds, saveDirtyIds]);
@@ -1676,8 +1838,9 @@ export default function App() {
     setSales(prev => [newSale, ...prev]);
 
     // Update product stock counts
+    let updatedProducts: Product[] = [];
     setProducts(prevProducts => {
-      return prevProducts.map(prod => {
+      const newList = prevProducts.map(prod => {
         const itemSold = newSale.items.find(it => it.productId === prod.id);
         if (itemSold) {
           const sz = (itemSold as any).selectedSize;
@@ -1694,16 +1857,19 @@ export default function App() {
             updatedColorStocks[col] = Math.max(0, updatedColorStocks[col] - itemSold.quantity);
           }
 
-          return {
+          const updatedProd = {
             ...prod,
             stock: Math.max(0, prod.stock - itemSold.quantity),
             salesCount: prod.salesCount + itemSold.quantity,
             colorStocks: updatedColorStocks,
             sizeColorStocks: updatedSizeColorStocks
           };
+          updatedProducts.push(updatedProd);
+          return updatedProd;
         }
         return prod;
       });
+      return newList;
     });
 
     // Feed to cashflows / transactions
@@ -1722,18 +1888,56 @@ export default function App() {
     setTransactions(prev => [newTx, ...prev]);
 
     // Update Client spent bounds if they already exist
+    let updatedClients: Client[] = [];
     setClients(prevClients => {
-      return prevClients.map(cli => {
+      const newList = prevClients.map(cli => {
         if (cli.name.toLowerCase() === newSale.clientName.toLowerCase()) {
-          return {
+          const updatedCli = {
             ...cli,
             totalSpent: cli.totalSpent + newSale.total,
             ordersCount: cli.ordersCount + 1
           };
+          updatedClients.push(updatedCli);
+          return updatedCli;
         }
         return cli;
       });
+      return newList;
     });
+
+    // Immediate Supabase sync for all affected entities!
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      syncBulkSalesToSupabase([newSale]).then(success => {
+        if (success) {
+          saveDirtyIds('ap_dirty_sales', getDirtyIds('ap_dirty_sales').filter(id => id !== newSale.id));
+        }
+      }).catch(e => console.error(e));
+
+      syncBulkTransactionsToSupabase([newTx]).then(success => {
+        if (success) {
+          saveDirtyIds('ap_dirty_transactions', getDirtyIds('ap_dirty_transactions').filter(id => id !== newTx.id));
+        }
+      }).catch(e => console.error(e));
+
+      if (updatedProducts.length > 0) {
+        syncBulkProductsToSupabase(updatedProducts).then(success => {
+          if (success) {
+            const affectedIds = updatedProducts.map(p => p.id);
+            saveDirtyIds('ap_dirty_products', getDirtyIds('ap_dirty_products').filter(id => !affectedIds.includes(id)));
+          }
+        }).catch(e => console.error(e));
+      }
+
+      if (updatedClients.length > 0) {
+        syncBulkClientsToSupabase(updatedClients).then(success => {
+          if (success) {
+            const affectedIds = updatedClients.map(c => c.id);
+            saveDirtyIds('ap_dirty_clients', getDirtyIds('ap_dirty_clients').filter(id => !affectedIds.includes(id)));
+          }
+        }).catch(e => console.error(e));
+      }
+    }
 
     // Check affected products for stock alerts and trigger WhatsApp alerts
     const alertsToTrigger: any[] = [];
@@ -1840,24 +2044,74 @@ export default function App() {
     }));
   };
 
-  const handleAddClient = (newClient: Client) => {
+  const handleAddClient = async (newClient: Client) => {
     setClients(prev => [newClient, ...prev]);
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await syncBulkClientsToSupabase([newClient]);
+        const remaining = getDirtyIds('ap_dirty_clients').filter(id => id !== newClient.id);
+        saveDirtyIds('ap_dirty_clients', remaining);
+      } catch (e) {
+        console.error('Immediate client upload failed:', e);
+      }
+    }
   };
 
-  const handleAddProduct = (newProd: Product) => {
+  const handleAddProduct = async (newProd: Product) => {
     setProducts(prev => [newProd, ...prev]);
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await syncBulkProductsToSupabase([newProd]);
+        const remaining = getDirtyIds('ap_dirty_products').filter(id => id !== newProd.id);
+        saveDirtyIds('ap_dirty_products', remaining);
+      } catch (e) {
+        console.error('Immediate product upload failed:', e);
+      }
+    }
   };
 
-  const handleUpdateProduct = (updatedProd: Product) => {
+  const handleUpdateProduct = async (updatedProd: Product) => {
     setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await syncBulkProductsToSupabase([updatedProd]);
+        const remaining = getDirtyIds('ap_dirty_products').filter(id => id !== updatedProd.id);
+        saveDirtyIds('ap_dirty_products', remaining);
+      } catch (e) {
+        console.error('Immediate product update failed:', e);
+      }
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await deleteProductFromSupabase(productId);
+        const remaining = getDirtyIds('ap_dirty_products').filter(id => id !== productId);
+        saveDirtyIds('ap_dirty_products', remaining);
+      } catch (e) {
+        console.error('Immediate product delete failed:', e);
+      }
+    }
   };
 
-  const handleAddTransaction = (newTx: Transaction) => {
+  const handleAddTransaction = async (newTx: Transaction) => {
     setTransactions(prev => [newTx, ...prev]);
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await syncBulkTransactionsToSupabase([newTx]);
+        const remaining = getDirtyIds('ap_dirty_transactions').filter(id => id !== newTx.id);
+        saveDirtyIds('ap_dirty_transactions', remaining);
+      } catch (e) {
+        console.error('Immediate transaction upload failed:', e);
+      }
+    }
   };
 
   const handleClearAllData = async () => {
@@ -2060,9 +2314,9 @@ export default function App() {
         return (
           <VendasList 
             products={products}
-            setProducts={setProducts}
+            setProducts={handleUpdateProductsList}
             sales={sales}
-            setSales={setSales}
+            setSales={handleUpdateSalesList}
             setActiveTab={setActiveTab}
             onAddTransaction={handleAddTransaction}
           />
@@ -2073,7 +2327,7 @@ export default function App() {
             products={products}
             clients={clients}
             onAddSale={handleAddSale}
-            onUpdateClients={setClients}
+            onUpdateClients={handleUpdateClientsList}
             onAddClient={handleAddClient}
             setActiveTab={setActiveTab}
             sellers={sellers}
@@ -2111,7 +2365,7 @@ export default function App() {
             clients={clients}
             sales={sales}
             onAddClient={handleAddClient}
-            onUpdateClients={setClients}
+            onUpdateClients={handleUpdateClientsList}
             currentUser={currentUser}
             activeSubTab={customersCRMSubTab}
             setActiveSubTab={setCustomersCRMSubTab}
@@ -2123,7 +2377,7 @@ export default function App() {
         return (
           <FinanceCashflow 
             transactions={transactions}
-            setTransactions={setTransactions}
+            setTransactions={handleUpdateTransactionsList}
             onAddTransaction={handleAddTransaction}
           />
         );
@@ -2256,7 +2510,7 @@ export default function App() {
         onAddOnlineOrder={handleAddOnlineOrder}
         clients={clients}
         onAddClient={handleAddClient}
-        onUpdateClients={(updatedList) => setClients(updatedList)}
+        onUpdateClients={handleUpdateClientsList}
         onExitCustomerView={() => setIsCustomerView(false)}
       />
     );
@@ -2270,7 +2524,7 @@ export default function App() {
         sales={sales}
         products={products}
         clients={clients}
-        onUpdateClients={setClients}
+        onUpdateClients={handleUpdateClientsList}
       />
     );
   }
