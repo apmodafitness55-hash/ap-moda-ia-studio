@@ -32,6 +32,7 @@ import {
   Search
 } from 'lucide-react';
 import { Sale } from '../types';
+import { pushSystemConfigToSupabase } from '../supabase';
 
 interface CompanyInfo {
   name: string;
@@ -173,6 +174,25 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
   // Sync settings
   useEffect(() => {
     localStorage.setItem('ap_moda_company_info', JSON.stringify(companyInfo));
+    pushSystemConfigToSupabase('ap_moda_company_info', JSON.stringify(companyInfo));
+
+    if (companyInfo.pixKey) {
+      localStorage.setItem('ap_pix_key', companyInfo.pixKey);
+      pushSystemConfigToSupabase('ap_pix_key', companyInfo.pixKey);
+
+      // Keep ap_moda_payment_config updated in sync
+      try {
+        const paymentConfigSaved = localStorage.getItem('ap_moda_payment_config');
+        if (paymentConfigSaved) {
+          const parsed = JSON.parse(paymentConfigSaved);
+          if (parsed.pixKey !== companyInfo.pixKey) {
+            parsed.pixKey = companyInfo.pixKey;
+            localStorage.setItem('ap_moda_payment_config', JSON.stringify(parsed));
+            pushSystemConfigToSupabase('ap_moda_payment_config', JSON.stringify(parsed));
+          }
+        }
+      } catch (err) {}
+    }
   }, [companyInfo]);
 
   useEffect(() => {

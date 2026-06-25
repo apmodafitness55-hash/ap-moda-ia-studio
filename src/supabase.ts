@@ -785,6 +785,8 @@ const CRITICAL_CONFIG_KEYS = [
   'ap_store_phone',
   'ap_store_footer',
   'ap_store_logo',
+  'ap_pix_key',
+  'ap_moda_company_info',
   'ap_whatsapp_token',
   'ap_whatsapp_phone_id',
   'ap_whatsapp_recipient',

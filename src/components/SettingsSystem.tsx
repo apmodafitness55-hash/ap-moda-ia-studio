@@ -202,6 +202,7 @@ export default function SettingsSystem({
   const [storeCnpj, setStoreCnpj] = useState(() => localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
   const [storeAddress, setStoreAddress] = useState(() => localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
   const [storePhone, setStorePhone] = useState(() => localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
+  const [storePixKey, setStorePixKey] = useState(() => localStorage.getItem('ap_pix_key') || 'apmodafitness55@gmail.com');
   const [storeFooter, setStoreFooter] = useState(() => localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
   const [storeLogoUrl, setStoreLogoUrl] = useState(() => localStorage.getItem('ap_store_logo') || 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=120&q=80');
 
@@ -213,6 +214,7 @@ export default function SettingsSystem({
       setStoreCnpj(localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
       setStoreAddress(localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
       setStorePhone(localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
+      setStorePixKey(localStorage.getItem('ap_pix_key') || 'apmodafitness55@gmail.com');
       setStoreFooter(localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
       setStoreLogoUrl(localStorage.getItem('ap_store_logo') || 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=120&q=80');
       setWhatsappToken(localStorage.getItem('ap_whatsapp_token') || '');
@@ -465,8 +467,26 @@ export default function SettingsSystem({
     localStorage.setItem('ap_store_cnpj', storeCnpj);
     localStorage.setItem('ap_store_address', storeAddress);
     localStorage.setItem('ap_store_phone', storePhone);
+    localStorage.setItem('ap_pix_key', storePixKey);
     localStorage.setItem('ap_store_footer', storeFooter);
     localStorage.setItem('ap_store_logo', storeLogoUrl);
+
+    // Keep ap_moda_payment_config and ap_moda_company_info updated as well
+    try {
+      const paymentConfigSaved = localStorage.getItem('ap_moda_payment_config');
+      if (paymentConfigSaved) {
+        const parsed = JSON.parse(paymentConfigSaved);
+        parsed.pixKey = storePixKey;
+        localStorage.setItem('ap_moda_payment_config', JSON.stringify(parsed));
+        await pushSystemConfigToSupabase('ap_moda_payment_config', JSON.stringify(parsed));
+      }
+
+      const companyInfoSaved = localStorage.getItem('ap_moda_company_info');
+      const parsedCompany = companyInfoSaved ? JSON.parse(companyInfoSaved) : {};
+      parsedCompany.pixKey = storePixKey;
+      localStorage.setItem('ap_moda_company_info', JSON.stringify(parsedCompany));
+      await pushSystemConfigToSupabase('ap_moda_company_info', JSON.stringify(parsedCompany));
+    } catch (err) {}
 
     // Register log
     registerAuditLog('Configuração Alterada', 'Dados da empresa editados e salvos');
@@ -477,6 +497,7 @@ export default function SettingsSystem({
     await pushSystemConfigToSupabase('ap_store_cnpj', storeCnpj);
     await pushSystemConfigToSupabase('ap_store_address', storeAddress);
     await pushSystemConfigToSupabase('ap_store_phone', storePhone);
+    await pushSystemConfigToSupabase('ap_pix_key', storePixKey);
     await pushSystemConfigToSupabase('ap_store_footer', storeFooter);
     await pushSystemConfigToSupabase('ap_store_logo', storeLogoUrl);
 
@@ -1066,7 +1087,7 @@ export default function SettingsSystem({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-slate-405 font-semibold mb-1">Endereço da Sede Física</label>
                   <input
@@ -1084,6 +1105,17 @@ export default function SettingsSystem({
                     required
                     value={storePhone}
                     onChange={(e) => setStorePhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-405 font-semibold mb-1">Chave Pix de Recebimento</label>
+                  <input
+                    type="text"
+                    required
+                    value={storePixKey}
+                    onChange={(e) => setStorePixKey(e.target.value)}
+                    placeholder="Chave Pix de Recebimento"
                     className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden font-mono"
                   />
                 </div>

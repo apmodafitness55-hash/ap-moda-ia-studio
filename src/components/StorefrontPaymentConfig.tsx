@@ -129,15 +129,20 @@ export default function StorefrontPaymentConfig() {
     // Also push to Supabase
     await pushSystemConfigToSupabase('ap_moda_payment_config', jsonStr);
 
-    // Also retroactively mirror / keep in sync company_info pixKey for backwards compatibility
+    // Also retroactively mirror / keep in sync company_info pixKey and ap_pix_key for backwards compatibility
     try {
+      localStorage.setItem('ap_pix_key', config.pixKey);
+      await pushSystemConfigToSupabase('ap_pix_key', config.pixKey);
+
       const companyInfoSaved = localStorage.getItem('ap_moda_company_info');
-      if (companyInfoSaved) {
-        const parsed = JSON.parse(companyInfoSaved);
-        parsed.pixKey = config.pixKey;
-        localStorage.setItem('ap_moda_company_info', JSON.stringify(parsed));
-      }
-    } catch (e) {}
+      const parsed = companyInfoSaved ? JSON.parse(companyInfoSaved) : {};
+      parsed.pixKey = config.pixKey;
+      const updatedCompanyStr = JSON.stringify(parsed);
+      localStorage.setItem('ap_moda_company_info', updatedCompanyStr);
+      await pushSystemConfigToSupabase('ap_moda_company_info', updatedCompanyStr);
+    } catch (e) {
+      console.error('Failed to sync legacy company info:', e);
+    }
 
     setIsSavedSuccess(true);
     setTimeout(() => setIsSavedSuccess(false), 3000);
