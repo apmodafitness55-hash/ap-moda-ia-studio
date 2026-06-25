@@ -239,9 +239,40 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
   const pixPayload = useMemo(() => {
     const key = companyInfo.pixKey || 'pagamentos@exemplo.com';
     const amountStr = finalTotal.toFixed(2);
+    
+    // Parse city from addressLine2 (format: "Cidade - Estado")
+    let rawCity = 'Sao Paulo';
+    if (companyInfo.addressLine2) {
+      const parts = companyInfo.addressLine2.split('-');
+      if (parts[0]) {
+        rawCity = parts[0].trim();
+      }
+    }
+    
+    // Clean city name: remove accents, special chars, keep only letters, max 15 chars
+    const cleanCity = rawCity
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(/[^a-zA-Z\s]/g, '') // keep only letters and spaces
+      .replace(/\s+/g, '') // remove all spaces for safe EMV Co payload
+      .trim()
+      .substring(0, 15) || 'SaoPaulo';
+      
+    const cityLen = String(cleanCity.length).padStart(2, '0');
+    
+    // Clean merchant name
+    const cleanMerchant = (companyInfo.name || 'AP Moda Fitness')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z]/g, '')
+      .trim()
+      .substring(0, 25) || 'APModaFitness';
+      
+    const merchantLen = String(cleanMerchant.length).padStart(2, '0');
+
     // Standard Pix static structure with basic variable interpolation
-    return `00020101021126580014br.gov.bcb.pix0136${key}5204000053039865407${amountStr}5802BR5915APModaFitness6009SaoPaulo62070503***6304A1B2`;
-  }, [companyInfo.pixKey, finalTotal]);
+    return `00020101021126580014br.gov.bcb.pix0136${key}5204000053039865407${amountStr}5802BR59${merchantLen}${cleanMerchant}60${cityLen}${cleanCity}62070503***6304A1B2`;
+  }, [companyInfo.pixKey, companyInfo.addressLine2, companyInfo.name, finalTotal]);
 
   const handleCopyPixString = () => {
     navigator.clipboard.writeText(pixPayload);

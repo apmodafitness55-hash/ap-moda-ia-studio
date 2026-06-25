@@ -233,6 +233,59 @@ export default function SettingsSystem({
   const [storeSlogan, setStoreSlogan] = useState(() => localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida');
   const [storeCnpj, setStoreCnpj] = useState(() => localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
   const [storeAddress, setStoreAddress] = useState(() => localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
+  
+  const [storeCity, setStoreCity] = useState(() => {
+    const saved = localStorage.getItem('ap_store_city');
+    if (saved) return saved;
+    try {
+      const companySaved = localStorage.getItem('ap_moda_company_info');
+      if (companySaved) {
+        const parsed = JSON.parse(companySaved);
+        if (parsed.addressLine2) {
+          const parts = parsed.addressLine2.split('-');
+          if (parts[0]) return parts[0].trim();
+        }
+      }
+    } catch (e) {}
+    const addr = localStorage.getItem('ap_store_address') || '';
+    if (addr.includes('São José de Mipibu')) return 'São José de Mipibu';
+    if (addr.includes(' - ')) {
+      const parts = addr.split(' - ');
+      if (parts[1]) {
+        const sub = parts[1].split(',');
+        return sub[0].trim();
+      }
+    }
+    return 'São José de Mipibu';
+  });
+
+  const [storeState, setStoreState] = useState(() => {
+    const saved = localStorage.getItem('ap_store_state');
+    if (saved) return saved;
+    try {
+      const companySaved = localStorage.getItem('ap_moda_company_info');
+      if (companySaved) {
+        const parsed = JSON.parse(companySaved);
+        if (parsed.addressLine2) {
+          const parts = parsed.addressLine2.split('-');
+          if (parts[1]) return parts[1].trim();
+        }
+      }
+    } catch (e) {}
+    const addr = localStorage.getItem('ap_store_address') || '';
+    if (addr.includes('São José de Mipibu')) return 'RN';
+    if (addr.includes(' - ')) {
+      const parts = addr.split(' - ');
+      if (parts[1] && parts[1].includes(',')) {
+        const sub = parts[1].split(',');
+        if (sub[1]) return sub[1].trim();
+      } else if (parts[2]) {
+        return parts[2].trim();
+      }
+    }
+    return 'RN';
+  });
+
   const [storePhone, setStorePhone] = useState(() => localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
   const [storePixKey, setStorePixKey] = useState(() => localStorage.getItem('ap_pix_key') || 'apmodafitness55@gmail.com');
   const [storeFooter, setStoreFooter] = useState(() => localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
@@ -245,6 +298,8 @@ export default function SettingsSystem({
       setStoreSlogan(localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida');
       setStoreCnpj(localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
       setStoreAddress(localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
+      setStoreCity(localStorage.getItem('ap_store_city') || 'São José de Mipibu');
+      setStoreState(localStorage.getItem('ap_store_state') || 'RN');
       setStorePhone(localStorage.getItem('ap_store_phone') || '(21) 99123-4567');
       setStorePixKey(localStorage.getItem('ap_pix_key') || 'apmodafitness55@gmail.com');
       setStoreFooter(localStorage.getItem('ap_store_footer') || 'Obrigado por escolher a AP Moda Fitness! Peças lindas que elevam seu treino. Siga-nos no Instagram: @apmodafitness');
@@ -498,6 +553,8 @@ export default function SettingsSystem({
     localStorage.setItem('ap_store_slogan', storeSlogan);
     localStorage.setItem('ap_store_cnpj', storeCnpj);
     localStorage.setItem('ap_store_address', storeAddress);
+    localStorage.setItem('ap_store_city', storeCity);
+    localStorage.setItem('ap_store_state', storeState);
     localStorage.setItem('ap_store_phone', storePhone);
     localStorage.setItem('ap_pix_key', storePixKey);
     localStorage.setItem('ap_store_footer', storeFooter);
@@ -515,7 +572,13 @@ export default function SettingsSystem({
 
       const companyInfoSaved = localStorage.getItem('ap_moda_company_info');
       const parsedCompany = companyInfoSaved ? JSON.parse(companyInfoSaved) : {};
+      parsedCompany.name = storeName;
+      parsedCompany.cnpj = storeCnpj;
+      parsedCompany.slogan = storeSlogan;
+      parsedCompany.phone = storePhone;
       parsedCompany.pixKey = storePixKey;
+      parsedCompany.addressLine1 = storeAddress;
+      parsedCompany.addressLine2 = `${storeCity} - ${storeState}`;
       localStorage.setItem('ap_moda_company_info', JSON.stringify(parsedCompany));
       await pushSystemConfigToSupabase('ap_moda_company_info', JSON.stringify(parsedCompany));
     } catch (err) {}
@@ -528,6 +591,8 @@ export default function SettingsSystem({
     await pushSystemConfigToSupabase('ap_store_slogan', storeSlogan);
     await pushSystemConfigToSupabase('ap_store_cnpj', storeCnpj);
     await pushSystemConfigToSupabase('ap_store_address', storeAddress);
+    await pushSystemConfigToSupabase('ap_store_city', storeCity);
+    await pushSystemConfigToSupabase('ap_store_state', storeState);
     await pushSystemConfigToSupabase('ap_store_phone', storePhone);
     await pushSystemConfigToSupabase('ap_pix_key', storePixKey);
     await pushSystemConfigToSupabase('ap_store_footer', storeFooter);
@@ -1138,9 +1203,36 @@ export default function SettingsSystem({
                     required
                     value={storeAddress}
                     onChange={(e) => setStoreAddress(e.target.value)}
+                    placeholder="Ex: Travessa José Jorge, 51, Centro"
                     className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden"
                   />
                 </div>
+                <div>
+                  <label className="block text-slate-405 font-semibold mb-1">Cidade da Loja</label>
+                  <input
+                    type="text"
+                    required
+                    value={storeCity}
+                    onChange={(e) => setStoreCity(e.target.value)}
+                    placeholder="Ex: São José de Mipibu"
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-405 font-semibold mb-1">Estado / UF</label>
+                  <input
+                    type="text"
+                    required
+                    value={storeState}
+                    onChange={(e) => setStoreState(e.target.value.toUpperCase())}
+                    placeholder="Ex: RN"
+                    maxLength={2}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden font-mono uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-405 font-semibold mb-1">WhatsApp de Contato</label>
                   <input

@@ -782,6 +782,8 @@ const CRITICAL_CONFIG_KEYS = [
   'ap_store_slogan',
   'ap_store_cnpj',
   'ap_store_address',
+  'ap_store_city',
+  'ap_store_state',
   'ap_store_phone',
   'ap_store_footer',
   'ap_store_logo',
