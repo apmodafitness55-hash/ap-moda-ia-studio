@@ -48,15 +48,15 @@ interface CompanyInfo {
 
 const DEFAULT_COMPANY_INFO: CompanyInfo = {
   name: 'AP MODA FITNESS',
-  subName: 'AP Moda Fitness - Confecções Femininas',
-  cnpj: '12.345.678/0001-99',
-  addressLine1: 'Av. Paulista, 1500 - Bela Vista',
-  addressLine2: 'São Paulo - SP',
-  phone: '(11) 98888-7777',
+  subName: '',
+  cnpj: '',
+  addressLine1: '',
+  addressLine2: '',
+  phone: '',
   slogan: 'Estilo, Conforto e Performance no seu Treino',
-  website: 'www.apmodafitness.com.br',
-  instructions: 'Para solicitar Nota Fiscal oficial, fale conosco via WhatsApp',
-  pixKey: 'apmodafitness55@gmail.com'
+  website: '',
+  instructions: '',
+  pixKey: ''
 };
 
 interface ThermalReceiptProps {
@@ -65,10 +65,66 @@ interface ThermalReceiptProps {
 }
 
 export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
-  // Load company config with localStorage fallback
+  // Load company config with localStorage fallback and dynamic system configuration parsing
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(() => {
+    // 1. Check if there is an explicit saved ap_moda_company_info
     const saved = localStorage.getItem('ap_moda_company_info');
-    return saved ? JSON.parse(saved) : DEFAULT_COMPANY_INFO;
+    let parsed: Partial<CompanyInfo> = {};
+    if (saved) {
+      try {
+        parsed = JSON.parse(saved);
+      } catch (e) {
+        parsed = {};
+      }
+    }
+
+    // 2. Read from system global localStorage keys, with dynamic clean fallbacks (no fake data)
+    const sysName = localStorage.getItem('ap_store_name');
+    const sysSlogan = localStorage.getItem('ap_store_slogan');
+    const sysCnpj = localStorage.getItem('ap_store_cnpj');
+    const sysAddress = localStorage.getItem('ap_store_address');
+    const sysPhone = localStorage.getItem('ap_store_phone');
+    const sysFooter = localStorage.getItem('ap_store_footer');
+
+    // Helper to clean up mock fallback data
+    const cleanValue = (val: string | null, defaultValue: string = '') => {
+      if (!val) return defaultValue;
+      const trimmed = val.trim();
+      const lowered = trimmed.toLowerCase();
+      if (
+        lowered.includes('12.345.678') || 
+        lowered.includes('paulista') || 
+        lowered.includes('copacabana') ||
+        lowered.includes('98888-7777') ||
+        lowered.includes('99123-4567')
+      ) {
+        return defaultValue;
+      }
+      return trimmed;
+    };
+
+    // Split address into addressLine1 and addressLine2 if needed
+    const rawAddress = cleanValue(sysAddress);
+    let addr1 = rawAddress;
+    let addr2 = '';
+    if (rawAddress && rawAddress.includes(' - ')) {
+      const parts = rawAddress.split(' - ');
+      addr1 = parts[0];
+      addr2 = parts.slice(1).join(' - ');
+    }
+
+    return {
+      name: (cleanValue(parsed.name) || cleanValue(sysName) || 'AP MODA FITNESS').trim(),
+      subName: (cleanValue(parsed.subName) || cleanValue(sysName) || '').trim(),
+      cnpj: (cleanValue(parsed.cnpj) || cleanValue(sysCnpj) || '').trim(),
+      addressLine1: (cleanValue(parsed.addressLine1) || addr1 || '').trim(),
+      addressLine2: (cleanValue(parsed.addressLine2) || addr2 || '').trim(),
+      phone: (cleanValue(parsed.phone) || cleanValue(sysPhone) || '').trim(),
+      slogan: (cleanValue(parsed.slogan) || cleanValue(sysSlogan) || 'Estilo, Conforto e Performance no seu Treino').trim(),
+      website: (cleanValue(parsed.website) || '').trim(),
+      instructions: (cleanValue(parsed.instructions) || cleanValue(sysFooter) || '').trim(),
+      pixKey: (cleanValue(parsed.pixKey) || cleanValue(localStorage.getItem('ap_pix_key')) || '').trim()
+    };
   });
 
   // Client documentation CPF model editable live for printing
@@ -773,16 +829,20 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
                 `}>
                   {companyInfo.name || 'AP MODA FITNESS'}
                 </h2>
-                <p className="text-[10px] text-slate-600 font-sans leading-tight">
-                  {companyInfo.subName || 'AP Moda Fitness S/A'}
-                </p>
-                <p className="text-[9px] text-slate-500">
-                  CNPJ: {companyInfo.cnpj || '12.345.678/0001-99'}
-                </p>
-                {showAddress && (
+                {companyInfo.subName && (
+                  <p className="text-[10px] text-slate-600 font-sans leading-tight">
+                    {companyInfo.subName}
+                  </p>
+                )}
+                {companyInfo.cnpj && (
+                  <p className="text-[9px] text-slate-500">
+                    CNPJ: {companyInfo.cnpj}
+                  </p>
+                )}
+                {showAddress && (companyInfo.addressLine1 || companyInfo.addressLine2) && (
                   <div className="text-[9px] text-slate-500 leading-tight">
-                    <p>{companyInfo.addressLine1 || 'Av. Paulista, 1500'}</p>
-                    <p>{companyInfo.addressLine2 || 'São Paulo - SP'}</p>
+                    {companyInfo.addressLine1 && <p>{companyInfo.addressLine1}</p>}
+                    {companyInfo.addressLine2 && <p>{companyInfo.addressLine2}</p>}
                   </div>
                 )}
               </div>
@@ -961,12 +1021,16 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
             {/* Footers information Slogan */}
             <div className="text-center text-[10px] text-slate-600 space-y-0.5 font-sans leading-normal">
               <p className="font-medium">Obrigado pela preferência e confiança!</p>
-              <p className="font-mono text-[9px] font-extrabold text-slate-800 uppercase">
-                {companyInfo.slogan || 'Qualidade & Performance'}
-              </p>
-              <p className="text-[9px]">
-                {companyInfo.addressLine2 || 'São Paulo - SP'}
-              </p>
+              {companyInfo.slogan && (
+                <p className="font-mono text-[9px] font-extrabold text-slate-800 uppercase">
+                  {companyInfo.slogan}
+                </p>
+              )}
+              {companyInfo.addressLine2 && (
+                <p className="text-[9px]">
+                  {companyInfo.addressLine2}
+                </p>
+              )}
             </div>
 
             {/* Pix key dynamic QRCode section in layout */}
@@ -979,6 +1043,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(pixPayload)}`}
                     alt="Pix QR Code"
                     className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
                 <div className="space-y-0.5 leading-snug">
@@ -992,9 +1057,11 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
             <div className="border-t border-dashed border-slate-300 my-2" />
             <div className="text-center text-[8px] leading-snug text-slate-450 mt-1 space-y-0.5">
               <p className="font-mono select-all">Ref: 800{sale.id.replace('v-', '')}4474-{sale.createdAt.slice(-2)}y</p>
-              <p className="font-sans leading-normal px-2 max-w-[240px] mx-auto text-slate-500">
-                {companyInfo.instructions || 'Para solicitar Nota Fiscal oficial entre em contato pelo Whats'}
-              </p>
+              {companyInfo.instructions && (
+                <p className="font-sans leading-normal px-2 max-w-[240px] mx-auto text-slate-500">
+                  {companyInfo.instructions}
+                </p>
+              )}
             </div>
 
             {/* Blank tear spacer Lines */}
