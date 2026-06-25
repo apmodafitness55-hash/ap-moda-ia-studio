@@ -392,7 +392,7 @@ export function getTolerantValue(item: any, camelKey: string, fallback: any = un
 
 /**
  * Helper resiliente e auto-regenerativo genérico para inserções (upsert) no Supabase.
- * Detecta automaticamente erros de coluna inexistente (PGRST204 ou código 42703), remove as propriedades ausentes do payload e tenta novamente de forma recursiva.
+ * Detecta automaticamente erros de coluna inexistente (PGRST204 ou código 42703), tenta mapear dinamicamente para formatos alternativos de escrita (minúsculas, snake_case, camelCase) antes de descartá-los para evitar perda de dados.
  */
 export async function resilientUpsert(tableName: string, originalPayloads: any[], maxAttempts = 15): Promise<boolean> {
   const client = getSupabaseClient();
@@ -400,6 +400,7 @@ export async function resilientUpsert(tableName: string, originalPayloads: any[]
 
   let payloads = JSON.parse(JSON.stringify(originalPayloads)); // Clona profundamente para evitar efeitos colaterais
   let attempts = 0;
+  const failedColumns = new Set<string>();
 
   while (attempts < maxAttempts) {
     const { error } = await client.from(tableName).upsert(payloads, { onConflict: 'id' });
@@ -434,22 +435,53 @@ export async function resilientUpsert(tableName: string, originalPayloads: any[]
       }
 
       if (offendingCol) {
-        console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Coluna "${offendingCol}" não existe no banco de dados. Autocompensando (removendo do payload e tentando novamente)...`);
+        failedColumns.add(offendingCol);
+        
+        const lowerCol = offendingCol.toLowerCase();
+        const snakeCol = offendingCol.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/_+/g, "_");
+        const camelCol = offendingCol.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+
+        console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Coluna "${offendingCol}" não existe no banco de dados. Tentando autocompensaçao por mapeamento flexível...`);
+        
+        let mappedToAlternative = false;
+
         payloads = payloads.map((p: any) => {
           const newP = { ...p };
-          delete newP[offendingCol!];
-          
-          // Remove equivalentes em snake_case ou minúsculas caso aplique
-          const snakeCol = offendingCol!.replace(/([A-Z])/g, "_$1").toLowerCase();
-          if (snakeCol !== offendingCol) {
-            delete newP[snakeCol];
-          }
-          const lowerCol = offendingCol!.toLowerCase();
-          if (lowerCol !== offendingCol) {
-            delete newP[lowerCol];
+          if (newP[offendingCol!] !== undefined) {
+            const val = newP[offendingCol!];
+            
+            // Procura alternativa que ainda não falhou
+            let alternativeKey: string | null = null;
+            if (lowerCol !== offendingCol && !failedColumns.has(lowerCol)) {
+              alternativeKey = lowerCol;
+            } else if (snakeCol !== offendingCol && !failedColumns.has(snakeCol)) {
+              alternativeKey = snakeCol;
+            } else if (camelCol !== offendingCol && !failedColumns.has(camelCol)) {
+              alternativeKey = camelCol;
+            }
+
+            if (alternativeKey) {
+              console.log(`[Supabase Self-Healing] Tabela "${tableName}": Remapeando valor de "${offendingCol}" para a coluna alternativa "${alternativeKey}"...`);
+              newP[alternativeKey] = val;
+              mappedToAlternative = true;
+            }
+            delete newP[offendingCol!];
           }
           return newP;
         });
+
+        if (!mappedToAlternative) {
+          console.warn(`[Supabase Self-Healing] Tabela "${tableName}": Sem alternativas válidas restantes para a coluna "${offendingCol}". Removendo do payload para garantir escrita resiliente.`);
+          payloads = payloads.map((p: any) => {
+            const newP = { ...p };
+            delete newP[offendingCol!];
+            delete newP[lowerCol];
+            delete newP[snakeCol];
+            delete newP[camelCol];
+            return newP;
+          });
+        }
+
         attempts++;
         continue;
       }
@@ -497,15 +529,15 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
 
 export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Promise<boolean> {
   const payloads = members.map(m => ({
-    id: m.id,
-    name: m.name,
-    login: m.login.toLowerCase().trim().replace(/\s+/g, ''),
-    password: m.password || '123',
-    role: m.role,
-    details: m.details || '',
-    birthDate: m.birthDate || '',
-    createdAt: m.createdAt || new Date().toISOString(),
-    avatar: m.avatar || ''
+    id: getTolerantValue(m, 'id'),
+    name: getTolerantValue(m, 'name'),
+    login: String(getTolerantValue(m, 'login', '')).toLowerCase().trim().replace(/\s+/g, ''),
+    password: getTolerantValue(m, 'password') || '123',
+    role: getTolerantValue(m, 'role'),
+    details: getTolerantValue(m, 'details', ''),
+    birthDate: getTolerantValue(m, 'birthDate', ''),
+    createdAt: getTolerantValue(m, 'createdAt', new Date().toISOString()),
+    avatar: getTolerantValue(m, 'avatar', '')
   }));
   return resilientUpsert('ap_team_members', payloads);
 }
@@ -589,24 +621,24 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
 
 export async function syncBulkProductsToSupabase(products: any[]): Promise<boolean> {
   const payloads = products.map(p => ({
-    id: p.id,
-    name: p.name,
-    sku: p.sku,
-    category: p.category,
-    price: p.price,
-    cost: p.cost,
-    stock: p.stock,
-    minStock: p.minStock,
-    image: p.image,
-    images: p.images || [],
-    salesCount: p.salesCount || 0,
-    description: p.description || '',
-    videoUrl: p.videoUrl || '',
-    colors: p.colors || [],
-    sizes: p.sizes || [],
-    size_colors: p.sizeColors || {},
-    color_stocks: p.colorStocks || {},
-    size_color_stocks: p.sizeColorStocks || {}
+    id: getTolerantValue(p, 'id'),
+    name: getTolerantValue(p, 'name'),
+    sku: getTolerantValue(p, 'sku'),
+    category: getTolerantValue(p, 'category'),
+    price: Number(getTolerantValue(p, 'price', 0)),
+    cost: Number(getTolerantValue(p, 'cost', 0)),
+    stock: Number(getTolerantValue(p, 'stock', 0)),
+    minStock: Number(getTolerantValue(p, 'minStock', 0)),
+    image: getTolerantValue(p, 'image'),
+    images: Array.isArray(getTolerantValue(p, 'images')) ? getTolerantValue(p, 'images') : [],
+    salesCount: Number(getTolerantValue(p, 'salesCount', 0)),
+    description: getTolerantValue(p, 'description', ''),
+    videoUrl: getTolerantValue(p, 'videoUrl', ''),
+    colors: Array.isArray(getTolerantValue(p, 'colors')) ? getTolerantValue(p, 'colors') : [],
+    sizes: Array.isArray(getTolerantValue(p, 'sizes')) ? getTolerantValue(p, 'sizes') : [],
+    size_colors: getTolerantValue(p, 'sizeColors', {}),
+    color_stocks: getTolerantValue(p, 'colorStocks', {}),
+    size_color_stocks: getTolerantValue(p, 'sizeColorStocks', {})
   }));
   return resilientUpsert('ap_products', payloads);
 }
@@ -660,31 +692,31 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
 
 export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boolean> {
   const payloads = clientsList.map(c => ({
-    id: c.id,
-    name: c.name,
-    email: c.email || '',
-    phone: c.phone || '',
-    cpf: c.cpf || '',
-    birthDate: c.birthDate || '',
-    whatsapp: c.whatsapp || '',
-    addressStreet: c.addressStreet || '',
-    addressNum: c.addressNum || '',
-    addressComp: c.addressComp || '',
-    addressBairro: c.addressBairro || '',
-    addressCidade: c.addressCidade || '',
-    addressEstado: c.addressEstado || '',
-    addressCep: c.addressCep || '',
-    channel: c.channel || 'Balcão',
-    npsScore: c.npsScore || 0,
-    totalSpent: c.totalSpent || 0,
-    ordersCount: c.ordersCount || 0,
-    cashbackBalance: c.cashbackBalance || 0,
-    busto: c.busto || null,
-    cintura: c.cintura || null,
-    quadril: c.quadril || null,
-    coxa: c.coxa || null,
-    altura: c.altura || null,
-    peso: c.peso || null
+    id: getTolerantValue(c, 'id'),
+    name: getTolerantValue(c, 'name'),
+    email: getTolerantValue(c, 'email', ''),
+    phone: getTolerantValue(c, 'phone', ''),
+    cpf: getTolerantValue(c, 'cpf', ''),
+    birthDate: getTolerantValue(c, 'birthDate', ''),
+    whatsapp: getTolerantValue(c, 'whatsapp', ''),
+    addressStreet: getTolerantValue(c, 'addressStreet', ''),
+    addressNum: getTolerantValue(c, 'addressNum', ''),
+    addressComp: getTolerantValue(c, 'addressComp', ''),
+    addressBairro: getTolerantValue(c, 'addressBairro', ''),
+    addressCidade: getTolerantValue(c, 'addressCidade', ''),
+    addressEstado: getTolerantValue(c, 'addressEstado', ''),
+    addressCep: getTolerantValue(c, 'addressCep', ''),
+    channel: getTolerantValue(c, 'channel', 'Balcão'),
+    npsScore: Number(getTolerantValue(c, 'npsScore', 0)),
+    totalSpent: Number(getTolerantValue(c, 'totalSpent', 0)),
+    ordersCount: Number(getTolerantValue(c, 'ordersCount', 0)),
+    cashbackBalance: Number(getTolerantValue(c, 'cashbackBalance', 0)),
+    busto: getTolerantValue(c, 'busto') !== undefined ? Number(getTolerantValue(c, 'busto')) : null,
+    cintura: getTolerantValue(c, 'cintura') !== undefined ? Number(getTolerantValue(c, 'cintura')) : null,
+    quadril: getTolerantValue(c, 'quadril') !== undefined ? Number(getTolerantValue(c, 'quadril')) : null,
+    coxa: getTolerantValue(c, 'coxa') !== undefined ? Number(getTolerantValue(c, 'coxa')) : null,
+    altura: getTolerantValue(c, 'altura') !== undefined ? Number(getTolerantValue(c, 'altura')) : null,
+    peso: getTolerantValue(c, 'peso') !== undefined ? Number(getTolerantValue(c, 'peso')) : null
   }));
   return resilientUpsert('ap_clients', payloads);
 }
@@ -723,17 +755,17 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
 
 export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean> {
   const payloads = salesList.map(s => ({
-    id: s.id,
-    clientName: s.clientName,
-    clientDoc: s.clientDoc || '',
-    channel: s.channel,
-    items: s.items || [],
-    total: s.total,
-    costTotal: s.costTotal || 0,
-    status: s.status,
-    createdAt: s.createdAt,
-    payments: s.payments || [],
-    salesperson: s.salesperson || ''
+    id: getTolerantValue(s, 'id'),
+    clientName: getTolerantValue(s, 'clientName'),
+    clientDoc: getTolerantValue(s, 'clientDoc', ''),
+    channel: getTolerantValue(s, 'channel'),
+    items: Array.isArray(getTolerantValue(s, 'items')) ? getTolerantValue(s, 'items') : [],
+    total: Number(getTolerantValue(s, 'total', 0)),
+    costTotal: Number(getTolerantValue(s, 'costTotal', 0)),
+    status: getTolerantValue(s, 'status'),
+    createdAt: getTolerantValue(s, 'createdAt'),
+    payments: Array.isArray(getTolerantValue(s, 'payments')) ? getTolerantValue(s, 'payments') : [],
+    salesperson: getTolerantValue(s, 'salesperson', '')
   }));
   return resilientUpsert('ap_sales', payloads);
 }
@@ -772,17 +804,17 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
 
 export async function syncBulkTransactionsToSupabase(transactionsList: any[]): Promise<boolean> {
   const payloads = transactionsList.map(t => ({
-    id: t.id,
-    type: t.type,
-    category: t.category,
-    description: t.description,
-    amount: t.amount,
-    date: t.date,
-    status: t.status || 'pago',
-    due_date: t.dueDate || t.date,
-    installments_group: t.installmentsGroup || null,
-    installment_number: t.installmentNumber || null,
-    total_installments: t.totalInstallments || null
+    id: getTolerantValue(t, 'id'),
+    type: getTolerantValue(t, 'type'),
+    category: getTolerantValue(t, 'category'),
+    description: getTolerantValue(t, 'description'),
+    amount: Number(getTolerantValue(t, 'amount', 0)),
+    date: getTolerantValue(t, 'date'),
+    status: getTolerantValue(t, 'status', 'pago'),
+    due_date: getTolerantValue(t, 'dueDate') || getTolerantValue(t, 'date'),
+    installments_group: getTolerantValue(t, 'installmentsGroup', null),
+    installment_number: getTolerantValue(t, 'installmentNumber', null),
+    total_installments: getTolerantValue(t, 'totalInstallments', null)
   }));
   return resilientUpsert('ap_transactions', payloads);
 }
@@ -819,15 +851,15 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
 
 export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise<boolean> {
   const payloads = ordersList.map(o => ({
-    id: o.id,
-    clientName: o.clientName,
-    total: o.total,
-    status: o.status,
-    items: o.items || [],
-    createdAt: o.createdAt,
-    phone: o.phone || '',
-    address: o.address || '',
-    paymentMethod: o.paymentMethod || ''
+    id: getTolerantValue(o, 'id'),
+    clientName: getTolerantValue(o, 'clientName'),
+    total: Number(getTolerantValue(o, 'total', 0)),
+    status: getTolerantValue(o, 'status'),
+    items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
+    createdAt: getTolerantValue(o, 'createdAt'),
+    phone: getTolerantValue(o, 'phone', ''),
+    address: getTolerantValue(o, 'address', ''),
+    paymentMethod: getTolerantValue(o, 'paymentMethod', '')
   }));
   return resilientUpsert('ap_online_orders', payloads);
 }

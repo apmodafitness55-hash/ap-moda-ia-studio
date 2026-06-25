@@ -48,6 +48,15 @@ export default function AIAgentsHub({
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
 
+  const getGeminiHeaders = () => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const key = (import.meta as any).env.VITE_GEMINI_API_KEY;
+    if (key) {
+      headers['x-gemini-api-key'] = key;
+    }
+    return headers;
+  };
+
   // Loading States and Result States
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -432,7 +441,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/generate-description', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           image: descImage,
           name: descName,
@@ -470,7 +479,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/trends-lookbook', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           products: matchingProducts,
           styleTone
@@ -508,7 +517,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/whatsapp-script', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           scenario: scDetail,
           clientName: waClientName,
@@ -541,7 +550,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/stock-sentinel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           productsList: products
         })
@@ -573,7 +582,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/marketing-campaign', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           theme: campTheme,
           discount: campDiscount,
@@ -608,7 +617,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/color-consultant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           primaryColor: colorPrim,
           fabricTexture: colorTextu,
@@ -642,7 +651,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/fashion-translator', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           textToTranslate: transText,
           targetLanguage: transLang
@@ -675,7 +684,7 @@ Modelagem financeira precisa executada pelo motor de precificação de contingê
     try {
       const response = await fetch('/api/gemini/analyze-pricing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getGeminiHeaders(),
         body: JSON.stringify({
           productName: priceProdName,
           category: priceCategory,

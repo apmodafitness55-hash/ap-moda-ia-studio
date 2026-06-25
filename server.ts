@@ -19,14 +19,15 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 app.use(express.json({ limit: '10mb' }));
 
 // Lazy-initialized Gemini Client to prevent crashes during container start
-let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const aiClientsMap = new Map<string, GoogleGenAI>();
+function getGeminiClient(customApiKey?: string): GoogleGenAI {
+  const apiKey = customApiKey || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('A chave de API GEMINI_API_KEY ou VITE_GEMINI_API_KEY não foi configurada nas variáveis de ambiente. Defina-a em no painel Ajustes > Segredos do AI Studio.');
   }
-  if (!aiClient) {
-    aiClient = new GoogleGenAI({
+  let client = aiClientsMap.get(apiKey);
+  if (!client) {
+    client = new GoogleGenAI({
       apiKey: apiKey,
       httpOptions: {
         headers: {
@@ -34,8 +35,9 @@ function getGeminiClient(): GoogleGenAI {
         }
       }
     });
+    aiClientsMap.set(apiKey, client);
   }
-  return aiClient;
+  return client;
 }
 
 // Helper to convert images (Base64 data URIs or hosted ImgBB URLs) into Gemini-friendly inline format
@@ -83,8 +85,8 @@ function cleanGeminiError(error: any): string {
 }
 
 // Wrapper to perform Gemini model generation with a robust retry mechanism (backoff)
-async function generateContentWithRetry(params: { model: string; contents: any }): Promise<any> {
-  const ai = getGeminiClient();
+async function generateContentWithRetry(params: { model: string; contents: any }, customApiKey?: string): Promise<any> {
+  const ai = getGeminiClient(customApiKey);
   const maxRetries = 3;
   let delay = 600;
 
@@ -192,10 +194,11 @@ Por favor, gere e retorne APENAS a descrição estruturada com formatação Mark
 
     parts.push({ text: textPrompt });
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: { parts }
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -226,10 +229,11 @@ Para cada Combo/Look, responda em formato Markdown contendo:
 
 Retorne os dois looks divididos de forma elegante com divisórias Markdown.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -259,10 +263,11 @@ Retorne duas versões do script:
 - **Versão 1 (Curta e Prática)**: Perfeita para contatos rápidos e diretos.
 - **Versão 2 (Boutique Personalizada)**: Um atendimento mais detalhado, sugerindo novidades complementares ou cuidado VIP.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -298,10 +303,11 @@ Elabore um Relatório Executivo Analítico rápido em Markdown. Sua análise dev
 
 Por favor, seja direto, profissional, analítico e use tabelas Markdown para facilitar a leitura.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -331,10 +337,11 @@ REQUISITOS DO PLANEJAMENTO (Responda em formato Markdown elegante):
 4. **Cupom de Desconto Exclusivo**: Gere uma palavra-chave/código promocional criativo e estimule o senso de urgência.
 5. **Sugestão de Reels / Vídeo Curto**: Descreva o roteiro visual de um vídeo rápido de 15 segundos para stories ou feed que gere engajamento instantâneo.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -363,10 +370,11 @@ RETORNE (Em formato Markdown com formatação impecável):
 4. **Paleta de Cores Recomendada (Visão Pantone Express)**: Descreva de forma textual com blocos de emojis pretos/coloridos simulando a escala de cores ideal para a AP Moda.
 5. **Aconselhamento de Modelagem**: Dicas para valorizar a silhueta de quem veste essa textura específica.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -392,10 +400,11 @@ INSTRUÇÕES DE TRADUÇÃO:
 - Garanta que a descrição permaneça fluida, vendedora e atraente para clientes de e-commerce internacional de alto padrão.
 - Retorne a tradução estruturada e com espaçamentos limpos em Markdown. Do lado do título traduzido de cada seção, coloque uma pequena flag emoji representativa do idioma.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
@@ -448,10 +457,11 @@ Sua resposta DEVE ser um relatório financeiro de consultoria profissional e mod
 
 Use formatação Markdown linda, profissional, tabelas limpas e com formatação de moeda em Real (R$). Seja preciso e direto.`;
 
+    const clientKey = req.headers['x-gemini-api-key'] as string;
     const response = await generateContentWithRetry({
       model: 'gemini-3.5-flash',
       contents: prompt
-    });
+    }, clientKey);
 
     res.json({ success: true, text: response.text });
   } catch (error: any) {
