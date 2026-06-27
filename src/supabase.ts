@@ -222,6 +222,9 @@ ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "costTotal" NUMERIC DEFAULT 0;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS payments JSONB;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS salesperson TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "trackingCode" TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "deliveryMethod" TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS address TEXT;
 
 -- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro / Contas a Pagar e Receber)
 CREATE TABLE IF NOT EXISTS ap_transactions (
@@ -268,6 +271,8 @@ ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS status_pagamento TEXT DEFAULT 'pendente';
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "trackingCode" TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "deliveryMethod" TEXT;
 
 -- 7. Criação da Tabela de Configurações do Sistema Geral (Google Workspace, Dados da Loja, Logo, etc.)
 CREATE TABLE IF NOT EXISTS ap_system_configs (
@@ -690,7 +695,10 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
       status: getTolerantValue(s, 'status'),
       createdAt: getTolerantValue(s, 'createdAt', ''),
       payments: Array.isArray(getTolerantValue(s, 'payments')) ? getTolerantValue(s, 'payments') : [],
-      salesperson: getTolerantValue(s, 'salesperson', '')
+      salesperson: getTolerantValue(s, 'salesperson', ''),
+      trackingCode: getTolerantValue(s, 'trackingCode', ''),
+      deliveryMethod: getTolerantValue(s, 'deliveryMethod', ''),
+      address: getTolerantValue(s, 'address', '')
     }));
   } catch (err) {
     console.error('Failed fetching sales:', err);
@@ -710,7 +718,10 @@ export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean
     status: s.status || '',
     createdAt: s.createdAt !== undefined ? s.createdAt : (s.created_at || ''),
     payments: Array.isArray(s.payments) ? s.payments : [],
-    salesperson: s.salesperson || ''
+    salesperson: s.salesperson || '',
+    trackingCode: s.trackingCode || '',
+    deliveryMethod: s.deliveryMethod || '',
+    address: s.address || ''
   }));
   return resilientUpsert('ap_sales', payloads);
 }
@@ -787,7 +798,9 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
       createdAt: getTolerantValue(o, 'createdAt', ''),
       phone: getTolerantValue(o, 'phone', ''),
       address: getTolerantValue(o, 'address', ''),
-      paymentMethod: getTolerantValue(o, 'paymentMethod', '')
+      paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
+      trackingCode: getTolerantValue(o, 'trackingCode', ''),
+      deliveryMethod: getTolerantValue(o, 'deliveryMethod', '')
     }));
   } catch (err) {
     console.error('Failed fetching online orders:', err);
@@ -806,7 +819,9 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
     createdAt: getTolerantValue(o, 'createdAt'),
     phone: getTolerantValue(o, 'phone', ''),
     address: getTolerantValue(o, 'address', ''),
-    paymentMethod: getTolerantValue(o, 'paymentMethod', '')
+    paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
+    trackingCode: o.trackingCode || '',
+    deliveryMethod: o.deliveryMethod || ''
   }));
   return resilientUpsert('ap_online_orders', payloads);
 }

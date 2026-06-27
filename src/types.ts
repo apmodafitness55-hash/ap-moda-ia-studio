@@ -64,6 +64,9 @@ export interface Sale {
   createdAt: string;
   payments?: { method: string; amount: number }[];
   salesperson?: string;
+  deliveryMethod?: string;
+  address?: string;
+  trackingCode?: string;
 }
 
 export interface Client {

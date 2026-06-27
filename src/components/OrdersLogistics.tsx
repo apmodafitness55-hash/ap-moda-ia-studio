@@ -23,9 +23,11 @@ import {
   Briefcase,
   Trash2,
   Edit,
-  X
+  X,
+  Printer
 } from 'lucide-react';
 import { Product, Sale, Client } from '../types';
+import CorreiosLabel from './CorreiosLabel';
 
 interface OrdersLogisticsProps {
   products: Product[];
@@ -98,6 +100,8 @@ export default function OrdersLogistics({
   const [internalActiveSubTab, setInternalActiveSubTab] = useState<'pedidos' | 'trocas_crediario' | 'logistica' | 'condicional'>('pedidos');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
+
+  const [selectedOrderForLabel, setSelectedOrderForLabel] = useState<any>(null);
 
   const [reservas, setReservas] = useState<Reserva[]>([
     {
@@ -631,6 +635,16 @@ export default function OrdersLogistics({
                         >
                           <MessageCircle size={12} />
                           <span className="hidden sm:inline">WhatsApp</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderForLabel(order)}
+                          title="Imprimir Etiqueta de Envio Correios"
+                          className="p-1 px-2 bg-pink-50 hover:bg-pink-100 text-pink-600 border border-pink-200/20 rounded font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Printer size={12} />
+                          <span className="hidden sm:inline">Etiqueta</span>
                         </button>
                       </div>
                     </div>
@@ -2058,6 +2072,16 @@ export default function OrdersLogistics({
             </form>
           </div>
         </div>
+      )}
+
+      {selectedOrderForLabel && (
+        <CorreiosLabel
+          order={selectedOrderForLabel}
+          onClose={() => setSelectedOrderForLabel(null)}
+          onUpdateTrackingCode={(orderId, code) => {
+            setOnlineOrders(prev => prev.map(o => o.id === orderId ? { ...o, trackingCode: code } : o));
+          }}
+        />
       )}
 
     </div>

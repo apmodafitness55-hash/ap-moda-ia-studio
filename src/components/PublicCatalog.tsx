@@ -929,6 +929,14 @@ export default function PublicCatalog({
 
     // Process order back to the administration orders system via hook
     if (onAddOnlineOrder) {
+      const isCorreios = deliveryMethod === 'correios';
+      const generatedTracking = isCorreios ? (() => {
+        const prefixes = ['QC', 'BR', 'PM', 'AL', 'JN', 'OB', 'XY'];
+        const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+        const middleNum = Math.floor(100000000 + Math.random() * 900000000).toString();
+        return `${prefix}${middleNum}BR`;
+      })() : undefined;
+
       const orderData = {
         id: `ped-web-${Date.now().toString().slice(-4)}`,
         clientName: clientName.trim(),
@@ -947,6 +955,8 @@ export default function PublicCatalog({
         createdAt: new Date().toISOString(),
         address: finalAddress,
         deliveryFee: deliveryFee,
+        deliveryMethod: deliveryMethod,
+        trackingCode: generatedTracking,
         notes: `Cor: ${cart.map(c=>c.color).join(', ')} | CPF: ${clientCpf.trim()} | Pg: ${paymentMethod === 'pix' ? 'PIX' : `Cartão (${cardInstallments}x)`} | Obs: ${clientNotes.trim()}`
       };
       

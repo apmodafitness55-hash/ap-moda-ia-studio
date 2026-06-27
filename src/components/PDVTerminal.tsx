@@ -22,11 +22,13 @@ import {
   Compass,
   FileText,
   DollarSign,
-  Printer
+  Printer,
+  Truck
 } from 'lucide-react';
 import { Product, SaleItem, Sale, Client, SalesChannel, ActiveTab } from '../types';
 import { getCardMachinesConfig, CardMachineConfig } from '../lib/cardMachines';
 import ThermalReceipt from './ThermalReceipt';
+import CorreiosLabel from './CorreiosLabel';
 
 interface PDVTerminalProps {
   products: Product[];
@@ -50,8 +52,9 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
   const [isThermalReceiptOpen, setIsThermalReceiptOpen] = useState<boolean>(false);
   const [createdReceipt, setCreatedReceipt] = useState<Sale | null>(null);
   
-  // Cashback usage states
-  const [useCashback, setUseCashback] = useState<boolean>(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<string>('retirada');
+  const [shippingAddress, setShippingAddress] = useState<string>('');
+  const [isShippingLabelOpen, setIsShippingLabelOpen] = useState<boolean>(false);
 
   // Find selected client object
   const selectedClientObject = useMemo(() => {
@@ -61,6 +64,32 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
   const clientCashbackAvailable = useMemo(() => {
     return selectedClientObject?.cashbackBalance || 0;
   }, [selectedClientObject]);
+
+  // Auto-fill shipping address when selected customer changes
+  React.useEffect(() => {
+    if (selectedClientObject) {
+      const parts = [
+        selectedClientObject.addressStreet,
+        selectedClientObject.addressNum ? `Nº ${selectedClientObject.addressNum}` : '',
+        selectedClientObject.addressComp ? `(${selectedClientObject.addressComp})` : '',
+        selectedClientObject.addressBairro,
+        selectedClientObject.addressCidade,
+        selectedClientObject.addressEstado,
+        selectedClientObject.addressCep ? `CEP: ${selectedClientObject.addressCep}` : ''
+      ].filter(Boolean);
+      
+      if (parts.length > 0) {
+        setShippingAddress(parts.join(', '));
+      } else {
+        setShippingAddress('');
+      }
+    } else {
+      setShippingAddress('');
+    }
+  }, [selectedClientObject]);
+  
+  // Cashback usage states
+  const [useCashback, setUseCashback] = useState<boolean>(false);
 
   // Reset cashback checkbox when client changes
   React.useEffect(() => {
@@ -628,6 +657,14 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       finalClientName = newClient.name;
     }
 
+    const isCorreios = deliveryMethod === 'correios_pac' || deliveryMethod === 'correios_sedex';
+    const generatedTracking = isCorreios ? (() => {
+      const prefixes = ['QC', 'BR', 'PM', 'AL', 'JN', 'OB', 'XY'];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const middleNum = Math.floor(100000000 + Math.random() * 900000000).toString();
+      return `${prefix}${middleNum}BR`;
+    })() : undefined;
+
     const newSale: Sale = {
       id: `v-00${Date.now().toString().slice(-3)}`,
       clientName: finalClientName,
@@ -638,7 +675,10 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       status: 'Concluída',
       createdAt: new Date().toISOString(),
       payments: payments,
-      salesperson: selectedSalesperson !== 'Sem Vendedor' ? selectedSalesperson : undefined
+      salesperson: selectedSalesperson !== 'Sem Vendedor' ? selectedSalesperson : undefined,
+      deliveryMethod: deliveryMethod !== 'retirada' ? (deliveryMethod === 'correios_pac' ? 'Correios PAC' : deliveryMethod === 'correios_sedex' ? 'Correios SEDEX' : 'Motoboy') : undefined,
+      address: deliveryMethod !== 'retirada' ? shippingAddress : undefined,
+      trackingCode: generatedTracking
     };
 
     onAddSale(newSale);
@@ -649,6 +689,8 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     setCouponCode('');
     setAppliedCoupon(null);
     setPayments([{ method: 'PIX', amount: 0 }]); // Reset payment methods
+    setDeliveryMethod('retirada');
+    setShippingAddress('');
     setIsSuccessModalOpen(true);
   };
 
@@ -1055,6 +1097,40 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
                 </select>
               </div>
             </div>
+
+            {/* Método de Envio / Entrega */}
+            <div className="space-y-1.5 text-xs font-sans border-t border-slate-100 pt-3">
+              <label className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none font-sans">
+                <Truck size={10} /> Método de Entrega / Envio
+              </label>
+              <select
+                id="pdv-delivery-select"
+                value={deliveryMethod}
+                onChange={(e) => setDeliveryMethod(e.target.value)}
+                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-sans text-slate-750 focus:outline-hidden focus:border-pink-500 transition-all font-bold cursor-pointer"
+              >
+                <option value="retirada">Retirada no Balcão 🏠</option>
+                <option value="motoboy">Entrega via Motoboy 🏍️</option>
+                <option value="correios_pac">Correios (PAC) 📦</option>
+                <option value="correios_sedex">Correios (SEDEX) ⚡</option>
+              </select>
+            </div>
+
+            {/* Condicional para Endereço de Envio se Correios ou Motoboy */}
+            {deliveryMethod !== 'retirada' && (
+              <div className="space-y-1.5 text-xs font-sans border border-pink-100 bg-pink-50/25 p-2.5 rounded-xl">
+                <label className="text-pink-600 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 select-none font-sans">
+                  📍 Endereço de Entrega *
+                </label>
+                <textarea
+                  value={shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
+                  placeholder="Rua, Número, Bairro, Cidade - Estado, CEP"
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-sans focus:outline-hidden focus:border-pink-500 min-h-[50px] resize-none text-slate-700"
+                  required
+                />
+              </div>
+            )}
 
             {/* Formas de Pagamento Combinadas */}
             <div className="space-y-2.5 text-xs font-sans border-t border-slate-100 pt-3">
@@ -1512,6 +1588,20 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
                 <span>Imprimir Cupom / PDF</span>
               </button>
 
+              {createdReceipt?.trackingCode && (
+                <button 
+                  type="button"
+                  id="pdv-modal-print-label-btn"
+                  onClick={() => {
+                    setIsShippingLabelOpen(true);
+                  }}
+                  className="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold font-sans transition-all flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/10 cursor-pointer active:scale-97"
+                >
+                  <Printer size={14} />
+                  <span>Imprimir Etiqueta de Envio</span>
+                </button>
+              )}
+
               <div className="flex gap-2">
                 <button 
                   type="button"
@@ -1545,6 +1635,16 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
           sale={createdReceipt} 
           onClose={() => {
             setIsThermalReceiptOpen(false);
+          }}
+        />
+      )}
+
+      {/* Interactive Shipping Label Modal popup */}
+      {isShippingLabelOpen && createdReceipt && (
+        <CorreiosLabel 
+          sale={createdReceipt} 
+          onClose={() => {
+            setIsShippingLabelOpen(false);
           }}
         />
       )}
