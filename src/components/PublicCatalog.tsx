@@ -1820,6 +1820,18 @@ export default function PublicCatalog({
                   )}
                 </div>
 
+                {/* Primary Add to Bag Button right after configs */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-sans font-extrabold rounded-2xl text-[12px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 cursor-pointer active:scale-97"
+                  >
+                    <ShoppingBag size={15} />
+                    <span>Adicionar à Sacola</span>
+                  </button>
+                </div>
+
                 {/* ACCORDION COLLAPSIBLES */}
                 <div className="border-t border-slate-100 pt-3.5 space-y-2 text-left">
                   

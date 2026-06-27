@@ -139,8 +139,8 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
   const [isEditingSettings, setIsEditingSettings] = useState(false);
 
   // Printer customizations
-  const [selectedPrinter, setSelectedPrinter] = useState<'80mm' | '58mm' | 'A4' | 'label'>(() => {
-    return (localStorage.getItem('ap_moda_selected_printer') as '80mm' | '58mm' | 'A4' | 'label') || '80mm';
+  const [selectedPrinter, setSelectedPrinter] = useState<'80mm' | '58mm' | 'A4' | 'label' | '30x110'>(() => {
+    return (localStorage.getItem('ap_moda_selected_printer') as '80mm' | '58mm' | 'A4' | 'label' | '30x110') || '80mm';
   });
 
   const [fontSize, setFontSize] = useState<'xs' | 'sm' | 'md' | 'lg'>(() => {
@@ -290,6 +290,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
       '58mm': '53mm',
       '80mm': '76mm',
       'label': '46mm',
+      '30x110': '28mm',
       'A4': '190mm'
     };
     
@@ -316,6 +317,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
           top: 0 !important;
           transform: translateX(-50%) !important;
           width: ${widthMap[selectedPrinter]} !important;
+          ${selectedPrinter === '30x110' ? 'height: 104mm !important; overflow: hidden !important;' : ''}
           max-width: 100% !important;
           margin: 0 auto !important;
           padding: ${selectedPrinter === 'A4' ? '12mm' : '1.5mm'} !important;
@@ -341,9 +343,16 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
         }
         
         /* Adjustments for labels */
-        ${selectedPrinter === 'label' ? `
+        ${selectedPrinter === 'label' || selectedPrinter === '30x110' ? `
           #printable-thermal-receipt * {
             line-height: 1.15 !important;
+          }
+        ` : ''}
+
+        ${selectedPrinter === '30x110' ? `
+          @page {
+            size: 30mm 110mm;
+            margin: 0;
           }
         ` : ''}
       }
@@ -551,6 +560,23 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
                     <span className="text-[9px] text-slate-450 font-medium">Adesivos de gôndola e fita fina (46mm).</span>
                   </button>
 
+                  {/* Option 3.5: 30x110mm Sticker */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPrinter('30x110')}
+                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between h-[68px] outline-hidden
+                      ${selectedPrinter === '30x110' 
+                        ? 'bg-pink-50/50 border-pink-400 text-pink-950 shadow-xs' 
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-350'
+                      }`}
+                  >
+                    <div className="flex justify-between items-start w-full">
+                      <span className="font-extrabold text-[10.5px]">Adesivo 30x110mm</span>
+                      {selectedPrinter === '30x110' && <Check size={11} className="text-pink-600" />}
+                    </div>
+                    <span className="text-[9px] text-slate-450 font-medium">Etiqueta adesiva esticada de 30x110mm.</span>
+                  </button>
+
                   {/* Option 4: A4 common sheets */}
                   <button
                     type="button"
@@ -755,7 +781,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
                 Prévia Oficial do Cupom
               </span>
               <span className="bg-pink-50 text-pink-700 font-mono font-bold text-[8.5px] px-2 py-0.5 rounded tracking-wide uppercase">
-                {selectedPrinter === '80mm' ? 'Térmica 80mm' : selectedPrinter === '58mm' ? 'Mini POS 58mm' : selectedPrinter === 'label' ? 'Etiqueta' : 'A4 Padrão'}
+                {selectedPrinter === '80mm' ? 'Térmica 80mm' : selectedPrinter === '58mm' ? 'Mini POS 58mm' : selectedPrinter === 'label' ? 'Etiqueta' : selectedPrinter === '30x110' ? 'Adesivo 30x110mm' : 'A4 Padrão'}
               </span>
             </div>
 
@@ -859,16 +885,19 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
                 className={`bg-white border select-all border-slate-350 shadow-xl transition-all duration-300 relative flex flex-col text-slate-800
                   ${selectedPrinter === '58mm' ? 'max-w-[240px] p-3 text-[10px] font-mono leading-snug' :
                     selectedPrinter === 'label' ? 'max-w-[210px] p-2 text-[9px] font-mono leading-tight' :
+                    selectedPrinter === '30x110' ? 'w-[114px] h-[415px] p-1.5 text-[7.5px] font-mono leading-tight overflow-hidden rounded-md' :
                     selectedPrinter === 'A4' ? 'max-w-[620px] p-10 text-[12px] font-sans leading-relaxed' :
                     'max-w-[340px] p-5 text-[11px] font-mono leading-relaxed'
                   }
                 `}
                 style={{
-                  fontSize: fontSize === 'xs' ? '8.5px' : fontSize === 'sm' ? '10px' : fontSize === 'md' ? '11.5px' : '13.5px'
+                  fontSize: selectedPrinter === '30x110' 
+                    ? (fontSize === 'xs' ? '5.5px' : fontSize === 'sm' ? '6.5px' : fontSize === 'md' ? '7.5px' : '8.5px')
+                    : (fontSize === 'xs' ? '8.5px' : fontSize === 'sm' ? '10px' : fontSize === 'md' ? '11.5px' : '13.5px')
                 }}
               >
             {/* Paper custom border details top & bottom */}
-            {selectedPrinter !== 'A4' && (
+            {selectedPrinter !== 'A4' && selectedPrinter !== '30x110' && (
               <div className="absolute top-0 inset-x-0 h-1.5 bg-radial from-transparent to-white bg-repeat-x bg-[length:8px_4px] opacity-10" />
             )}
 
@@ -1116,7 +1145,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
             </div>
 
             {/* Blank tear spacer Lines */}
-            {cutLinesCount > 0 && (
+            {cutLinesCount > 0 && selectedPrinter !== '30x110' && (
               <div 
                 className="no-print select-none border-t border-dashed border-slate-200 text-center text-slate-400 relative mt-4 pt-1"
                 style={{ height: `${cutLinesCount * 22}px` }}
@@ -1129,7 +1158,7 @@ export default function ThermalReceipt({ sale, onClose }: ThermalReceiptProps) {
             )}
 
             {/* Paper jagged footer simulation */}
-            {selectedPrinter !== 'A4' && (
+            {selectedPrinter !== 'A4' && selectedPrinter !== '30x110' && (
               <div className="absolute bottom-0 inset-x-0 h-1.5 bg-radial from-transparent to-white bg-repeat-x bg-[length:8px_4px] transform rotate-180 opacity-10" />
             )}
           </div>
