@@ -685,6 +685,82 @@ export default function PublicCatalog({
     };
   }, []);
 
+  const storeInfo = useMemo(() => {
+    let name = 'AP Moda Fitness';
+    let city = 'São José de Mipibu';
+    let state = 'RN';
+    let phone = '5521991234567';
+
+    try {
+      const savedName = localStorage.getItem('ap_store_name');
+      if (savedName) name = savedName;
+
+      const savedCity = localStorage.getItem('ap_store_city');
+      if (savedCity) city = savedCity;
+
+      const savedState = localStorage.getItem('ap_store_state');
+      if (savedState) state = savedState;
+
+      const savedPhone = localStorage.getItem('ap_store_phone');
+      if (savedPhone) phone = savedPhone;
+
+      // Fallback check legacy company info
+      const savedLegacy = localStorage.getItem('ap_moda_company_info');
+      if (savedLegacy) {
+        const parsed = JSON.parse(savedLegacy);
+        if (parsed) {
+          if (!savedName && parsed.name) name = parsed.name;
+          if (!savedPhone && parsed.phone) phone = parsed.phone;
+          if (parsed.addressLine2 && !savedCity) {
+            const parts = parsed.addressLine2.split('-');
+            if (parts[0]) city = parts[0].trim();
+            if (parts[1]) state = parts[1].trim();
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Clean merchant name for Pix
+    const cleanMerchant = name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z]/g, '')
+      .trim()
+      .substring(0, 25) || 'APModaFitness';
+    const merchantLen = String(cleanMerchant.length).padStart(2, '0');
+
+    // Clean city for Pix
+    const cleanCity = city
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z\s]/g, '')
+      .replace(/\s+/g, '')
+      .trim()
+      .substring(0, 15) || 'SaoPaulo';
+    const cityLen = String(cleanCity.length).padStart(2, '0');
+
+    // Clean phone
+    const cleanPhone = phone.replace(/\D/g, '');
+    let finalPhone = cleanPhone;
+    if (cleanPhone.length >= 10 && cleanPhone.length <= 11 && !cleanPhone.startsWith('55')) {
+      finalPhone = `55${cleanPhone}`;
+    }
+    if (finalPhone.length === 0) {
+      finalPhone = '5521991234567';
+    }
+
+    return {
+      name,
+      city,
+      state,
+      phone: finalPhone,
+      cleanMerchant,
+      merchantLen,
+      cleanCity,
+      cityLen
+    };
+  }, []);
+
   const storePixKey = useMemo(() => {
     return paymentConfig.pixKey || 'apmodafitness55@gmail.com';
   }, [paymentConfig]);
@@ -704,9 +780,9 @@ export default function PublicCatalog({
   }, [cartSubtotal, cartDiscount, pixDiscount, deliveryFee]);
 
   const pixPayload = useMemo(() => {
-    const amountStr = cartTotal.toFixed(2).replace('.', '');
-    return `00020101021126580014br.gov.bcb.pix0136${storePixKey}5204000053039865407${amountStr}5802BR5915APModaFitness6009SaoPaulo62070503***6304A1B2`;
-  }, [storePixKey, cartTotal]);
+    const amountStr = cartTotal.toFixed(2);
+    return `00020101021126580014br.gov.bcb.pix0136${storePixKey}5204000053039865407${amountStr}5802BR59${storeInfo.merchantLen}${storeInfo.cleanMerchant}60${storeInfo.cityLen}${storeInfo.cleanCity}62070503***6304A1B2`;
+  }, [storePixKey, cartTotal, storeInfo]);
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(pixPayload);
@@ -894,7 +970,7 @@ export default function PublicCatalog({
     setIsVipRegisteredJustNow(true);
 
     try {
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(orderMsg)}`, '_blank');
+      window.open(`https://api.whatsapp.com/send?phone=${storeInfo.phone}&text=${encodeURIComponent(orderMsg)}`, '_blank');
     } catch {
       alert('Seu navegador bloqueou o WhatsApp. Copie a mensagem ou tente novamente.');
     }
@@ -2476,7 +2552,7 @@ export default function PublicCatalog({
 
       {/* 9. Interactive Float WhatsApp Button with notify sticker */}
       <a 
-        href={`https://api.whatsapp.com/send?phone=5521991234567&text=Ol%C3%A1!%20Gostaria%20de%20tirar%20uma%20d%C3%BAvida%20sobre%20as%20pe%C3%A7as%20da%20vitrine%20AP%20Moda%20Fitness%20🌸`}
+        href={`https://api.whatsapp.com/send?phone=${storeInfo.phone}&text=Ol%C3%A1!%20Gostaria%20de%20tirar%20uma%20d%C3%BAvida%20sobre%20as%20pe%C3%A7as%20da%20vitrine%20AP%20Moda%20Fitness%20🌸`}
         target="_blank"
         rel="noreferrer"
         className="fixed bottom-6 right-6 z-40 bg-green-500 hover:bg-green-600 p-3.5 rounded-full shadow-lg text-white hover:scale-110 active:scale-95 transition-all text-center flex items-center justify-center animate-bounce duration-3000 cursor-pointer"

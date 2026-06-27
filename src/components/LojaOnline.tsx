@@ -24,6 +24,7 @@ import {
   Share2
 } from 'lucide-react';
 import { Product } from '../types';
+import { getCatalogUrl } from '../config';
 
 interface LojaOnlineProps {
   products: Product[];
@@ -101,7 +102,7 @@ export default function LojaOnline({
   };
 
   const getCatalogLink = () => {
-    return `${window.location.protocol}//${window.location.host}/?catalog=true`;
+    return getCatalogUrl();
   };
 
   const handleCopyCatalogLink = () => {
