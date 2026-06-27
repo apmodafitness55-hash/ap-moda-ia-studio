@@ -73,6 +73,11 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
   // GPS navigation simulation state inside the detailed card
   const [routeStep, setRouteStep] = useState(0); // 0: Idle, 1: En Route, 2: Arrived
   const [simulatedDistance, setSimulatedDistance] = useState(4.2); // km
+  
+  // New tabs & filters for routing / logistics
+  const [feedTab, setFeedTab] = useState<'pending' | 'completed'>('pending');
+  const [feedFilter, setFeedFilter] = useState<'mine' | 'all'>('mine');
+  const [showWhatsappModal, setShowWhatsappModal] = useState<any | null>(null);
 
   // Dynamically filter orders allocated to this specific rider
   const riderOrders = useMemo(() => {
@@ -82,10 +87,33 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
     });
   }, [onlineOrders, selectedRider]);
 
+  // Dynamically filter orders allocated for the visual feed list
+  const filteredFeedOrders = useMemo(() => {
+    return onlineOrders.filter(o => {
+      const isAssignedToMe = o.motoboy && o.motoboy.toLowerCase().includes(selectedRider.toLowerCase());
+      const isUnassigned = !o.motoboy || o.motoboy.trim() === '';
+      
+      const matchesRiderType = feedFilter === 'mine' ? isAssignedToMe : isUnassigned;
+      const statusLower = (o.status || '').toLowerCase();
+      
+      if (feedTab === 'pending') {
+        // Pending physical routes: Pago, Saiu para Entrega, Pronto
+        const isPending = statusLower === 'pago' || statusLower === 'saiu para entrega' || statusLower === 'saiu para entrega' || statusLower === 'pronto';
+        return matchesRiderType && isPending;
+      } else {
+        // Completed routes
+        return matchesRiderType && statusLower === 'entregue';
+      }
+    });
+  }, [onlineOrders, selectedRider, feedFilter, feedTab]);
+
   // Delivery total calculations
   const stats = useMemo(() => {
     const totalDeliveries = riderOrders.length;
-    const completed = riderOrders.filter(o => o.status === 'Entregue').length;
+    const completed = riderOrders.filter(o => {
+      const s = (o.status || '').toLowerCase();
+      return s === 'entregue';
+    }).length;
     const pending = totalDeliveries - completed;
     return { totalDeliveries, completed, pending };
   }, [riderOrders]);
@@ -189,6 +217,22 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
     setRouteStep(1);
     setSimulatedDistance(4.5);
     onUpdateOrderStatus(order.id, 'Saiu para Entrega');
+
+    // Build automated WhatsApp link and show modal
+    const rawPhone = order.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    const clientPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const msg = `Olá, *${order.clientName}*! Seu pedido da *AP Moda Fitness* (ID: #${order.id.toUpperCase()}) está a caminho com o nosso entregador *${selectedRider}*. 🏍️💨\n\n📍 Endereço de Entrega: _${order.address}_\n\nPor favor, certifique-se de que há alguém disponível no local para receber. Obrigado!`;
+    const link = `https://api.whatsapp.com/send?phone=${clientPhone}&text=${encodeURIComponent(msg)}`;
+
+    setShowWhatsappModal({
+      orderId: order.id,
+      clientName: order.clientName,
+      phone: rawPhone,
+      message: msg,
+      link: link
+    });
+
     setActiveStep('delivery_detail');
   };
 
@@ -339,10 +383,10 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
           {/* SCREEN: DELIVERY FEED LIST */}
           {activeStep === 'feed' && (
             <div className="flex-1 flex flex-col p-4 overflow-y-auto" id="driver-app-feed">
-              <div className="flex justify-between items-center mb-4 pt-4 border-b border-slate-800 pb-3">
+              <div className="flex justify-between items-center mb-3 pt-4 border-b border-slate-800 pb-2">
                 <div>
                   <span className="text-[9px] font-bold text-pink-400 uppercase tracking-wide">Bem-vindo, {selectedRider.split(' ')[0]}!</span>
-                  <h4 className="text-sm font-black text-white">Minhas Entregas</h4>
+                  <h4 className="text-sm font-black text-white">Minhas Rotas</h4>
                 </div>
                 
                 <button 
@@ -354,7 +398,7 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
               </div>
 
               {/* Delivery stats pills */}
-              <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+              <div className="grid grid-cols-3 gap-2 mb-3 text-center">
                 <div className="bg-slate-850/70 p-2 rounded-xl">
                   <span className="text-slate-500 text-[8px] font-bold block uppercase">Receber</span>
                   <span className="text-xs font-black text-slate-100">{stats.totalDeliveries}</span>
@@ -369,72 +413,143 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
                 </div>
               </div>
 
+              {/* ROUTING TABS FOR LOGISTICS STATUS */}
+              <div className="flex bg-slate-950 p-1 rounded-xl mb-3 border border-slate-800 shrink-0">
+                <button
+                  onClick={() => setFeedTab('pending')}
+                  className={`flex-1 py-1.5 text-center text-[10px] font-extrabold rounded-lg transition-all cursor-pointer ${feedTab === 'pending' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  A Entregar ({onlineOrders.filter(o => o.motoboy?.toLowerCase().includes(selectedRider.toLowerCase()) && ['pago', 'saiu para entrega', 'saiu para entrega', 'pronto'].includes((o.status || '').toLowerCase())).length})
+                </button>
+                <button
+                  onClick={() => setFeedTab('completed')}
+                  className={`flex-1 py-1.5 text-center text-[10px] font-extrabold rounded-lg transition-all cursor-pointer ${feedTab === 'completed' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  Concluídos ({onlineOrders.filter(o => o.motoboy?.toLowerCase().includes(selectedRider.toLowerCase()) && (o.status || '').toLowerCase() === 'entregue').length})
+                </button>
+              </div>
+
+              {/* ASSIGNED VS UNASSIGNED TOGGLE */}
+              <div className="flex justify-between items-center mb-3 text-[10px] bg-slate-900/40 p-1.5 rounded-lg border border-slate-850 shrink-0">
+                <span className="font-bold text-slate-400">Filtrar Pedidos:</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFeedFilter('mine')}
+                    className={`px-2 py-0.5 rounded font-extrabold cursor-pointer transition-colors ${feedFilter === 'mine' ? 'bg-pink-900/20 text-pink-400 border border-pink-500/30' : 'text-slate-500 hover:text-slate-400'}`}
+                  >
+                    Meus
+                  </button>
+                  <button
+                    onClick={() => setFeedFilter('all')}
+                    className={`px-2 py-0.5 rounded font-extrabold cursor-pointer transition-colors ${feedFilter === 'all' ? 'bg-pink-900/20 text-pink-400 border border-pink-500/30' : 'text-slate-500 hover:text-slate-400'}`}
+                  >
+                    Sem Entregador ({onlineOrders.filter(o => (!o.motoboy || o.motoboy.trim() === '') && ['pago', 'pronto'].includes((o.status || '').toLowerCase())).length})
+                  </button>
+                </div>
+              </div>
+
               {/* Active list container */}
-              <div className="space-y-3 flex-1 overflow-y-auto">
-                {riderOrders.length === 0 ? (
-                  <div className="text-center py-12 space-y-2">
-                    <Truck size={34} className="text-slate-700 mx-auto" />
-                    <p className="text-slate-400 italic text-[11px]">Nenhuma entrega designada para você hoje.</p>
-                    <p className="text-[10px] text-slate-500 leading-normal pl-4 pr-4">O gerente da loja pode atribuir entregas a você selecionando seu nome na área de "Pedidos & Entregas" no painel principal</p>
+              <div className="space-y-3 flex-1 overflow-y-auto pr-0.5">
+                {filteredFeedOrders.length === 0 ? (
+                  <div className="text-center py-10 space-y-2">
+                    <Truck size={30} className="text-slate-800 mx-auto" />
+                    <p className="text-slate-400 italic text-[11px]">Nenhum pedido localizado nesta lista.</p>
+                    <p className="text-[10px] text-slate-600 pr-2 pl-2 leading-relaxed">Pedidos pagos ou prontos aparecem aqui para roteirização física.</p>
                   </div>
                 ) : (
-                  riderOrders.map((ord: any) => (
-                    <div key={ord.id} className="bg-slate-850 border border-slate-800 rounded-2xl p-3 space-y-3 hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-bold font-mono text-pink-400 bg-pink-900/20 px-2 py-0.5 rounded uppercase">
-                          {ord.id}
-                        </span>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full
-                          ${ord.status === 'Entregue' ? 'bg-emerald-900/30 text-emerald-400' : ''}
-                          ${ord.status === 'Saiu para Entrega' ? 'bg-amber-900/30 text-amber-400 animate-pulse' : ''}
-                          ${ord.status === 'Pendente' || ord.status === 'Separando' || ord.status === 'Pronto' ? 'bg-slate-800 text-slate-400' : ''}
-                        `}>
-                          {ord.status}
-                        </span>
-                      </div>
+                  filteredFeedOrders.map((ord: any) => {
+                    const statusLower = (ord.status || '').toLowerCase();
+                    return (
+                      <div key={ord.id} className="bg-slate-850 border border-slate-800 rounded-2xl p-3 space-y-3 hover:border-slate-700 transition-colors">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-bold font-mono text-pink-400 bg-pink-900/20 px-2 py-0.5 rounded uppercase">
+                            {ord.id}
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full
+                            ${statusLower === 'entregue' ? 'bg-emerald-900/30 text-emerald-400' : ''}
+                            ${statusLower === 'saiu para entrega' ? 'bg-amber-900/30 text-amber-400 animate-pulse' : ''}
+                            ${statusLower === 'pago' ? 'bg-indigo-900/30 text-indigo-400' : ''}
+                            ${['pendente', 'separando', 'pronto'].includes(statusLower) ? 'bg-slate-800 text-slate-400' : ''}
+                          `}>
+                            {ord.status}
+                          </span>
+                        </div>
 
-                      <div className="text-xs font-sans">
-                        <p className="font-extrabold text-slate-200">{ord.clientName}</p>
-                        <p className="text-slate-400 text-[10px] mt-1 leading-normal flex items-start gap-1">
-                          <MapPin size={10} className="text-slate-500 shrink-0 mt-0.5" />
-                          <span>{ord.address}</span>
-                        </p>
-                      </div>
+                        <div className="text-xs font-sans">
+                          <p className="font-extrabold text-slate-200">{ord.clientName}</p>
+                          
+                          {/* Street-optimized high readability address box */}
+                          <div className="bg-slate-900 border-l-4 border-pink-500 p-2.5 mt-2 rounded-r-xl space-y-1">
+                            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1 select-none">
+                              <MapPin size={9} className="text-pink-400 shrink-0" />
+                              <span>Endereço de Entrega</span>
+                            </p>
+                            <p className="font-extrabold text-slate-200 text-xs leading-normal select-all">
+                              {ord.address}
+                            </p>
+                          </div>
+                        </div>
 
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-800 pt-2 font-mono">
-                        <span>Total Coleta:</span>
-                        <span className="font-extrabold text-pink-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ord.total + ord.deliveryFee)}</span>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleOpenGoogleMaps(ord.address)}
-                          className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer"
-                        >
-                          <Navigation size={10} />
-                          <span>Abrir GPS</span>
-                        </button>
-                        
-                        {ord.status !== 'Entregue' ? (
-                          <button
-                            onClick={() => handleStartRoute(ord)}
-                            className="flex-1 py-1.5 bg-pink-600 hover:bg-pink-700 text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer"
-                          >
-                            <span>Ir p/ Entrega</span>
-                            <ChevronRight size={10} />
-                          </button>
-                        ) : (
-                          <button
-                            disabled
-                            className="flex-1 py-1.5 bg-slate-800/50 text-slate-600 text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-not-allowed"
-                          >
-                            <CheckCircle size={10} className="text-emerald-500" />
-                            <span>Entregue</span>
-                          </button>
+                        {/* Order items snippet */}
+                        {ord.items && ord.items.length > 0 && (
+                          <div className="text-[9px] text-slate-400 font-sans border-t border-slate-800/40 pt-2 select-none">
+                            <span className="font-bold text-slate-500">Itens: </span>
+                            <span>{ord.items.map((it: any) => `${it.quantity}x ${it.productName || 'Peça'}`).join(', ')}</span>
+                          </div>
                         )}
+
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-800 pt-2 font-mono">
+                          <span>Total Coleta:</span>
+                          <span className="font-extrabold text-pink-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ord.total + (ord.deliveryFee || 0))}</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleOpenGoogleMaps(ord.address)}
+                            className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer border-0"
+                          >
+                            <Navigation size={10} />
+                            <span>Abrir GPS</span>
+                          </button>
+                          
+                          {statusLower === 'pago' || statusLower === 'pronto' || statusLower === 'pendente' ? (
+                            <button
+                              onClick={() => {
+                                // Direct order claim from the street
+                                if (!ord.motoboy || ord.motoboy.trim() === '') {
+                                  ord.motoboy = selectedRider;
+                                }
+                                handleStartRoute(ord);
+                              }}
+                              className="flex-1 py-1.5 bg-pink-600 hover:bg-pink-700 text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer border-0"
+                            >
+                              <span>Iniciar Entrega</span>
+                              <ChevronRight size={10} />
+                            </button>
+                          ) : statusLower === 'saiu para entrega' ? (
+                            <button
+                              onClick={() => {
+                                setActiveOrder(ord);
+                                setActiveStep('signature');
+                              }}
+                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer border-0"
+                            >
+                              <CheckCircle size={10} />
+                              <span>Marcar como Entregue</span>
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="flex-1 py-1.5 bg-slate-800/50 text-slate-600 text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-not-allowed border-0"
+                            >
+                              <CheckCircle size={10} className="text-emerald-500" />
+                              <span>Entregue</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -655,6 +770,51 @@ export default function DriverAppPortal({ onlineOrders, onUpdateOrderStatus, onE
                     Confirmar e Finalizar Recebimento ✅
                   </button>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* WHATSAPP AUTOMATION MODAL */}
+          {showWhatsappModal && (
+            <div className="absolute inset-0 bg-slate-950/95 z-50 flex flex-col justify-center p-5 text-center">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl">
+                <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mx-auto animate-bounce">
+                  <MessageSquare size={24} />
+                </div>
+                
+                <div className="space-y-1">
+                  <h4 className="text-white font-extrabold text-sm">Aviso WhatsApp Cliente 🌸</h4>
+                  <p className="text-slate-400 text-[10px] leading-relaxed">
+                    Status do pedido atualizado para <span className="text-pink-400 font-bold">Saiu para entrega</span>! Envie o aviso de trânsito à cliente agora:
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-950 text-left border border-slate-800 rounded-xl max-h-32 overflow-y-auto">
+                  <p className="text-[10px] font-mono text-emerald-400 leading-normal whitespace-pre-wrap select-all">
+                    {showWhatsappModal.message}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <a
+                    href={showWhatsappModal.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => {
+                      setShowWhatsappModal(null);
+                    }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all text-center no-underline hover:text-white"
+                  >
+                    <MessageSquare size={14} />
+                    <span>Enviar Notificação</span>
+                  </a>
+                  <button
+                    onClick={() => setShowWhatsappModal(null)}
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all border-0 cursor-pointer"
+                  >
+                    Prosseguir sem enviar
+                  </button>
+                </div>
               </div>
             </div>
           )}
