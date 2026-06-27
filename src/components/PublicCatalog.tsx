@@ -127,6 +127,7 @@ interface PublicCatalogProps {
   onAddClient: (newClient: Client) => void;
   onUpdateClients?: (updatedList: Client[]) => void;
   onExitCustomerView?: () => void;
+  currentUser?: any;
 }
 
 export default function PublicCatalog({ 
@@ -136,7 +137,8 @@ export default function PublicCatalog({
   clients = [], 
   onAddClient, 
   onUpdateClients,
-  onExitCustomerView
+  onExitCustomerView,
+  currentUser
 }: PublicCatalogProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -145,6 +147,10 @@ export default function PublicCatalog({
   // Custom states for interactive lookbook carousel
   const [currentSlide, setCurrentSlide] = useState(0);
   const [viewMode, setViewMode] = useState<'cliente' | 'editor'>('cliente');
+
+  const hasAdminPrivileges = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Gerente');
+  const actualViewMode = hasAdminPrivileges ? viewMode : 'cliente';
+
   const [editorTab, setEditorTab] = useState<'geral' | 'ticker' | 'carrossel' | 'campanha'>('geral');
   const [editingSlideIndex, setEditingSlideIndex] = useState(0);
 
@@ -1046,10 +1052,10 @@ export default function PublicCatalog({
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative ${viewMode === 'editor' ? 'flex flex-col lg:flex-row pb-0 lg:overflow-hidden' : ''}`}>
+    <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative ${actualViewMode === 'editor' ? 'flex flex-col lg:flex-row pb-0 lg:overflow-hidden' : ''}`}>
       
       {/* Workspace Demonstration Switcher Button Helper */}
-      {onExitCustomerView && (
+      {onExitCustomerView && hasAdminPrivileges && (
         <div className="bg-slate-900 border-b border-slate-800 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-3 font-sans shadow-md shrink-0 w-full absolute top-0 left-0">
           <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
             <div className="flex items-center gap-2">
@@ -1092,7 +1098,7 @@ export default function PublicCatalog({
       )}
 
       {/* 1A. Left Side Custom Editor Workspace Control Desk (Only visible in editor mode) */}
-      {viewMode === 'editor' && (
+      {actualViewMode === 'editor' && (
         <div className="w-full lg:w-[420px] shrink-0 bg-slate-905 border-r border-slate-800 text-slate-100 p-5 mt-14 font-sans overflow-y-auto lg:h-[calc(100vh-50px)] sticky top-[50px] z-30 shadow-2xl flex flex-col justify-between" style={{ backgroundColor: '#0f172a' }}>
           <div className="space-y-6">
             <div className="pb-4 border-b border-slate-800 flex items-center justify-between">
@@ -1537,7 +1543,7 @@ export default function PublicCatalog({
       )}
 
       {/* Main E-Commerce Scrollable Vitrine Body Block */}
-      <div className={`flex-1 ${viewMode === 'editor' ? 'lg:h-[calc(100vh-50px)] lg:overflow-y-auto mt-[50px]' : 'mt-[50px]'} relative transition-all duration-300`}>
+      <div className={`flex-1 ${actualViewMode === 'editor' ? 'lg:h-[calc(100vh-50px)] lg:overflow-y-auto mt-[50px]' : (onExitCustomerView && hasAdminPrivileges ? 'mt-[50px]' : 'mt-0')} relative transition-all duration-300`}>
         
         {/* 1. Ticker Announcement Bar */}
         {tickerConfig.show && (

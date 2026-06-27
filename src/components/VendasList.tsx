@@ -19,7 +19,8 @@ import {
   CheckCircle,
   AlertTriangle,
   ChevronDown,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
 import { Sale, Product, Transaction } from '../types';
 import ThermalReceipt from './ThermalReceipt';
@@ -31,9 +32,18 @@ interface VendasListProps {
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   setActiveTab: (tab: any) => void;
   onAddTransaction?: (tx: Transaction) => void;
+  onDeleteSale?: (saleId: string) => void;
 }
 
-export default function VendasList({ sales, setSales, products, setProducts, setActiveTab, onAddTransaction }: VendasListProps) {
+export default function VendasList({ 
+  sales, 
+  setSales, 
+  products, 
+  setProducts, 
+  setActiveTab, 
+  onAddTransaction,
+  onDeleteSale
+}: VendasListProps) {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
@@ -128,6 +138,45 @@ export default function VendasList({ sales, setSales, products, setProducts, set
 
       alert('Venda cancelada e armazenada como "Cancelada". O estoque físico correspondente foi retornado para o inventário!');
     }
+  };
+
+  // Handle Permanent Delete Sale
+  const handleDeleteSaleClick = (saleId: string) => {
+    const targetSale = sales.find(s => s.id === saleId);
+    if (!targetSale) return;
+
+    if (!confirm(`ATENÇÃO: Tem certeza absoluta que deseja APAGAR permanentemente a venda #${saleId.toUpperCase()} de ${targetSale.clientName} do histórico?\n\nEsta ação não poderá ser desfeita e removerá o registro completamente!`)) {
+      return;
+    }
+
+    // Se a venda for concluída, perguntar sobre o estoque
+    if (targetSale.status === 'Concluída') {
+      const returnStock = confirm(`Deseja também retornar os produtos desta venda (${targetSale.items.length} itens) ao estoque físico antes de apagá-la do histórico?\n\n[OK] Sim, devolver itens ao estoque e apagar venda.\n[Cancelar] Não, apenas apagar a venda sem alterar o estoque.`);
+      if (returnStock) {
+        setProducts(prevProducts => {
+          return prevProducts.map(prod => {
+            const itemSold = targetSale.items.find(it => it.productId === prod.id);
+            if (itemSold) {
+              return {
+                ...prod,
+                stock: prod.stock + itemSold.quantity,
+                salesCount: Math.max(0, prod.salesCount - itemSold.quantity)
+              };
+            }
+            return prod;
+          });
+        });
+      }
+    }
+
+    // Remover a venda do estado
+    if (onDeleteSale) {
+      onDeleteSale(saleId);
+    } else {
+      setSales(prev => prev.filter(s => s.id !== saleId));
+    }
+
+    alert('Venda apagada com sucesso do histórico!');
   };
 
   // KPI Calculations
@@ -602,6 +651,15 @@ export default function VendasList({ sales, setSales, products, setProducts, set
                             <span>Cancelar</span>
                           </button>
                         )}
+
+                        <button
+                          onClick={() => handleDeleteSaleClick(sale.id)}
+                          title="Excluir/Apagar essa venda permanentemente"
+                          className="p-1 px-2 hover:bg-red-50 text-red-600 hover:border-red-150 border border-transparent rounded font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Trash2 size={12} />
+                          <span>Apagar</span>
+                        </button>
                       </div>
                     </td>
                   </tr>

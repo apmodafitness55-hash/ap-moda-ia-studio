@@ -58,6 +58,7 @@ import {
   fetchProductsFromSupabase,
   syncBulkProductsToSupabase,
   deleteProductFromSupabase,
+  deleteSaleFromSupabase,
   fetchClientsFromSupabase,
   syncBulkClientsToSupabase,
   fetchSalesFromSupabase,
@@ -2284,6 +2285,20 @@ export default function App() {
     }
   };
 
+  const handleDeleteSale = async (saleId: string) => {
+    setSales(prev => prev.filter(s => s.id !== saleId));
+    const config = getSupabaseConfig();
+    if (config && !systemOffline) {
+      try {
+        await deleteSaleFromSupabase(saleId);
+        const remaining = getDirtyIds('ap_dirty_sales').filter(id => id !== saleId);
+        saveDirtyIds('ap_dirty_sales', remaining);
+      } catch (e) {
+        console.error('Immediate sale delete failed:', e);
+      }
+    }
+  };
+
   const handleAddTransaction = async (newTx: Transaction) => {
     setTransactions(prev => [newTx, ...prev]);
     const config = getSupabaseConfig();
@@ -2514,6 +2529,7 @@ export default function App() {
             setProducts={handleUpdateProductsList}
             sales={sales}
             setSales={handleUpdateSalesList}
+            onDeleteSale={handleDeleteSale}
             setActiveTab={setActiveTab}
             onAddTransaction={handleAddTransaction}
           />
@@ -2710,6 +2726,7 @@ export default function App() {
         onAddClient={handleAddClient}
         onUpdateClients={handleUpdateClientsList}
         onExitCustomerView={() => navigateTo('/painel')}
+        currentUser={currentUser}
       />
     );
   }
