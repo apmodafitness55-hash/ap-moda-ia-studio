@@ -27,7 +27,9 @@ import {
   ArrowUpRight,
   Eye,
   Plus,
-  Printer
+  Printer,
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 import { Product, Sale, Client, Transaction, ActiveTab, SalesChannel } from '../types';
 import ThermalReceipt from './ThermalReceipt';
@@ -221,6 +223,50 @@ export default function DashboardOverview({ products, sales, clients, transactio
 
   const bestSellingProducts = useMemo(() => {
     return [...products].sort((a, b) => b.salesCount - a.salesCount).slice(0, 3);
+  }, [products]);
+
+  const criticalStockVariations = useMemo(() => {
+    const list: { productId: string; productName: string; size: string; color: string; stock: number }[] = [];
+    products.forEach(p => {
+      if (p.sizeColorStocks) {
+        Object.entries(p.sizeColorStocks).forEach(([size, colorObj]) => {
+          if (colorObj) {
+            Object.entries(colorObj).forEach(([color, stock]) => {
+              if (stock <= 2) {
+                list.push({
+                  productId: p.id,
+                  productName: p.name,
+                  size,
+                  color,
+                  stock
+                });
+              }
+            });
+          }
+        });
+      } else if (p.colorStocks) {
+        Object.entries(p.colorStocks).forEach(([color, stock]) => {
+          if (stock <= 2) {
+            list.push({
+              productId: p.id,
+              productName: p.name,
+              size: 'Padrão',
+              color,
+              stock
+            });
+          }
+        });
+      } else if (p.stock <= 2) {
+        list.push({
+          productId: p.id,
+          productName: p.name,
+          size: 'Único',
+          color: 'Padrão',
+          stock: p.stock
+        });
+      }
+    });
+    return list;
   }, [products]);
 
   return (

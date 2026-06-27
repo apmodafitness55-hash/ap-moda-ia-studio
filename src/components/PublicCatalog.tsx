@@ -42,7 +42,8 @@ import {
   Save,
   QrCode,
   Handshake,
-  Ruler
+  Ruler,
+  Clock
 } from 'lucide-react';
 import { Product, Client } from '../types';
 import { pushSystemConfigToSupabase } from '../supabase';
@@ -386,6 +387,17 @@ export default function PublicCatalog({
   const [clientNotes, setClientNotes] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; fixedDiscount: number } | null>(null);
+
+  // Perfil / Área VIP Cliente States
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [loggedClient, setLoggedClient] = useState<Client | null>(null);
+  const [loginCpf, setLoginCpf] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [useCashback, setUseCashback] = useState(false);
+  
+  // Retirada Agendamento
+  const [pickupDate, setPickupDate] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
 
   // Payment states in storefront Checkout
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao'>('pix');
@@ -978,9 +990,19 @@ export default function PublicCatalog({
     return Number(((cartSubtotal - cartDiscount) * (pixDiscountPercent / 100)).toFixed(2));
   }, [paymentMethod, cartSubtotal, cartDiscount, pixDiscountPercent]);
 
+  const availableCashback = useMemo(() => {
+    return loggedClient ? (loggedClient.cashbackBalance || 0) : 0;
+  }, [loggedClient]);
+
+  const cashbackDiscount = useMemo(() => {
+    if (!useCashback) return 0;
+    const maxDiscountable = Math.max(0, cartSubtotal - cartDiscount - pixDiscount);
+    return Number(Math.min(availableCashback, maxDiscountable).toFixed(2));
+  }, [useCashback, availableCashback, cartSubtotal, cartDiscount, pixDiscount]);
+
   const cartTotal = useMemo(() => {
-    return Math.max(0, cartSubtotal - cartDiscount - pixDiscount + deliveryFee);
-  }, [cartSubtotal, cartDiscount, pixDiscount, deliveryFee]);
+    return Math.max(0, Number((cartSubtotal - cartDiscount - pixDiscount - cashbackDiscount + deliveryFee).toFixed(2)));
+  }, [cartSubtotal, cartDiscount, pixDiscount, cashbackDiscount, deliveryFee]);
 
   const pixPayload = useMemo(() => {
     const amountStr = cartTotal.toFixed(2);
@@ -1065,6 +1087,13 @@ export default function PublicCatalog({
       }
     }
 
+    if (deliveryMethod === 'retirada') {
+      if (!pickupDate || !pickupTime) {
+        alert('Por favor, agende uma Data e Horário para a retirada do seu pedido na loja.');
+        return;
+      }
+    }
+
     if (paymentMethod === 'cartao') {
       if (!cardNumber.trim() || cardNumber.replace(/\s/g, '').length < 16) {
         alert('Por favor, insira um número de cartão de crédito válido (16 dígitos).');
@@ -1098,6 +1127,11 @@ export default function PublicCatalog({
 
     const couponInfo = appliedCoupon ? `\n🏷️ Cupom: *${appliedCoupon.code}* (-R$ ${cartDiscount.toFixed(2)})` : '';
     const pixDiscountInfo = paymentMethod === 'pix' ? `\n⚡ Desconto Pix (${pixDiscountPercent}% OFF Extra): -R$ ${pixDiscount.toFixed(2)}` : '';
+    const cashbackDiscountInfo = useCashback && cashbackDiscount > 0 ? `\n✨ Desconto Cashback Clube VIP: -R$ ${cashbackDiscount.toFixed(2)}` : '';
+    const pickupSchedInfo = deliveryMethod === 'retirada' 
+      ? `\n📅 *Agendamento de Retirada na Loja:*\n  Dia: *${new Date(pickupDate).toLocaleDateString('pt-BR')}* às *${pickupTime}*\n` 
+      : '';
+
     const deliveryTypeLabel = 
       deliveryMethod === 'motoboy' ? 'Entrega por Motoboy 🏍️' :
       deliveryMethod === 'correios' ? 'Envio via Correios 📦' :
@@ -1119,11 +1153,13 @@ export default function PublicCatalog({
       `---------------------------------\n` +
       `💵 *Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n` +
       `${couponInfo}` +
-      `${pixDiscountInfo}\n` +
+      `${pixDiscountInfo}` +
+      `${cashbackDiscountInfo}\n` +
       `🚚 *Taxa de Entrega:* R$ ${deliveryFee.toFixed(2)}\n` +
       `💰 *Total Geral:* R$ ${cartTotal.toFixed(2)}\n\n` +
       `💳 *Forma de Pagamento:* ${paymentLabelText}\n` +
       `📍 *Forma de Recebimento:* ${deliveryTypeLabel}\n` +
+      `${pickupSchedInfo}` +
       (deliveryMethod !== 'retirada' && deliveryMethod !== 'combinar' ? `🏠 *Endereço Completo:*\n  Rua: ${addressStreet.trim()}, Nº ${addressNum.trim()}\n  Bairro: ${addressBairro.trim()}\n  Cidade: ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}${addressComp.trim() ? `\n  Compl.: ${addressComp.trim()}` : ''}\n` : '') +
       (clientNotes.trim() ? `📝 *Observações:* ${clientNotes.trim()}\n` : '') +
       `\nOlá! Acabei de finalizar meu pedido e efetuar o pagamento via ${paymentMethod === 'pix' ? 'PIX (comprovante anexo)' : `Cartão de Crédito (${cardInstallments}x)`}. Aguardo a entrega das minhas lidas peças! Gratidão! 🌸✨`;
@@ -1158,6 +1194,8 @@ export default function PublicCatalog({
         deliveryFee: deliveryFee,
         deliveryMethod: deliveryMethod,
         trackingCode: generatedTracking,
+        pickupDate: deliveryMethod === 'retirada' ? pickupDate : undefined,
+        pickupTime: deliveryMethod === 'retirada' ? pickupTime : undefined,
         notes: `Cor: ${cart.map(c=>c.color).join(', ')} | CPF: ${clientCpf.trim()} | Pg: ${paymentMethod === 'pix' ? 'PIX' : `Cartão (${cardInstallments}x)`} | Obs: ${clientNotes.trim()}`
       };
       
@@ -1194,6 +1232,10 @@ export default function PublicCatalog({
     const cleanedName = clientName.trim();
     const cleanedCpf = clientCpf.replace(/\D/g, '');
     
+    // Calculate cashback accumulation: 5% of order total
+    const cashbackEarned = Number((cartTotal * 0.05).toFixed(2));
+    const appliedCashbackDiscount = useCashback ? cashbackDiscount : 0;
+
     const existingClientIndex = (clients || []).findIndex(c => {
       const matchPhone = c.phone.replace(/\D/g, '') === cleanedPhone && cleanedPhone.length > 0;
       const matchCpf = c.cpf && c.cpf.replace(/\D/g, '') === cleanedCpf && cleanedCpf.length > 0;
@@ -1204,6 +1246,8 @@ export default function PublicCatalog({
     if (existingClientIndex !== -1) {
       const existingClient = clients[existingClientIndex];
       const updatedList = [...clients];
+      const nextBalance = Math.max(0, Number(((existingClient.cashbackBalance || 0) - appliedCashbackDiscount + cashbackEarned).toFixed(2)));
+
       updatedList[existingClientIndex] = {
         ...existingClient,
         email: clientEmail.trim() || existingClient.email,
@@ -1219,11 +1263,12 @@ export default function PublicCatalog({
         addressCep: addressCep.trim() || existingClient.addressCep,
         totalSpent: Number((existingClient.totalSpent + cartTotal).toFixed(2)),
         ordersCount: (existingClient.ordersCount || 0) + 1,
+        cashbackBalance: nextBalance
       };
       if (onUpdateClients) {
         onUpdateClients(updatedList);
       }
-      setVipMessage(`Fidelidade Ativa! Encontramos seu cadastro: você já possui ${updatedList[existingClientIndex].ordersCount} pedidos com R$ ${updatedList[existingClientIndex].totalSpent.toFixed(2)} acumulados em nosso sistema! 🌸`);
+      setVipMessage(`Fidelidade Ativa! Cashback atualizado: você acumulou R$ ${cashbackEarned.toFixed(2)} nesta compra e possui R$ ${nextBalance.toFixed(2)} disponíveis para novos pedidos! 🌸`);
     } else {
       const newClient: Client = {
         id: `cli-${Date.now()}`,
@@ -1244,12 +1289,16 @@ export default function PublicCatalog({
         npsScore: 10,
         totalSpent: Number(cartTotal.toFixed(2)),
         ordersCount: 1,
+        cashbackBalance: cashbackEarned,
         createdAt: new Date().toISOString()
       };
       onAddClient(newClient);
-      setVipMessage(`Seja bem-vinda, ${cleanedName}! Seu cadastro de cliente VIP foi salvo automaticamente no sistema. ✨ Acumule pontos em suas próximas compras!`);
+      setVipMessage(`Seja bem-vinda, ${cleanedName}! Seu cadastro de cliente VIP foi salvo automaticamente no sistema. ✨ Você acumulou R$ ${cashbackEarned.toFixed(2)} de cashback nesta compra!`);
     }
 
+    // Reset login states
+    setLoggedClient(null);
+    setUseCashback(false);
     setIsVipRegisteredJustNow(true);
 
     try {
@@ -1317,14 +1366,14 @@ export default function PublicCatalog({
         <div className="flex items-center gap-3">
           <button 
             type="button"
-            onClick={() => {
-              const sec = document.getElementById('newsletter-section');
-              if (sec) sec.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="p-2 text-slate-700 hover:text-pink-600 hover:bg-slate-50 rounded-full transition cursor-pointer"
-            title="Área Vip Cliente"
+            onClick={() => setIsProfileModalOpen(true)}
+            className={`p-2 rounded-full transition cursor-pointer relative ${loggedClient ? 'bg-pink-50 text-pink-700 border border-pink-200/50' : 'text-slate-700 hover:text-pink-600 hover:bg-slate-50'}`}
+            title={loggedClient ? `Olá, ${loggedClient.name} (Clube VIP)` : "Área VIP Cliente & Cashback"}
           >
             <User size={18} />
+            {loggedClient && (
+              <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
+            )}
           </button>
           
           <button 
@@ -2815,6 +2864,53 @@ export default function PublicCatalog({
                       </div>
                     </div>
 
+                    {/* Dynamic Date & Time Picker for Retirada */}
+                    {deliveryMethod === 'retirada' && (
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-3 bg-pink-50/20 border border-pink-100/40 rounded-xl p-3 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={14} className="text-pink-600 animate-pulse" />
+                          <p className="font-extrabold text-[10px] uppercase tracking-wider text-pink-700">Agendar Retirada na Loja</p>
+                        </div>
+                        <p className="text-[9px] text-slate-500 leading-normal">
+                          Selecione o dia e o horário em que deseja comparecer à nossa loja física para retirar suas peças fitness.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-slate-550 font-bold text-[8px] uppercase tracking-wider block mb-1">Data de Retirada *</label>
+                            <input 
+                              type="date"
+                              required
+                              value={pickupDate}
+                              min={new Date().toISOString().split('T')[0]}
+                              onChange={(e) => setPickupDate(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-pink-500 text-[10px] bg-white font-medium"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-slate-550 font-bold text-[8px] uppercase tracking-wider block mb-1">Horário Estimado *</label>
+                            <select
+                              required
+                              value={pickupTime}
+                              onChange={(e) => setPickupTime(e.target.value)}
+                              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-pink-500 text-[10px] bg-white font-medium"
+                            >
+                              <option value="">Selecione...</option>
+                              <option value="09:00">09:00 (Abertura)</option>
+                              <option value="10:00">10:00</option>
+                              <option value="11:00">11:00</option>
+                              <option value="12:00">12:00 (Almoço)</option>
+                              <option value="13:00">13:00</option>
+                              <option value="14:00">14:00</option>
+                              <option value="15:00">15:00</option>
+                              <option value="16:00">16:00</option>
+                              <option value="17:00">17:00</option>
+                              <option value="18:00">18:00 (Fechamento)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Dynamic Address option */}
                     {deliveryMethod !== 'retirada' && deliveryMethod !== 'combinar' && (
                       <div className="animate-in fade-in duration-205 space-y-2 border-t border-slate-100/60 pt-2">
@@ -2938,6 +3034,59 @@ export default function PublicCatalog({
                         </button>
                       </div>
                       <span className="text-[8px] text-slate-400 block mt-1">Dica: Use cupons como <strong>FITNESS10</strong>, <strong>BEMVINDA50</strong> ou <strong>FRETEGRATIS</strong> para testar.</span>
+                    </div>
+
+                    {/* Cashback / Fidelidade Section */}
+                    <div className="border-t border-slate-100/60 pt-4 space-y-2">
+                      <p className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500">Clube VIP & Cashback</p>
+                      {loggedClient ? (
+                        <div className="bg-emerald-50/50 border border-emerald-100/80 rounded-xl p-3 flex flex-col gap-2 text-left animate-in fade-in duration-300">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-emerald-800 font-extrabold uppercase tracking-wide">
+                              ✨ Cliente VIP Identificado
+                            </span>
+                            <span className="text-[10px] text-emerald-700 font-bold font-mono">
+                              Saldo: R$ {loggedClient.cashbackBalance?.toFixed(2) || '0.00'}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-slate-600 leading-normal">
+                            Olá, <strong>{loggedClient.name}</strong>! Você possui um saldo acumulado de cashback. Deseja aplicá-lo como desconto nesta compra?
+                          </p>
+                          {(loggedClient.cashbackBalance || 0) > 0 ? (
+                            <label className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-emerald-100 cursor-pointer shadow-xs hover:bg-emerald-50/30 transition">
+                              <input 
+                                type="checkbox"
+                                checked={useCashback}
+                                onChange={(e) => setUseCashback(e.target.checked)}
+                                className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                              />
+                              <span className="text-[10px] font-bold text-slate-700">
+                                Sim, usar R$ {Math.min(loggedClient.cashbackBalance || 0, cartSubtotal - cartDiscount - pixDiscount).toFixed(2)} de desconto! 🎁
+                              </span>
+                            </label>
+                          ) : (
+                            <div className="text-[9.5px] text-slate-500 italic">
+                              Você ainda não possui cashback disponível. Esta compra gerará 5% de cashback para o seu próximo pedido! 🌸
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-left">
+                          <p className="text-[9.5px] text-slate-600 leading-relaxed">
+                            Faça login com seu CPF na <strong>Área VIP</strong> (ícone de perfil no topo do site) para visualizar e resgatar seu saldo de Cashback!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCartOpen(false); // Close cart drawer
+                              setIsProfileModalOpen(true); // Open login modal
+                            }}
+                            className="mt-2 text-pink-600 hover:text-pink-700 font-extrabold text-[9px] uppercase tracking-wider flex items-center gap-1 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-xs cursor-pointer"
+                          >
+                            <User size={10} /> Entrar com meu CPF →
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Forma de Pagamento */}
@@ -3168,6 +3317,13 @@ export default function PublicCatalog({
                     </div>
                   )}
 
+                  {useCashback && cashbackDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Desconto Cashback VIP:</span>
+                      <span>-R$ {cashbackDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between">
                     <span>Taxa de Envio:</span>
                     <span className="font-bold text-slate-800">{deliveryMethod === 'combinar' ? "A combinar 🤝" : (deliveryFee === 0 ? "GRÁTIS 🚚" : `R$ ${deliveryFee.toFixed(2)}`)}</span>
@@ -3236,6 +3392,180 @@ export default function PublicCatalog({
                 {floatingBanner.ctaText || "Aproveitar"}
               </a>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 11. Profile Modal / Clube VIP e Cashback */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-[100] p-4 text-[11px] md:text-xs">
+          <div className="bg-white max-w-md w-full rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col font-sans text-slate-800">
+            
+            {/* Header */}
+            <div className="bg-pink-600 text-white p-5 flex justify-between items-center relative">
+              <div className="flex items-center gap-2">
+                <Gift size={18} className="animate-bounce" />
+                <div>
+                  <h3 className="font-extrabold text-sm md:text-base tracking-tight uppercase">Clube VIP & Cashback 🌸</h3>
+                  <p className="text-[10px] text-pink-100 font-medium">Consulte seu saldo de fidelidade e acelere seus looks fitness</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsProfileModalOpen(false);
+                  setLoginError('');
+                }}
+                className="p-1.5 bg-pink-700/50 hover:bg-pink-850/80 rounded-full transition text-white border-none cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Content body */}
+            <div className="p-6 space-y-4 text-left">
+              {loggedClient ? (
+                // LOGGED VIP VIEW
+                <div className="space-y-4">
+                  <div className="bg-pink-50/40 border border-pink-100 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-pink-600 text-white flex items-center justify-center font-black text-sm">
+                        {loggedClient.name.split(' ')[0][0].toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-850 text-sm leading-tight">{loggedClient.name}</h4>
+                        <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider block w-max mt-0.5">
+                          Membro do Clube VIP 👑
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-pink-100/50 pt-3 grid grid-cols-2 gap-3 text-slate-650 text-[10px]">
+                      <div>
+                        <span className="block text-slate-400 font-bold uppercase text-[8px]">Pedidos Realizados</span>
+                        <strong className="text-slate-800 text-xs font-mono">{loggedClient.ordersCount || 1} compras</strong>
+                      </div>
+                      <div>
+                        <span className="block text-slate-400 font-bold uppercase text-[8px]">Investimento Acumulado</span>
+                        <strong className="text-slate-800 text-xs font-mono">R$ {(loggedClient.totalSpent || 0).toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cashback Display Card */}
+                  <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-5 shadow-md shadow-emerald-500/10 flex items-center justify-between relative overflow-hidden">
+                    <div className="absolute right-2 -bottom-2 opacity-10 pointer-events-none transform rotate-12">
+                      <Gift size={96} />
+                    </div>
+                    <div className="space-y-1 relative z-10">
+                      <span className="text-[9px] font-extrabold tracking-wider uppercase bg-white/20 px-2 py-0.5 rounded-full block w-max">
+                        Seu Saldo Disponível
+                      </span>
+                      <h3 className="text-2xl font-black font-mono tracking-tight pt-1">
+                        R$ {(loggedClient.cashbackBalance || 0).toFixed(2)}
+                      </h3>
+                      <p className="text-[9px] text-emerald-100 leading-normal max-w-[220px]">
+                        Insira itens na sacola para resgatar seu saldo como desconto no Checkout!
+                      </p>
+                    </div>
+                    <div className="bg-white/10 p-2.5 rounded-xl border border-white/10 flex items-center justify-center">
+                      <span className="text-xl">💰</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[9px] text-slate-400 text-center leading-normal">
+                    Fidelidade garantida: 5% de cashback sobre o valor pago é devolvido em cada nova compra concluída!
+                  </p>
+
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileModalOpen(false);
+                        setIsCartOpen(true);
+                      }}
+                      className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition text-center cursor-pointer border-none shadow-sm"
+                    >
+                      Ver Minha Sacola
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoggedClient(null);
+                        setUseCashback(false);
+                      }}
+                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-xl text-xs font-bold transition text-center cursor-pointer border-none"
+                    >
+                      Sair da Conta
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // LOGIN FORM VIEW
+                <div className="space-y-4 font-sans">
+                  <p className="text-slate-600 text-[10.5px] leading-relaxed">
+                    Bem-vinda ao seu espaço exclusivo de fidelidade! Insira o seu <strong>CPF cadastrado</strong> para acessar seu saldo de cashback e preencher o checkout de forma instantânea.
+                  </p>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-slate-500 font-bold text-[9px] uppercase tracking-wider block">Insira seu CPF *</label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="000.000.000-00"
+                      value={loginCpf}
+                      onChange={(e) => setLoginCpf(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-pink-500 font-medium font-mono tracking-wide"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <div className="bg-rose-50 border border-rose-100 text-rose-700 p-2.5 rounded-xl text-[9.5px] font-bold leading-normal">
+                      ⚠ {loginError}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleaned = loginCpf.replace(/\D/g, '');
+                      if (!cleaned) {
+                        setLoginError('Por favor, informe seu CPF.');
+                        return;
+                      }
+                      const found = (clients || []).find(c => c.cpf && c.cpf.replace(/\D/g, '') === cleaned);
+                      if (found) {
+                        setLoggedClient(found);
+                        setClientName(found.name);
+                        setClientPhone(found.phone || found.whatsapp || '');
+                        setClientEmail(found.email || '');
+                        setClientCpf(found.cpf || '');
+                        setClientBirthDate(found.birthDate || '');
+                        setAddressStreet(found.addressStreet || '');
+                        setAddressNum(found.addressNum || '');
+                        setAddressComp(found.addressComp || '');
+                        setAddressBairro(found.addressBairro || '');
+                        setAddressCidade(found.addressCidade || '');
+                        setAddressEstado(found.addressEstado || '');
+                        setAddressCep(found.addressCep || '');
+                        setLoginError('');
+                      } else {
+                        setLoginError('CPF não localizado em nosso Clube VIP. Cadastre-se efetuando sua primeira compra!');
+                      }
+                    }}
+                    className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-pink-500/10 transition-all cursor-pointer border-none flex items-center justify-center gap-1.5 font-sans"
+                  >
+                    <span>Entrar no Clube VIP</span>
+                  </button>
+
+                  <div className="border-t border-slate-100 pt-3 text-center">
+                    <span className="text-[9.5px] text-slate-450 leading-normal block">
+                      Ainda não comprou conosco? Não se preocupe! Ao realizar seu primeiro pedido, você será cadastrada automaticamente e já acumulará <strong>5% de cashback</strong> para as próximas compras. ✨
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   ShoppingBag, 
   MessageSquare, 
+  MessageCircle,
   Clock, 
   AlertCircle, 
   CheckCircle, 
@@ -179,6 +180,38 @@ export default function AbandonedCarts({ checkouts = [], setCheckouts, onSyncChe
     // Open WhatsApp tab
     window.open(waUrl, '_blank');
     setSelectedCheckout(null);
+  };
+
+  // Quick 1-click WhatsApp Recovery with 5% discount coupon
+  const handleQuickRecoveryWhatsApp = (checkout: Checkout) => {
+    const itemsText = (checkout.items || []).map(it => 
+      `• *${it.quantity}x* ${it.productName || 'Peça Fitness'}`
+    ).join('\n');
+    
+    const message = `Olá, ${checkout.clientName}! 🌸\n\nNotamos que você visitou nossa vitrine online *AP Moda Fitness* e deixou algumas peças incríveis salvas em sua sacola:\n\n${itemsText}\n\n💵 *Total das Peças:* R$ ${checkout.total.toFixed(2)}\n\nPara te dar uma ajudinha especial, preparamos um cupom exclusivo de *5% DE DESCONTO* para você garantir seus novos looks fitness hoje mesmo! 🌟\n\n🎟️ Código do Cupom: *FITNESS05*\n\nClique no link para finalizar seu pedido com desconto ou nos chame aqui se precisar de ajuda com tamanhos! 👇✨`;
+
+    let cleanPhone = checkout.phone.replace(/\D/g, '');
+    if (cleanPhone.length === 11 && !cleanPhone.startsWith('55')) {
+      cleanPhone = '55' + cleanPhone;
+    } else if (cleanPhone.length === 10 && !cleanPhone.startsWith('55')) {
+      cleanPhone = '55' + cleanPhone;
+    }
+
+    const encodedText = encodeURIComponent(message);
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
+
+    // Mark as recovered
+    const updatedCheckouts = checkouts.map(c => 
+      c.id === checkout.id 
+        ? { ...c, status: 'recuperado' as const, updatedAt: new Date().toISOString() } 
+        : c
+    );
+    setCheckouts(updatedCheckouts);
+    localStorage.setItem('ap_moda_checkouts', JSON.stringify(updatedCheckouts));
+    localStorage.setItem('ap_dirty_checkouts', 'true');
+
+    // Open link
+    window.open(waUrl, '_blank');
   };
 
   // Clear checkout record
@@ -391,6 +424,14 @@ export default function AbandonedCarts({ checkouts = [], setCheckouts, onSyncChe
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleQuickRecoveryWhatsApp(c)}
+                              className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-xs hover:scale-102 border-none"
+                              title="Recuperação Rápida (Mensagem Automática + Cupom 5% em 1 Clique)"
+                            >
+                              <MessageCircle size={11} />
+                              <span>Recuperação Rápida (5% OFF)</span>
+                            </button>
                             <button
                               id={`recover-btn-${c.id}`}
                               onClick={() => handleGenerateRecoveryMessage(c)}

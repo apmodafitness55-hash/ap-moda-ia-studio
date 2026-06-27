@@ -656,6 +656,12 @@ export default function OrdersLogistics({
                           <MapPin size={11} className="text-slate-400 shrink-0" />
                           <span className="truncate">{order.address}</span>
                         </p>
+                        {order.pickupDate && (
+                          <div className="text-emerald-700 bg-emerald-50 text-[10px] px-2 py-1 rounded-md mt-1.5 border border-emerald-200/60 flex items-center gap-1.5 w-max font-bold animate-pulse">
+                            <Clock size={12} className="text-emerald-600" />
+                            <span>📅 RETIRADA AGENDADA: {new Date(order.pickupDate + 'T12:00:00').toLocaleDateString('pt-BR')} às {order.pickupTime}</span>
+                          </div>
+                        )}
                         {order.notes && <p className="text-blue-600 bg-blue-50/40 text-[10px] px-1.5 py-0.5 rounded mt-1.5 border border-blue-100/50">📝 OBS: {order.notes}</p>}
                       </div>
 

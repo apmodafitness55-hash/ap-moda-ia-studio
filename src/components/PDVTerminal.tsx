@@ -954,6 +954,38 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
                 />
               </div>
 
+              {/* Live Cashback & Loyalty Search Indicator for Seller */}
+              {selectedClientObject && (
+                <div className="bg-emerald-50 border border-emerald-200/65 rounded-xl p-3 mt-2 flex items-center justify-between gap-2.5 animate-fadeIn font-sans text-left">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-[10.5px] text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>👑</span>
+                      <span>Cliente VIP: {selectedClientObject.name}</span>
+                    </p>
+                    <p className="text-[9px] text-slate-500 font-medium">
+                      {selectedClientObject.cpf ? `CPF: ${selectedClientObject.cpf}` : 'Sem CPF informado'} • Total Comprado: R$ {(selectedClientObject.totalSpent || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="block text-slate-400 font-bold uppercase text-[7.5px] tracking-wider">Saldo Cashback</span>
+                    <span className="font-mono font-black text-xs text-emerald-600 block">
+                      R$ {(selectedClientObject.cashbackBalance || 0).toFixed(2)}
+                    </span>
+                    {(selectedClientObject.cashbackBalance || 0) > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setUseCashback(!useCashback)}
+                        className={`mt-1 text-[8px] font-extrabold uppercase px-2 py-0.5 rounded transition cursor-pointer border-none ${useCashback ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-100 text-emerald-850 hover:bg-emerald-200'}`}
+                      >
+                        {useCashback ? 'Aplicado ✓' : 'Aplicar Desc.'}
+                      </button>
+                    ) : (
+                      <span className="text-[7.5px] text-slate-400 font-semibold block uppercase">Sem Saldo</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <datalist id="pdv-clients-list">
                 {clients.map(c => (
                   <option key={c.id} value={c.name}>
