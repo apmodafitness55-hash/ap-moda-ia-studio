@@ -40,7 +40,8 @@ import {
   Layout,
   Megaphone,
   Save,
-  QrCode
+  QrCode,
+  Handshake
 } from 'lucide-react';
 import { Product, Client } from '../types';
 import { pushSystemConfigToSupabase } from '../supabase';
@@ -371,7 +372,7 @@ export default function PublicCatalog({
 
   const [isVipRegisteredJustNow, setIsVipRegisteredJustNow] = useState(false);
   const [vipMessage, setVipMessage] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState<'motoboy' | 'correios' | 'retirada'>('motoboy');
+  const [deliveryMethod, setDeliveryMethod] = useState<'motoboy' | 'correios' | 'retirada' | 'combinar'>('motoboy');
   const [clientAddress, setClientAddress] = useState('');
   const [clientNotes, setClientNotes] = useState('');
   const [couponCode, setCouponCode] = useState('');
@@ -644,7 +645,7 @@ export default function PublicCatalog({
   }, [cart]);
 
   const deliveryFee = useMemo(() => {
-    if (deliveryMethod === 'retirada') return 0;
+    if (deliveryMethod === 'retirada' || deliveryMethod === 'combinar') return 0;
     if (appliedCoupon?.code === 'FRETEGRATIS' || cartSubtotal >= 399) return 0;
     return deliveryMethod === 'motoboy' ? 12 : 20;
   }, [deliveryMethod, cartSubtotal, appliedCoupon]);
@@ -856,7 +857,7 @@ export default function PublicCatalog({
       return;
     }
     
-    if (deliveryMethod !== 'retirada') {
+    if (deliveryMethod !== 'retirada' && deliveryMethod !== 'combinar') {
       if (!addressStreet.trim() || !addressNum.trim() || !addressBairro.trim() || !addressCidade.trim() || !addressEstado.trim() || !addressCep.trim()) {
         alert('Por favor, preencha todos os campos obrigatórios do endereço de entrega (Rua, Número, Bairro, Cidade, Estado e CEP).');
         return;
@@ -883,7 +884,9 @@ export default function PublicCatalog({
     }
 
     let finalAddress = 'Retirada no Local';
-    if (deliveryMethod !== 'retirada') {
+    if (deliveryMethod === 'combinar') {
+      finalAddress = 'A combinar via WhatsApp';
+    } else if (deliveryMethod !== 'retirada') {
       finalAddress = `${addressStreet.trim()}, ${addressNum.trim()}${addressComp.trim() ? ` (${addressComp.trim()})` : ''} - Bairro: ${addressBairro.trim()} - ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}`;
     }
 
@@ -897,6 +900,7 @@ export default function PublicCatalog({
     const deliveryTypeLabel = 
       deliveryMethod === 'motoboy' ? 'Entrega por Motoboy 🏍️' :
       deliveryMethod === 'correios' ? 'Envio via Correios 📦' :
+      deliveryMethod === 'combinar' ? 'Combinar Entrega 🤝' :
       'Retirar no Local de Venda 🏠';
 
     const paymentLabelText = paymentMethod === 'pix' 
@@ -919,7 +923,7 @@ export default function PublicCatalog({
       `💰 *Total Geral:* R$ ${cartTotal.toFixed(2)}\n\n` +
       `💳 *Forma de Pagamento:* ${paymentLabelText}\n` +
       `📍 *Forma de Recebimento:* ${deliveryTypeLabel}\n` +
-      (deliveryMethod !== 'retirada' ? `🏠 *Endereço Completo:*\n  Rua: ${addressStreet.trim()}, Nº ${addressNum.trim()}\n  Bairro: ${addressBairro.trim()}\n  Cidade: ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}${addressComp.trim() ? `\n  Compl.: ${addressComp.trim()}` : ''}\n` : '') +
+      (deliveryMethod !== 'retirada' && deliveryMethod !== 'combinar' ? `🏠 *Endereço Completo:*\n  Rua: ${addressStreet.trim()}, Nº ${addressNum.trim()}\n  Bairro: ${addressBairro.trim()}\n  Cidade: ${addressCidade.trim()}/${addressEstado.trim()} - CEP: ${addressCep.trim()}${addressComp.trim() ? `\n  Compl.: ${addressComp.trim()}` : ''}\n` : '') +
       (clientNotes.trim() ? `📝 *Observações:* ${clientNotes.trim()}\n` : '') +
       `\nOlá! Acabei de finalizar meu pedido e efetuar o pagamento via ${paymentMethod === 'pix' ? 'PIX (comprovante anexo)' : `Cartão de Crédito (${cardInstallments}x)`}. Aguardo a entrega das minhas lidas peças! Gratidão! 🌸✨`;
 
@@ -2281,7 +2285,7 @@ export default function PublicCatalog({
                     {/* Delivery Options select */}
                     <div>
                       <label className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Forma de Retirada/Envio *</label>
-                      <div className="grid grid-cols-3 gap-1 mt-1 font-sans font-bold">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-1 font-sans font-bold">
                         <button
                           type="button"
                           onClick={() => setDeliveryMethod('motoboy')}
@@ -2306,6 +2310,17 @@ export default function PublicCatalog({
                         </button>
                         <button
                           type="button"
+                          onClick={() => setDeliveryMethod('combinar')}
+                          className={`py-1.5 transition rounded-lg text-[9px] flex flex-col items-center justify-center gap-1 cursor-pointer border
+                            ${deliveryMethod === 'combinar' 
+                              ? 'bg-slate-900 border-slate-900 text-white' 
+                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                        >
+                          <Handshake size={12} />
+                          <span>Combinar</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setDeliveryMethod('retirada')}
                           className={`py-1.5 transition rounded-lg text-[9px] flex flex-col items-center justify-center gap-1 cursor-pointer border
                             ${deliveryMethod === 'retirada' 
@@ -2319,7 +2334,7 @@ export default function PublicCatalog({
                     </div>
 
                     {/* Dynamic Address option */}
-                    {deliveryMethod !== 'retirada' && (
+                    {deliveryMethod !== 'retirada' && deliveryMethod !== 'combinar' && (
                       <div className="animate-in fade-in duration-205 space-y-2 border-t border-slate-100/60 pt-2">
                         <p className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500">Endereço Completo de Destino</p>
                         
@@ -2673,7 +2688,7 @@ export default function PublicCatalog({
 
                   <div className="flex justify-between">
                     <span>Taxa de Envio:</span>
-                    <span className="font-bold text-slate-800">{deliveryFee === 0 ? "GRÁTIS 🚚" : `R$ ${deliveryFee.toFixed(2)}`}</span>
+                    <span className="font-bold text-slate-800">{deliveryMethod === 'combinar' ? "A combinar 🤝" : (deliveryFee === 0 ? "GRÁTIS 🚚" : `R$ ${deliveryFee.toFixed(2)}`)}</span>
                   </div>
 
                   <div className="flex justify-between text-slate-905 font-bold text-sm pt-2 border-t border-slate-100">
