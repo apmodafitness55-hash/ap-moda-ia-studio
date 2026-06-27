@@ -25,5 +25,5 @@ export const getAppUrl = (): string => {
  * Returns the fully qualified public link to the customer vitrine / catalog.
  */
 export const getCatalogUrl = (): string => {
-  return `${getAppUrl()}/?catalog=true`;
+  return `${getAppUrl()}/`;
 };

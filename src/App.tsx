@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Menu, 
   X, 
@@ -276,10 +276,33 @@ export default function App() {
     localStorage.setItem('ap_themeAccent', themeAccent);
   }, [themeAccent]);
 
-  // Check if visitor is an external customer loaded with deep link parameter ?view=catalog or ?catalog=true
-  const [isCustomerView, setIsCustomerView] = useState(() => {
-    return window.location.search.includes('catalog=true') || window.location.search.includes('view=catalog');
-  });
+  // Custom client-side router state to invert routing: root is public catalog, /painel or /admin is internal admin area
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    window.history.pushState(null, '', path);
+    setCurrentPath(path);
+  };
+
+  const isCustomerView = useMemo(() => {
+    // Force admin view if "?admin=true" or if on "/painel" or "/admin" paths
+    if (window.location.search.includes('admin=true')) {
+      return false;
+    }
+    if (currentPath === '/painel' || currentPath === '/admin') {
+      return false;
+    }
+    // Default to customer view on root "/" or any other paths
+    return true;
+  }, [currentPath]);
 
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const isSyncingRef = useRef(false);
@@ -2560,7 +2583,7 @@ export default function App() {
         return (
           <LojaOnline 
             products={products}
-            onEnterCustomerView={() => setIsCustomerView(true)}
+            onEnterCustomerView={() => navigateTo('/')}
             activeSubTab={lojaOnlineSubTab}
             setActiveSubTab={setLojaOnlineSubTab}
             checkouts={checkouts}
@@ -2677,6 +2700,20 @@ export default function App() {
     }
   };
 
+  if (isCustomerView) {
+    return (
+      <PublicCatalog 
+        products={products}
+        onAddOnlineOrder={handleAddOnlineOrder}
+        onAddCheckout={handleAddCheckout}
+        clients={clients}
+        onAddClient={handleAddClient}
+        onUpdateClients={handleUpdateClientsList}
+        onExitCustomerView={() => navigateTo('/painel')}
+      />
+    );
+  }
+
   if (!currentUser) {
     return (
       <LoginScreen 
@@ -2688,20 +2725,6 @@ export default function App() {
           setCurrentUser(user);
           await runFullSynchronousSetup(user);
         }}
-      />
-    );
-  }
-
-  if (isCustomerView) {
-    return (
-      <PublicCatalog 
-        products={products}
-        onAddOnlineOrder={handleAddOnlineOrder}
-        onAddCheckout={handleAddCheckout}
-        clients={clients}
-        onAddClient={handleAddClient}
-        onUpdateClients={handleUpdateClientsList}
-        onExitCustomerView={() => setIsCustomerView(false)}
       />
     );
   }
@@ -2906,7 +2929,7 @@ export default function App() {
               )}
               <span className="text-slate-200">|</span>
               <button 
-                onClick={() => setIsCustomerView(true)}
+                onClick={() => navigateTo('/')}
                 className="bg-pink-600 hover:bg-pink-700 active:scale-95 text-white flex items-center gap-1.5 font-bold text-xs px-3 py-1 bg-pink-600/90 rounded-full transition-all shadow-sm shadow-pink-600/20 cursor-pointer animate-pulse border-none"
                 title="Navegar no catálogo moderno como se fosse sua cliente"
               >
