@@ -25,12 +25,16 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { getCatalogUrl } from '../config';
+import AbandonedCarts from './AbandonedCarts';
 
 interface LojaOnlineProps {
   products: Product[];
   onEnterCustomerView?: () => void;
-  activeSubTab?: 'compartilhar' | 'cupons' | 'vitrine';
-  setActiveSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine') => void;
+  activeSubTab?: 'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao';
+  setActiveSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao') => void;
+  checkouts?: any[];
+  setCheckouts?: React.Dispatch<React.SetStateAction<any[]>>;
+  onSyncCheckouts?: () => void;
 }
 
 export interface Coupon {
@@ -47,9 +51,12 @@ export default function LojaOnline({
   products, 
   onEnterCustomerView,
   activeSubTab: propActiveSubTab,
-  setActiveSubTab: propSetActiveSubTab
+  setActiveSubTab: propSetActiveSubTab,
+  checkouts = [],
+  setCheckouts = () => {},
+  onSyncCheckouts
 }: LojaOnlineProps) {
-  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine'>('compartilhar');
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao'>('compartilhar');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab || setInternalActiveSubTab;
   const [copiedLink, setCopiedLink] = useState(false);
@@ -318,6 +325,18 @@ export default function LojaOnline({
         >
           <Smartphone size={14} className={activeSubTab === 'vitrine' ? 'text-pink-600' : 'text-slate-400'} />
           <span>Vitrine de Clientes (Preview)</span>
+        </button>
+        <button
+          id="tab-recuperacao-btn"
+          type="button"
+          onClick={() => setActiveSubTab('recuperacao')}
+          className={`px-4 py-2.5 font-sans text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap
+            ${activeSubTab === 'recuperacao' 
+              ? 'border-pink-600 text-pink-600' 
+              : 'border-transparent text-slate-450 hover:text-slate-700'}`}
+        >
+          <Sparkles size={14} className={activeSubTab === 'recuperacao' ? 'text-pink-600' : 'text-slate-400'} />
+          <span>Carrinhos Abandonados (IA)</span>
         </button>
       </div>
 
@@ -1011,6 +1030,15 @@ export default function LojaOnline({
           </div>
         </div>
       </div>
+      )}
+
+      {/* Tab: Recuperação de Carrinhos Abandonados por IA */}
+      {activeSubTab === 'recuperacao' && (
+        <AbandonedCarts 
+          checkouts={checkouts} 
+          setCheckouts={setCheckouts}
+          onSyncCheckouts={onSyncCheckouts}
+        />
       )}
 
     </div>

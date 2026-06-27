@@ -276,6 +276,19 @@ CREATE TABLE IF NOT EXISTS ap_system_configs (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8. Criação da Tabela de Checkouts (Carrinhos Abandonados) para Recuperação com IA
+CREATE TABLE IF NOT EXISTS ap_checkouts (
+  id TEXT PRIMARY KEY,
+  client_name TEXT,
+  phone TEXT,
+  email TEXT,
+  items JSONB,
+  total NUMERIC,
+  status TEXT DEFAULT 'pendente',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Como múltiplos aparelhos de funcionários sincronizam de forma pareada compartilhando a mesma chave de acesso unificada (token de API)
 -- sem a necessidade de criar contas de e-mail individuais no painel de Autenticação do Supabase (usando o sistema local simples de equipe),
 -- desabilitamos o Row Level Security (RLS) de todas as tabelas. Isso garante que todos os celulares e computadores conectados possam ler e gravar perfeitamente.
@@ -286,6 +299,7 @@ ALTER TABLE ap_sales DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ap_transactions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ap_online_orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ap_system_configs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_checkouts DISABLE ROW LEVEL SECURITY;
 
 -- Apagar políticas antigas para evitar conflitos residuais
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_team_members;
@@ -295,6 +309,7 @@ DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_sales;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_transactions;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_online_orders;
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_system_configs;
+DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_checkouts;
 
 DROP POLICY IF EXISTS "Leitura de Equipes para Login" ON ap_team_members;
 DROP POLICY IF EXISTS "Escrita de Equipes apenas para Admin e Gerente" ON ap_team_members;
@@ -779,6 +794,51 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
 
 
 /**
+ * ------------------- 6.5. CHECKOUTS SYNC (For abandoned carts recovery) -------------------
+ */
+export async function fetchCheckoutsFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('ap_checkouts').select('*');
+    if (error) {
+      handleSchemaError(error, 'ap_checkouts');
+      throw error;
+    }
+    return (data || []).map((c: any) => ({
+      id: getTolerantValue(c, 'id'),
+      clientName: getTolerantValue(c, 'client_name', ''),
+      phone: getTolerantValue(c, 'phone', ''),
+      email: getTolerantValue(c, 'email', ''),
+      items: Array.isArray(getTolerantValue(c, 'items')) ? getTolerantValue(c, 'items') : [],
+      total: Number(getTolerantValue(c, 'total', 0)),
+      status: getTolerantValue(c, 'status', 'pendente'),
+      createdAt: getTolerantValue(c, 'created_at', '') || getTolerantValue(c, 'createdAt', ''),
+      updatedAt: getTolerantValue(c, 'updated_at', '') || getTolerantValue(c, 'updatedAt', '')
+    }));
+  } catch (err) {
+    console.error('Failed fetching checkouts from Supabase:', err);
+    return null;
+  }
+}
+
+export async function syncBulkCheckoutsToSupabase(checkoutsList: any[]): Promise<boolean> {
+  const payloads = checkoutsList.map(c => ({
+    id: getTolerantValue(c, 'id'),
+    client_name: getTolerantValue(c, 'clientName') || getTolerantValue(c, 'client_name', ''),
+    phone: getTolerantValue(c, 'phone', ''),
+    email: getTolerantValue(c, 'email', ''),
+    items: Array.isArray(getTolerantValue(c, 'items')) ? getTolerantValue(c, 'items') : [],
+    total: Number(getTolerantValue(c, 'total', 0)),
+    status: getTolerantValue(c, 'status', 'pendente'),
+    created_at: getTolerantValue(c, 'createdAt') || getTolerantValue(c, 'created_at') || new Date().toISOString(),
+    updated_at: getTolerantValue(c, 'updatedAt') || getTolerantValue(c, 'updated_at') || new Date().toISOString()
+  }));
+  return resilientUpsert('ap_checkouts', payloads);
+}
+
+
+/**
  * ------------------- 7. SYSTEM CONFIGS SYNC (Google Workspace keys, Store specs, logo, slide assets, rates etc.) -------------------
  */
 const CRITICAL_CONFIG_KEYS = [
@@ -935,6 +995,7 @@ export async function clearAllSupabaseData(): Promise<boolean> {
     await client.from('ap_sales').delete().neq('id', 'dummy_nonexistent_id_value');
     await client.from('ap_transactions').delete().neq('id', 'dummy_nonexistent_id_value');
     await client.from('ap_online_orders').delete().neq('id', 'dummy_nonexistent_id_value');
+    await client.from('ap_checkouts').delete().neq('id', 'dummy_nonexistent_id_value');
     
     // Para funcionários, deleta tudo que não for Admin (evita trancar os admins atuais para fora)
     await client.from('ap_team_members').delete().neq('role', 'Admin');

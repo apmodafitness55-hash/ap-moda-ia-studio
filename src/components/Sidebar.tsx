@@ -59,7 +59,7 @@ interface SidebarProps {
   onSetCustomersCRMSubTab?: (subTab: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade') => void;
   onSetSuppliersManagementSubTab?: (subTab: 'fornecedores' | 'compras') => void;
   onSetProductsSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
-  onSetLojaOnlineSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine') => void;
+  onSetLojaOnlineSubTab?: (subTab: 'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao') => void;
   onSetAiAgentsHubSubTab?: (subTab: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador') => void;
   onSetGoogleWorkspaceSubTab?: (subTab: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config') => void;
   onSetSettingsSystemSubTab?: (subTab: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine') => void;
@@ -67,7 +67,7 @@ interface SidebarProps {
   activeCustomersCRMSubTab?: 'diretorio' | 'funil' | 'followup' | 'parceiros' | 'fidelidade';
   activeSuppliersManagementSubTab?: 'fornecedores' | 'compras';
   activeProductsSubTab?: 'inventario' | 'restoque' | 'cadastro';
-  activeLojaOnlineSubTab?: 'compartilhar' | 'cupons' | 'vitrine';
+  activeLojaOnlineSubTab?: 'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao';
   activeAiAgentsHubSubTab?: 'descritor' | 'estilista' | 'whatsapp' | 'sentinela' | 'campanha' | 'consultoria' | 'tradutor' | 'precificador';
   activeGoogleWorkspaceSubTab?: 'agenda' | 'tarefas' | 'docs' | 'gmail' | 'sheets' | 'drive' | 'config';
   activeSettingsSystemSubTab?: 'empresa' | 'integracoes' | 'seguranca' | 'roadmap' | 'vitrine';
@@ -292,7 +292,8 @@ export default function Sidebar({
           subLinks: [
             { label: 'Compartilhar Bio & Link', subTab: 'compartilhar' },
             { label: 'Cupons de Desconto', subTab: 'cupons' },
-            { label: 'Vitrine Mobile & Campanhas', subTab: 'vitrine' }
+            { label: 'Vitrine Mobile & Campanhas', subTab: 'vitrine' },
+            { label: 'Carrinhos Abandonados (IA)', subTab: 'recuperacao' }
           ]
         }
       ]

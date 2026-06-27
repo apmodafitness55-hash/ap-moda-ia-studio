@@ -66,6 +66,8 @@ import {
   syncBulkTransactionsToSupabase,
   fetchOnlineOrdersFromSupabase,
   syncBulkOnlineOrdersToSupabase,
+  fetchCheckoutsFromSupabase,
+  syncBulkCheckoutsToSupabase,
   syncSystemConfigsWithSupabase,
   getTolerantValue,
   clearAllSupabaseData
@@ -317,6 +319,12 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // State for checkouts (abandoned carts) synced
+  const [checkouts, setCheckouts] = useState<any[]>(() => {
+    const saved = localStorage.getItem('ap_moda_checkouts');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [clients, setClients] = useState<Client[]>(() => {
     const saved = localStorage.getItem('ap_moda_clients');
     return saved ? JSON.parse(saved) : [];
@@ -346,6 +354,7 @@ export default function App() {
   const prevSalesRef = useRef<Sale[]>(sales);
   const prevTransactionsRef = useRef<Transaction[]>(transactions);
   const prevOnlineOrdersRef = useRef<any[]>(onlineOrders);
+  const prevCheckoutsRef = useRef<any[]>(checkouts);
   const prevTeamMembersRef = useRef<any[]>(teamMembers);
 
   // Sync to localStorage & automatically track local mutations as dirty
@@ -475,6 +484,31 @@ export default function App() {
   }, [onlineOrders, getDirtyIds, saveDirtyIds]);
 
   useEffect(() => {
+    localStorage.setItem('ap_moda_checkouts', JSON.stringify(checkouts));
+    if (!isUpdatingFromSyncRef.current) {
+      const prevList = prevCheckoutsRef.current || [];
+      const prevMap = new Map(prevList.map(c => [c.id, c]));
+      const dirtyIds = getDirtyIds('ap_dirty_checkouts');
+      let changed = false;
+
+      for (const c of checkouts) {
+        const prevC = prevMap.get(c.id);
+        if (!prevC || JSON.stringify(prevC) !== JSON.stringify(c)) {
+          if (!dirtyIds.includes(c.id)) {
+            dirtyIds.push(c.id);
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        saveDirtyIds('ap_dirty_checkouts', dirtyIds);
+        setTimeout(() => { if (performSyncRef.current) performSyncRef.current(); }, 150);
+      }
+    }
+    prevCheckoutsRef.current = checkouts;
+  }, [checkouts, getDirtyIds, saveDirtyIds]);
+
+  useEffect(() => {
     if (!isUpdatingFromSyncRef.current) {
       const prevList = prevTeamMembersRef.current || [];
       const prevMap = new Map(prevList.map(m => [m.id, m]));
@@ -573,6 +607,15 @@ export default function App() {
             await syncBulkOnlineOrdersToSupabase(toUpload);
           }
         }
+
+        // G. Checkouts
+        const dirtyCheckoutsList = getDirtyIds('ap_dirty_checkouts');
+        if (dirtyCheckoutsList.length > 0) {
+          const toUpload = lastCheckoutsRef.current.filter((c: any) => dirtyCheckoutsList.includes(c.id));
+          if (toUpload.length > 0) {
+            await syncBulkCheckoutsToSupabase(toUpload);
+          }
+        }
       }
 
       setSyncProgress(prev => ({
@@ -661,9 +704,23 @@ export default function App() {
 
       setSyncProgress(prev => ({
         ...prev,
+        step: 'Sincronizando Carrinhos Abandonados...',
+        details: 'Acompanhando checkouts iniciados não concluídos pela inteligência artificial...',
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Pedidos Online...']
+      }));
+
+      // 7.5 Sincroniza Checkouts
+      const dbCheckouts = await fetchCheckoutsFromSupabase();
+      if (dbCheckouts) {
+        setCheckouts(dbCheckouts);
+        localStorage.setItem('ap_moda_checkouts', JSON.stringify(dbCheckouts));
+      }
+
+      setSyncProgress(prev => ({
+        ...prev,
         step: 'Sincronizando Configurações Globais...',
         details: 'Sincronizando dados institucionais, banners do carrossel da vitrine e taxas de juros...',
-        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Pedidos Online...']
+        stepsCompleted: [...prev.stepsCompleted, 'Sincronizando Carrinhos Abandonados...']
       }));
 
       // 8. Sincroniza Configurações Globais
@@ -676,6 +733,7 @@ export default function App() {
       localStorage.setItem('ap_dirty_sales', JSON.stringify([]));
       localStorage.setItem('ap_dirty_transactions', JSON.stringify([]));
       localStorage.setItem('ap_dirty_online_orders', JSON.stringify([]));
+      localStorage.setItem('ap_dirty_checkouts', JSON.stringify([]));
 
       setSyncProgress(prev => ({
         ...prev,
@@ -721,6 +779,7 @@ export default function App() {
   const lastSalesRef = useRef(sales);
   const lastTransactionsRef = useRef(transactions);
   const lastOnlineOrdersRef = useRef(onlineOrders);
+  const lastCheckoutsRef = useRef(checkouts);
   const lastTeamMembersRef = useRef(teamMembers);
   const currentUserRef = useRef(currentUser);
   const isCustomerViewRef = useRef(isCustomerView);
@@ -731,6 +790,7 @@ export default function App() {
   useEffect(() => { lastSalesRef.current = sales; }, [sales]);
   useEffect(() => { lastTransactionsRef.current = transactions; }, [transactions]);
   useEffect(() => { lastOnlineOrdersRef.current = onlineOrders; }, [onlineOrders]);
+  useEffect(() => { lastCheckoutsRef.current = checkouts; }, [checkouts]);
   useEffect(() => { lastTeamMembersRef.current = teamMembers; }, [teamMembers]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { isCustomerViewRef.current = isCustomerView; }, [isCustomerView]);
@@ -1255,6 +1315,49 @@ export default function App() {
         }
       }
 
+      // 6.5. Sincronização de Checkouts (Carrinhos Abandonados)
+      const dbCheckouts = await fetchCheckoutsFromSupabase();
+      if (dbCheckouts) {
+        const dirtyCheckouts = getDirtyIds('ap_dirty_checkouts');
+        const currentCheckouts = lastCheckoutsRef.current;
+        const localMap = new Map(currentCheckouts.map(c => [c.id, c]));
+        let localModified = false;
+        let remoteModified = false;
+        const merged = [...currentCheckouts];
+
+        for (const dbC of dbCheckouts) {
+          const localC = localMap.get(dbC.id);
+          if (!localC) {
+            merged.push(dbC);
+            localModified = true;
+          } else if (!dirtyCheckouts.includes(dbC.id)) {
+            if (JSON.stringify(localC) !== JSON.stringify(dbC)) {
+              const idx = merged.findIndex(x => x.id === dbC.id);
+              if (idx >= 0) merged[idx] = dbC;
+              localModified = true;
+            }
+          }
+        }
+
+        const toUpload = currentCheckouts.filter(lc => dirtyCheckouts.includes(lc.id));
+        if (toUpload.length > 0) {
+          const success = await syncBulkCheckoutsToSupabase(toUpload);
+          if (success) {
+            const remaining = getDirtyIds('ap_dirty_checkouts').filter(id => !toUpload.some(u => u.id === id));
+            saveDirtyIds('ap_dirty_checkouts', remaining);
+            remoteModified = true;
+          }
+        }
+
+        if (localModified) {
+          setCheckouts(merged);
+          localStateModified = true;
+        }
+        if (remoteModified || localModified) {
+          remoteStateModified = true;
+        }
+      }
+
       // 7. Sincronização de Configurações Globais (Microsoft/Google Workspace keys, dados de loja, logo, bandeiras, etc.)
       const localConfigsChanged = await syncSystemConfigsWithSupabase();
       if (localConfigsChanged) {
@@ -1694,6 +1797,45 @@ export default function App() {
         });
       }
 
+      else if (tableName === 'ap_checkouts') {
+        setCheckouts(prev => {
+          let updated = [...prev];
+          if (eventType === 'INSERT' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.client_name || newRec.clientName,
+              phone: newRec.phone || '',
+              email: newRec.email || '',
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              total: Number(newRec.total),
+              status: newRec.status,
+              createdAt: newRec.created_at || newRec.createdAt,
+              updatedAt: newRec.updated_at || newRec.updatedAt
+            };
+            if (!prev.some(c => c.id === mapped.id)) {
+              updated = [mapped, ...prev];
+            }
+          } else if (eventType === 'UPDATE' && newRec) {
+            const mapped = {
+              id: newRec.id,
+              clientName: newRec.client_name || newRec.clientName,
+              phone: newRec.phone || '',
+              email: newRec.email || '',
+              items: Array.isArray(newRec.items) ? newRec.items : [],
+              total: Number(newRec.total),
+              status: newRec.status,
+              createdAt: newRec.created_at || newRec.createdAt,
+              updatedAt: newRec.updated_at || newRec.updatedAt
+            };
+            updated = prev.map(c => c.id === mapped.id ? mapped : c);
+          } else if (eventType === 'DELETE' && oldRec) {
+            updated = prev.filter(c => c.id !== oldRec.id);
+          }
+          localStorage.setItem('ap_moda_checkouts', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
       else if (tableName === 'ap_team_members') {
         setTeamMembers(prev => {
           let updated = [...prev];
@@ -1751,6 +1893,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_products' }, (p) => handlePostgresChange('ap_products', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_transactions' }, (p) => handlePostgresChange('ap_transactions', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_online_orders' }, (p) => handlePostgresChange('ap_online_orders', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_checkouts' }, (p) => handlePostgresChange('ap_checkouts', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_team_members' }, (p) => handlePostgresChange('ap_team_members', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ap_system_configs' }, (p) => handlePostgresChange('ap_system_configs', p))
       .subscribe((status) => {
@@ -2168,6 +2311,7 @@ export default function App() {
       localStorage.setItem('ap_moda_sales', JSON.stringify([]));
       localStorage.setItem('ap_moda_transactions', JSON.stringify([]));
       localStorage.setItem('ap_moda_online_orders', JSON.stringify([]));
+      localStorage.setItem('ap_moda_checkouts', JSON.stringify([]));
       localStorage.setItem('ap_moda_sellers', JSON.stringify([]));
       localStorage.setItem('ap_moda_motoboys', JSON.stringify([]));
       localStorage.setItem('ap_moda_opportunities', JSON.stringify([]));
@@ -2184,6 +2328,7 @@ export default function App() {
       localStorage.removeItem('ap_dirty_sales');
       localStorage.removeItem('ap_dirty_transactions');
       localStorage.removeItem('ap_dirty_online_orders');
+      localStorage.removeItem('ap_dirty_checkouts');
       localStorage.removeItem('ap_dirty_team_members');
 
       setProducts([]);
@@ -2191,6 +2336,7 @@ export default function App() {
       setSales([]);
       setTransactions([]);
       setOnlineOrders([]);
+      setCheckouts([]);
       setSellers([]);
       setMotoboys([]);
       alert('Tudo limpo! O sistema está zerado e com todos os dados fantasmas excluídos tanto localmente quanto na nuvem Supabase, pronto para o seu uso oficial.');
@@ -2305,6 +2451,16 @@ export default function App() {
     setNotifications((prev: any[]) => [newNotify, ...prev]);
   };
 
+  const handleAddCheckout = (newCheckout: any) => {
+    setCheckouts((prev: any[]) => {
+      const exists = prev.some(c => c.id === newCheckout.id);
+      if (exists) {
+        return prev.map(c => c.id === newCheckout.id ? { ...c, ...newCheckout, updatedAt: new Date().toISOString() } : c);
+      }
+      return [newCheckout, ...prev];
+    });
+  };
+
   // Render the currently selected tab/page view
   const renderCurrentView = () => {
     switch (activeTab) {
@@ -2405,6 +2561,11 @@ export default function App() {
           <LojaOnline 
             products={products}
             onEnterCustomerView={() => setIsCustomerView(true)}
+            activeSubTab={lojaOnlineSubTab}
+            setActiveSubTab={setLojaOnlineSubTab}
+            checkouts={checkouts}
+            setCheckouts={setCheckouts}
+            onSyncCheckouts={() => performSync(true)}
           />
         );
       case ActiveTab.AGENTES_IA:
@@ -2536,6 +2697,7 @@ export default function App() {
       <PublicCatalog 
         products={products}
         onAddOnlineOrder={handleAddOnlineOrder}
+        onAddCheckout={handleAddCheckout}
         clients={clients}
         onAddClient={handleAddClient}
         onUpdateClients={handleUpdateClientsList}

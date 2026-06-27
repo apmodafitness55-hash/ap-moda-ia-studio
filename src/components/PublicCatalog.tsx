@@ -122,6 +122,7 @@ const getColorHex = (name: string) => {
 interface PublicCatalogProps {
   products: Product[];
   onAddOnlineOrder?: (order: any) => void;
+  onAddCheckout?: (checkout: any) => void;
   clients: Client[];
   onAddClient: (newClient: Client) => void;
   onUpdateClients?: (updatedList: Client[]) => void;
@@ -131,6 +132,7 @@ interface PublicCatalogProps {
 export default function PublicCatalog({ 
   products, 
   onAddOnlineOrder, 
+  onAddCheckout,
   clients = [], 
   onAddClient, 
   onUpdateClients,
@@ -790,6 +792,44 @@ export default function PublicCatalog({
     setTimeout(() => setIsCopiedPix(false), 2000);
   };
 
+  // Synchronize/monitor checkout initiation as soon as cart and some contact info exists
+  useEffect(() => {
+    if (cart.length > 0 && (clientName.trim() || clientPhone.trim() || clientEmail.trim())) {
+      const timer = setTimeout(() => {
+        let checkoutId = localStorage.getItem('ap_current_checkout_id');
+        if (!checkoutId) {
+          checkoutId = `chk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          localStorage.setItem('ap_current_checkout_id', checkoutId);
+        }
+
+        const checkoutData = {
+          id: checkoutId,
+          clientName: clientName.trim() || 'Cliente Anônimo',
+          phone: clientPhone.trim() || '',
+          email: clientEmail.trim() || '',
+          items: cart.map(it => ({
+            productName: `${it.product.name} (${it.color} - ${it.size})`,
+            productId: it.product.id,
+            quantity: it.quantity,
+            price: it.priceAtTime,
+            color: it.color,
+            size: it.size
+          })),
+          total: cartTotal,
+          status: 'pendente', // status is 'pendente' until final order submission
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (onAddCheckout) {
+          onAddCheckout(checkoutData);
+        }
+      }, 1000); // 1s debounce to avoid spamming while typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [clientName, clientPhone, clientEmail, cart, cartTotal, onAddCheckout]);
+
   // Checkout submission
   const handleCheckoutWhatsApp = () => {
     if (cart.length === 0) {
@@ -908,6 +948,31 @@ export default function PublicCatalog({
       };
       
       onAddOnlineOrder(orderData);
+    }
+
+    // Mark checkout as concluded and clear current checkout ID
+    const currentCheckoutId = localStorage.getItem('ap_current_checkout_id');
+    if (currentCheckoutId && onAddCheckout) {
+      const checkoutData = {
+        id: currentCheckoutId,
+        clientName: clientName.trim(),
+        phone: clientPhone.trim(),
+        email: clientEmail.trim(),
+        items: cart.map(it => ({
+          productName: `${it.product.name} (${it.color} - ${it.size})`,
+          productId: it.product.id,
+          quantity: it.quantity,
+          price: it.priceAtTime,
+          color: it.color,
+          size: it.size
+        })),
+        total: cartTotal,
+        status: 'concluido',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      onAddCheckout(checkoutData);
+      localStorage.removeItem('ap_current_checkout_id');
     }
 
     // Save or update Customer details in CRM system

@@ -428,6 +428,48 @@ Retorne duas versões do script:
   }
 });
 
+// 3.5. Intelligent Abandoned Cart Recovery Message Agent
+app.post('/api/gemini/recovery-message', async (req, res) => {
+  try {
+    const { clientName, cartItems, total } = req.body;
+
+    const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total || 0);
+    const itemsText = Array.isArray(cartItems) 
+      ? cartItems.map((it: any) => `${it.quantity || it.quantityToDeduct || 1}x ${it.productName || it.product?.name || it.name}`).join(', ')
+      : String(cartItems || 'Peças Premium');
+
+    const prompt = `Você é a Consultora de Estilo e Relacionamento da "AP Moda Fitness", uma marca de roupas de ginástica feminina sofisticada e elegante.
+Escreva uma mensagem de abordagem de WhatsApp super simpática, descontraída e calorosa para recuperar um carrinho abandonado.
+
+DADOS DA CLIENTE E CARRINHO:
+- Primeiro Nome: ${clientName || 'Linda'}
+- Produtos esquecidos no carrinho: ${itemsText}
+- Valor Total do Carrinho: ${formattedTotal}
+
+DIRETRIZES DE ESTILO DO TEXTO (MUITO IMPORTANTE):
+1. Use o primeiro nome da cliente de forma calorosa e afetiva (ex: "Oi Lu!", "Olá Carol, tudo bem, lindeza?").
+2. Evite um tom corporativo engessado ou robótico. Seja como uma amiga que notou que ela esqueceu de finalizar as comprinhas.
+3. Demonstre entusiasmo com as peças que ela escolheu (ex: diga que aquele conjunto é incrível, que tem um caimento de tirar o fôlego, ou que é super tecnológico).
+4. Ofereça ajuda com tamanhos ou dúvidas de caimento.
+5. Deixe claro que as peças ficam reservadas por pouquíssimo tempo no sistema porque a marca tem coleções limitadas e esgota rápido!
+6. Forneça um incentivo delicado, como frete grátis ou um cupom surpresa, se ela quiser concluir agora pelo WhatsApp.
+7. Escreva de forma espaçada, usando emojis delicados de moda e estilo de forma sutil, sem excesso de texto corporativo.
+
+Retorne APENAS o texto da mensagem persuasiva pronta para ser enviada no WhatsApp. Não inclua nenhuma observação técnica ou introduções comerciais adicionais.`;
+
+    const clientKey = req.headers['x-gemini-api-key'] as string;
+    const response = await generateContentWithRetry({
+      model: 'gemini-3.5-flash',
+      contents: prompt
+    }, clientKey);
+
+    res.json({ success: true, text: response.text });
+  } catch (error: any) {
+    console.error('Gemini recovery-message error:', error);
+    res.status(500).json({ success: false, error: cleanGeminiError(error) });
+  }
+});
+
 // 4. Stock & Profit Sentinel Analyzer Agent
 app.post('/api/gemini/stock-sentinel', async (req, res) => {
   try {
