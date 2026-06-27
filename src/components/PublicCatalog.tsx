@@ -1051,51 +1051,59 @@ export default function PublicCatalog({
     }
   };
 
+  // Safe and authenticated workspace administrator view controller bar rendering logic
+  const renderAdminBar = () => {
+    if (!hasAdminPrivileges || !onExitCustomerView) {
+      return null;
+    }
+    return (
+      <div className="bg-slate-900 border-b border-slate-800 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-3 font-sans shadow-md shrink-0 w-full absolute top-0 left-0">
+        <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse shrink-0" />
+            <p className="text-[11px] md:text-xs">
+              <span className="font-extrabold text-pink-400 uppercase">Acesso Administrador</span>
+            </p>
+          </div>
+          
+          {/* Visual selector toggle */}
+          <div className="flex bg-slate-950 border border-slate-850 p-0.5 rounded-lg text-[10.5px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('cliente')}
+              className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'cliente' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Eye size={12} />
+              <span>Ver como Cliente</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('editor')}
+              className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'editor' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Edit size={12} />
+              <span>Acessar como Editor</span>
+            </button>
+          </div>
+        </div>
+        
+        <button
+          type="button"
+          onClick={onExitCustomerView}
+          className="shrink-0 bg-white hover:bg-slate-100 text-slate-900 active:scale-95 font-bold text-[10px] md:text-[11px] px-3.5 py-1.5 rounded-full transition-all shadow-md cursor-pointer flex items-center gap-1.5 border-none"
+        >
+          <ArrowLeft size={11} className="stroke-[2.5px]" />
+          <span>Voltar ao Painel Admin</span>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-pink-100 selection:text-pink-600 pb-16 relative ${actualViewMode === 'editor' ? 'flex flex-col lg:flex-row pb-0 lg:overflow-hidden' : ''}`}>
       
       {/* Workspace Demonstration Switcher Button Helper */}
-      {onExitCustomerView && hasAdminPrivileges && (
-        <div className="bg-slate-900 border-b border-slate-800 text-white py-2.5 px-4 md:px-6 sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-center gap-3 font-sans shadow-md shrink-0 w-full absolute top-0 left-0">
-          <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse shrink-0" />
-              <p className="text-[11px] md:text-xs">
-                <span className="font-extrabold text-pink-400 uppercase">Acesso Administrador</span>
-              </p>
-            </div>
-            
-            {/* Visual selector toggle */}
-            <div className="flex bg-slate-950 border border-slate-850 p-0.5 rounded-lg text-[10.5px]">
-              <button
-                type="button"
-                onClick={() => setViewMode('cliente')}
-                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'cliente' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Eye size={12} />
-                <span>Ver como Cliente</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('editor')}
-                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 cursor-pointer border-none outline-none ${viewMode === 'editor' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Edit size={12} />
-                <span>Acessar como Editor</span>
-              </button>
-            </div>
-          </div>
-          
-          <button
-            type="button"
-            onClick={onExitCustomerView}
-            className="shrink-0 bg-white hover:bg-slate-100 text-slate-900 active:scale-95 font-bold text-[10px] md:text-[11px] px-3.5 py-1.5 rounded-full transition-all shadow-md cursor-pointer flex items-center gap-1.5 border-none"
-          >
-            <ArrowLeft size={11} className="stroke-[2.5px]" />
-            <span>Voltar ao Painel Admin</span>
-          </button>
-        </div>
-      )}
+      {renderAdminBar()}
 
       {/* 1A. Left Side Custom Editor Workspace Control Desk (Only visible in editor mode) */}
       {actualViewMode === 'editor' && (
