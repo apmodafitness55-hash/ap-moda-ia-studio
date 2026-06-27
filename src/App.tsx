@@ -1994,54 +1994,71 @@ export default function App() {
     setNotifications(prev => [newNotify, ...prev]);
   };
 
-  const handleUpdateOnlineOrderStatus = (orderId: string, newStatus: any) => {
-    setOnlineOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        if (newStatus === 'Entregue' && o.status !== 'Entregue') {
-          const matchedClient = clients.find(c => c.name.toLowerCase() === o.clientName.toLowerCase());
-          
-          const saleItems = o.items.map((it: any) => {
-            const matchedProd = products.find(p => p.name.toLowerCase() === it.productName.toLowerCase());
-            return {
-              productId: matchedProd?.id || `p-ext-${Date.now()}`,
-              name: it.productName,
-              quantity: it.quantity,
-              price: it.price,
-              cost: matchedProd?.cost || Math.round(it.price * 0.45)
+  const handleUpdateOnlineOrderStatus = (orderId: string, newStatus: any, statusPagamento?: string) => {
+    setOnlineOrders(prev => {
+      const updated = prev.map(o => {
+        if (o.id === orderId) {
+          let updatedStatusPag = statusPagamento || o.status_pagamento || 'pendente';
+          if (newStatus === 'Pago' || newStatus === 'Concluído' || newStatus === 'Entregue') {
+            updatedStatusPag = 'pago';
+          }
+          if (newStatus === 'Entregue' && o.status !== 'Entregue') {
+            const matchedClient = clients.find(c => c.name.toLowerCase() === o.clientName.toLowerCase());
+            
+            const saleItems = o.items.map((it: any) => {
+              const matchedProd = products.find(p => p.name.toLowerCase() === it.productName.toLowerCase());
+              return {
+                productId: matchedProd?.id || `p-ext-${Date.now()}`,
+                name: it.productName,
+                quantity: it.quantity,
+                price: it.price,
+                cost: matchedProd?.cost || Math.round(it.price * 0.45)
+              };
+            });
+
+            const newSale: Sale = {
+              id: `v-ent-${Date.now().toString().slice(-4)}`,
+              clientName: o.clientName,
+              channel: 'E-commerce',
+              items: saleItems,
+              total: o.total,
+              costTotal: saleItems.reduce((currSum: number, it: any) => currSum + (it.cost * it.quantity), 0),
+              status: 'Concluída',
+              createdAt: new Date().toISOString(),
+              payments: [{ method: 'Maquininha/Pix', amount: o.total + (o.deliveryFee || 0) }],
+              salesperson: o.motoboy || 'Entregador Parceiro'
             };
-          });
 
-          const newSale: Sale = {
-            id: `v-ent-${Date.now().toString().slice(-4)}`,
-            clientName: o.clientName,
-            channel: 'E-commerce',
-            items: saleItems,
-            total: o.total,
-            costTotal: saleItems.reduce((currSum: number, it: any) => currSum + (it.cost * it.quantity), 0),
-            status: 'Concluída',
-            createdAt: new Date().toISOString(),
-            payments: [{ method: 'Maquininha/Pix', amount: o.total + o.deliveryFee }],
-            salesperson: o.motoboy || 'Entregador Parceiro'
-          };
+            // Automatically feed this completed shipment into our sales CRM logs
+            setTimeout(() => {
+              handleAddSale(newSale);
+            }, 100);
 
-          // Automatically feed this completed shipment into our sales CRM logs
-          setTimeout(() => {
-            handleAddSale(newSale);
-          }, 100);
-
-          const driverDeliverNotification = {
-            id: Date.now() + 50,
-            title: 'Corrida Concluída! 🏍️',
-            detail: `Encomenda #${orderId.toUpperCase()} foi entregue com sucesso para ${o.clientName}. Saldo de faturamento total adicionado no caixa!`,
-            read: false,
-            type: 'sale'
-          };
-          setNotifications(prevNot => [driverDeliverNotification, ...prevNot]);
+            const driverDeliverNotification = {
+              id: Date.now() + 50,
+              title: 'Corrida Concluída! 🏍️',
+              detail: `Encomenda #${orderId.toUpperCase()} foi entregue com sucesso para ${o.clientName}. Saldo de faturamento total adicionado no caixa!`,
+              read: false,
+              type: 'sale'
+            };
+            setNotifications(prevNot => [driverDeliverNotification, ...prevNot]);
+          }
+          return { ...o, status: newStatus, status_pagamento: updatedStatusPag };
         }
-        return { ...o, status: newStatus };
+        return o;
+      });
+
+      // Immediate Supabase sync for online order status update
+      const config = getSupabaseConfig();
+      if (config && !systemOffline) {
+        const orderToSync = updated.find(o => o.id === orderId);
+        if (orderToSync) {
+          syncBulkOnlineOrdersToSupabase([orderToSync]).catch(e => console.error('Error syncing order status update:', e));
+        }
       }
-      return o;
-    }));
+
+      return updated;
+    });
   };
 
   const handleAddClient = async (newClient: Client) => {

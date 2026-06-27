@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS ap_online_orders (
   "clientName" TEXT NOT NULL,
   total NUMERIC NOT NULL,
   status TEXT NOT NULL,
+  status_pagamento TEXT DEFAULT 'pendente',
   items JSONB NOT NULL,
   "createdAt" TEXT NOT NULL,
   phone TEXT,
@@ -266,6 +267,7 @@ ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS status_pagamento TEXT DEFAULT 'pendente';
 
 -- 7. Criação da Tabela de Configurações do Sistema Geral (Google Workspace, Dados da Loja, Logo, etc.)
 CREATE TABLE IF NOT EXISTS ap_system_configs (
@@ -746,6 +748,7 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
       clientName: getTolerantValue(o, 'clientName', ''),
       total: Number(getTolerantValue(o, 'total', 0)),
       status: getTolerantValue(o, 'status'),
+      status_pagamento: getTolerantValue(o, 'status_pagamento', 'pendente'),
       items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
       createdAt: getTolerantValue(o, 'createdAt', ''),
       phone: getTolerantValue(o, 'phone', ''),
@@ -764,6 +767,7 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
     clientName: getTolerantValue(o, 'clientName'),
     total: Number(getTolerantValue(o, 'total', 0)),
     status: getTolerantValue(o, 'status'),
+    status_pagamento: getTolerantValue(o, 'status_pagamento', 'pendente'),
     items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
     createdAt: getTolerantValue(o, 'createdAt'),
     phone: getTolerantValue(o, 'phone', ''),

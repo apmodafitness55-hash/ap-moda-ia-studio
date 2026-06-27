@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -150,6 +151,157 @@ app.post('/api/supabase-config', (req, res) => {
   } catch (err: any) {
     console.error('[Config Server] Erro ao gravar arquivo de configuração unificado:', err);
     res.status(500).json({ error: 'Erro ao gravar persistência central das chaves.' });
+  }
+});
+
+// GET & POST automatic payment Webhook for Pix/Gateways (Mercado Pago, Asaas, etc)
+app.post('/api/webhook/payment', async (req, res) => {
+  try {
+    const orderId = req.body.orderId || req.query.orderId || req.body.externalReference || req.body.payment?.externalReference || req.body.external_reference || req.body.data?.external_reference || req.body.id;
+    
+    if (!orderId) {
+      console.warn('[Webhook Warning] Notificação de Webhook recebida sem ID de pedido legível:', req.body);
+      return res.status(400).json({ error: 'Nenhum identificador de pedido (orderId, externalReference, etc) encontrado no payload do webhook.' });
+    }
+
+    console.log(`[Webhook Web] Iniciando processamento de pagamento para o pedido: ${orderId}`);
+
+    // Instancia o cliente do Supabase
+    const CONFIG_FILE_PATH = path.join(process.cwd(), 'supabase_config.json');
+    let url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+    let key = process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      try {
+        const data = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+        const config = JSON.parse(data);
+        if (config.url && config.key) {
+          url = config.url;
+          key = config.key;
+        }
+      } catch (err) {}
+    }
+
+    const supabase = createClient(url, key);
+
+    // 1. Busca o pedido online
+    const { data: order, error: fetchError } = await supabase
+      .from('ap_online_orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (fetchError || !order) {
+      console.log(`[Webhook Info] Pedido ${orderId} não encontrado no Supabase. Pode ser uma notificação teste ou ping do gateway.`);
+      return res.json({ success: false, message: `Pedido ${orderId} não localizado na tabela ap_online_orders.` });
+    }
+
+    // 2. Verifica se já está pago
+    const currentStatus = String(order.status || '').toLowerCase();
+    const currentStatusPag = String(order.status_pagamento || '').toLowerCase();
+    if (currentStatus === 'pago' || currentStatusPag === 'pago') {
+      console.log(`[Webhook Success] Pedido ${orderId} já estava marcado como pago anteriormente.`);
+      return res.json({ success: true, message: `O pedido ${orderId} já constava como pago.` });
+    }
+
+    // 3. Atualiza o status do pedido para 'Pago'
+    const { error: updateError } = await supabase
+      .from('ap_online_orders')
+      .update({ status: 'Pago', status_pagamento: 'pago' })
+      .eq('id', orderId);
+
+    if (updateError) {
+      console.error(`[Webhook Error] Erro ao atualizar status do pedido no Supabase:`, updateError);
+      return res.status(500).json({ error: 'Erro ao atualizar o status do pedido no banco de dados.' });
+    }
+
+    // 4. DISPARO DE ESTOQUE: Baixa de produtos no estoque
+    const items = Array.isArray(order.items) ? order.items : [];
+    const stockUpdates: any[] = [];
+
+    for (const item of items) {
+      let productId = item.productId;
+      let productName = item.productName || '';
+      let quantityToDeduct = Number(item.quantity || 1);
+
+      let product = null;
+      if (productId) {
+        const { data } = await supabase.from('ap_products').select('*').eq('id', productId).single();
+        product = data;
+      } else if (productName) {
+        // Fallback por correspondência de nome (se o pedido veio sem ID de produto de versões antigas do catálogo)
+        const cleanName = productName.split(' (')[0].trim();
+        const { data } = await supabase.from('ap_products').select('*').ilike('name', cleanName).limit(1);
+        if (data && data.length > 0) {
+          product = data[0];
+        }
+      }
+
+      if (product) {
+        const oldStock = Number(product.stock || 0);
+        const newStock = Math.max(0, oldStock - quantityToDeduct);
+
+        let updatedColorStocks = product.color_stocks || product.colorStocks || {};
+        let updatedSizeColorStocks = product.size_color_stocks || product.sizeColorStocks || {};
+
+        const sz = item.size;
+        const col = item.color;
+
+        if (sz && col && updatedSizeColorStocks[sz] && updatedSizeColorStocks[sz][col] !== undefined) {
+          updatedSizeColorStocks[sz][col] = Math.max(0, Number(updatedSizeColorStocks[sz][col]) - quantityToDeduct);
+        }
+        if (col && updatedColorStocks[col] !== undefined) {
+          updatedColorStocks[col] = Math.max(0, Number(updatedColorStocks[col]) - quantityToDeduct);
+        }
+
+        const { error: prodUpdateError } = await supabase
+          .from('ap_products')
+          .update({
+            stock: newStock,
+            salesCount: Number(product.salesCount || 0) + quantityToDeduct,
+            color_stocks: updatedColorStocks,
+            colorStocks: updatedColorStocks,
+            size_color_stocks: updatedSizeColorStocks,
+            sizeColorStocks: updatedSizeColorStocks
+          })
+          .eq('id', product.id);
+
+        if (!prodUpdateError) {
+          stockUpdates.push({
+            id: product.id,
+            name: product.name,
+            oldStock,
+            newStock
+          });
+        }
+      }
+    }
+
+    // 5. Registra transação de entrada financeira
+    const txId = `t-web-${Date.now()}`;
+    await supabase.from('ap_transactions').insert([{
+      id: txId,
+      type: 'Inflow',
+      category: 'Venda',
+      description: `Pix Automático Webhook: Pedido ${orderId.toUpperCase()} de ${order.clientName}`,
+      amount: Number(order.total || 0),
+      date: new Date().toISOString(),
+      status: 'pago'
+    }]);
+
+    console.log(`[Webhook Success] Pedido ${orderId} processado e estoque deduzido para:`, stockUpdates);
+
+    return res.json({
+      success: true,
+      message: 'Webhook processado com sucesso! Status do pedido atualizado para Pago e estoque deduzido.',
+      orderId,
+      updatedProducts: stockUpdates,
+      transactionId: txId
+    });
+
+  } catch (err: any) {
+    console.error('[Webhook Critical Error] Erro ao executar processamento de webhook:', err);
+    return res.status(500).json({ error: 'Erro interno durante o processamento do webhook.' });
   }
 });
 

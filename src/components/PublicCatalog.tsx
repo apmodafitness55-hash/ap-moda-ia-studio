@@ -892,11 +892,15 @@ export default function PublicCatalog({
         phone: clientPhone.trim(),
         items: cart.map(it => ({
           productName: `${it.product.name} (${it.color} - ${it.size})`,
+          productId: it.product.id,
           quantity: it.quantity,
-          price: it.priceAtTime
+          price: it.priceAtTime,
+          color: it.color,
+          size: it.size
         })),
         total: cartTotal,
         status: 'Pendente',
+        status_pagamento: 'pendente',
         createdAt: new Date().toISOString(),
         address: finalAddress,
         deliveryFee: deliveryFee,
