@@ -41,7 +41,8 @@ import {
   Megaphone,
   Save,
   QrCode,
-  Handshake
+  Handshake,
+  Ruler
 } from 'lucide-react';
 import { Product, Client } from '../types';
 import { pushSystemConfigToSupabase } from '../supabase';
@@ -311,6 +312,14 @@ export default function PublicCatalog({
   // Detail modal options selection
   const [selectedColor, setSelectedColor] = useState('Fúcsia');
   const [selectedSize, setSelectedSize] = useState('M');
+
+  // Provador Virtual (Virtual Fitting Room) States
+  const [isFittingRoomOpen, setIsFittingRoomOpen] = useState(false);
+  const [fitHeight, setFitHeight] = useState<string>('');
+  const [fitWeight, setFitWeight] = useState<string>('');
+  const [fitPreference, setFitPreference] = useState<'justo' | 'normal' | 'largo'>('normal');
+  const [fitRecommendation, setFitRecommendation] = useState<'P' | 'M' | 'G' | 'GG' | null>(null);
+
   const [productQty, setProductQty] = useState(1);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
@@ -501,6 +510,198 @@ export default function PublicCatalog({
       setCepResult(values[Math.floor(Math.random() * values.length)]);
       setIsCalculatingCep(false);
     }, 1000);
+  };
+
+  // Provador Virtual: Cálculo matemático baseado no IMC, Altura e Preferência de Caimento
+  const calculateRecommendedSize = (heightCm: number, weightKg: number, fit: 'justo' | 'normal' | 'largo'): 'P' | 'M' | 'G' | 'GG' => {
+    const bmi = weightKg / ((heightCm / 100) ** 2);
+    let baseSize: 'P' | 'M' | 'G' | 'GG' = 'M';
+
+    if (bmi < 20.5) {
+      baseSize = 'P';
+    } else if (bmi >= 20.5 && bmi < 24.0) {
+      baseSize = 'M';
+    } else if (bmi >= 24.0 && bmi < 27.5) {
+      baseSize = 'G';
+    } else {
+      baseSize = 'GG';
+    }
+
+    // Ajuste fino para fôrma fitness considerando limites de altura/peso que forçam estiramento vertical
+    if (baseSize === 'P' && (weightKg > 55 || heightCm > 168)) {
+      baseSize = 'M';
+    }
+    if (baseSize === 'M' && (weightKg > 66 || heightCm > 174)) {
+      baseSize = 'G';
+    }
+    if (baseSize === 'G' && (weightKg > 78 || heightCm > 180)) {
+      baseSize = 'GG';
+    }
+
+    // Ajuste de preferência de caimento
+    const sizes: ('P' | 'M' | 'G' | 'GG')[] = ['P', 'M', 'G', 'GG'];
+    let sizeIdx = sizes.indexOf(baseSize);
+
+    if (fit === 'justo') {
+      sizeIdx = Math.max(0, sizeIdx - 1);
+    } else if (fit === 'largo') {
+      sizeIdx = Math.min(sizes.length - 1, sizeIdx + 1);
+    }
+
+    return sizes[sizeIdx];
+  };
+
+  const handleApplyRecommendedSize = (size: 'P' | 'M' | 'G' | 'GG') => {
+    setSelectedSize(size);
+    setIsFittingRoomOpen(false);
+    // Reset recommend states
+    setFitHeight('');
+    setFitWeight('');
+    setFitPreference('normal');
+    setFitRecommendation(null);
+    alert(`Tamanho ${size} selecionado com base nas suas medidas do Provador! ✨`);
+  };
+
+  // Compre o Look: Algoritmo de inteligência de cross-selling de peças fitness complementares
+  const getComplementaryProduct = (product: Product): Product | null => {
+    if (!product || !products || products.length === 0) return null;
+
+    const cat = (product.category || '').toLowerCase();
+    const name = (product.name || '').toLowerCase();
+
+    // Identificação de grupos (Topwear vs Bottomwear)
+    const isTopGroup = cat.includes('top') || cat.includes('cropped') || cat.includes('regata') || cat.includes('t-shirt') || cat.includes('camiseta') || cat.includes('blusa') || name.includes('top') || name.includes('cropped') || name.includes('regata');
+    const isBottomGroup = cat.includes('shorts') || cat.includes('legging') || cat.includes('calça') || cat.includes('bermuda') || cat.includes('saia') || name.includes('shorts') || name.includes('legging') || name.includes('calça') || name.includes('bermuda');
+
+    let matched: Product | null = null;
+
+    if (isTopGroup) {
+      // Procura uma peça de baixo
+      matched = products.find(p => {
+        if (p.id === product.id) return false;
+        const pCat = (p.category || '').toLowerCase();
+        const pName = (p.name || '').toLowerCase();
+        return pCat.includes('legging') || pCat.includes('shorts') || pCat.includes('calça') || pName.includes('legging') || pName.includes('shorts') || pName.includes('calça');
+      }) || null;
+    } else if (isBottomGroup) {
+      // Procura uma peça de cima
+      matched = products.find(p => {
+        if (p.id === product.id) return false;
+        const pCat = (p.category || '').toLowerCase();
+        const pName = (p.name || '').toLowerCase();
+        return pCat.includes('top') || pCat.includes('cropped') || pCat.includes('regata') || pName.includes('top') || pName.includes('cropped') || pName.includes('regata');
+      }) || null;
+    }
+
+    // Fallback 1: Caso não pertença a um grupo claro, busca outro produto de categoria diferente
+    if (!matched) {
+      matched = products.find(p => p.id !== product.id && p.category !== product.category) || null;
+    }
+
+    // Fallback 2: Qualquer outro produto que não seja ele mesmo
+    if (!matched) {
+      matched = products.find(p => p.id !== product.id) || null;
+    }
+
+    return matched;
+  };
+
+  // Adicionar Combo Look Inteiro à Sacola de forma transparente aplicando desconto de 5% em ambos
+  const handleAddComboToCart = (compProduct: Product) => {
+    if (!selectedProduct) return;
+
+    // Estoque do produto principal
+    let mainMaxStock = selectedProduct.stock;
+    if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
+      mainMaxStock = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
+    } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
+      mainMaxStock = selectedProduct.colorStocks[selectedColor];
+    }
+
+    if (mainMaxStock <= 0) {
+      alert(`Desculpe, o tamanho ${selectedSize} na cor ${selectedColor} do produto principal está esgotado.`);
+      return;
+    }
+
+    // Define cor e tamanho para o produto complementar correspondente
+    // Tenta usar o mesmo tamanho para harmonia, senão usa o primeiro disponível
+    const compSize = compProduct.sizes && compProduct.sizes.includes(selectedSize) 
+      ? selectedSize 
+      : (compProduct.sizes && compProduct.sizes.length > 0 ? compProduct.sizes[0] : 'M');
+    
+    // Tenta pegar a primeira cor disponível para o tamanho complementar
+    const compAvailableColors = compProduct.sizeColors && compProduct.sizeColors[compSize] && compProduct.sizeColors[compSize].length > 0
+      ? compProduct.sizeColors[compSize]
+      : (compProduct.colors && compProduct.colors.length > 0 ? compProduct.colors : ['Única']);
+    
+    const compColor = Array.isArray(compAvailableColors) ? compAvailableColors[0] : compAvailableColors;
+
+    let compMaxStock = compProduct.stock;
+    if (compProduct.sizeColorStocks && compProduct.sizeColorStocks[compSize] && compProduct.sizeColorStocks[compSize][compColor] !== undefined) {
+      compMaxStock = compProduct.sizeColorStocks[compSize][compColor];
+    } else if (compProduct.colorStocks && compProduct.colorStocks[compColor] !== undefined) {
+      compMaxStock = compProduct.colorStocks[compColor];
+    }
+
+    if (compMaxStock <= 0) {
+      alert(`Desculpe, o tamanho ${compSize} na cor ${compColor} do produto complementar está esgotado.`);
+      return;
+    }
+
+    // Calcula preços com desconto de 5%
+    const discountedMainPrice = selectedProduct.price * 0.95;
+    const discountedCompPrice = compProduct.price * 0.95;
+
+    setCart(prev => {
+      let updated = [...prev];
+
+      // 1. Adicionar/Atualizar Produto Principal
+      const mainExistingIdx = updated.findIndex(item => 
+        item.product.id === selectedProduct.id && 
+        item.color === selectedColor && 
+        item.size === selectedSize
+      );
+
+      if (mainExistingIdx > -1) {
+        const newQty = updated[mainExistingIdx].quantity + 1;
+        updated[mainExistingIdx].quantity = Math.min(newQty, mainMaxStock);
+        updated[mainExistingIdx].priceAtTime = discountedMainPrice;
+      } else {
+        updated.push({
+          product: selectedProduct,
+          color: selectedColor,
+          size: selectedSize,
+          quantity: 1,
+          priceAtTime: discountedMainPrice
+        });
+      }
+
+      // 2. Adicionar/Atualizar Produto Complementar
+      const compExistingIdx = updated.findIndex(item => 
+        item.product.id === compProduct.id && 
+        item.color === compColor && 
+        item.size === compSize
+      );
+
+      if (compExistingIdx > -1) {
+        const newQty = updated[compExistingIdx].quantity + 1;
+        updated[compExistingIdx].quantity = Math.min(newQty, compMaxStock);
+        updated[compExistingIdx].priceAtTime = discountedCompPrice;
+      } else {
+        updated.push({
+          product: compProduct,
+          color: compColor,
+          size: compSize,
+          quantity: 1,
+          priceAtTime: discountedCompPrice
+        });
+      }
+
+      return updated;
+    });
+
+    setIsCartOpen(true);
+    alert(`🎉 Look Completo Adicionado! Aplicamos 5% de desconto de cross-selling em ambas as peças! 🌸`);
   };
 
   // Add item to custom checkout cart
@@ -1684,9 +1885,25 @@ export default function PublicCatalog({
                 <div className="space-y-4 border-t border-slate-50 pt-3">
                   {/* Sizes Row */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">
-                      <Palette size={11} className="text-pink-600" />
-                      <span>1. Escolha o Tamanho:</span>
+                    <div className="flex items-center justify-between gap-1.5 text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">
+                      <div className="flex items-center gap-1.5">
+                        <Palette size={11} className="text-pink-600" />
+                        <span>1. Escolha o Tamanho:</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFitHeight('');
+                          setFitWeight('');
+                          setFitPreference('normal');
+                          setFitRecommendation(null);
+                          setIsFittingRoomOpen(true);
+                        }}
+                        className="text-pink-600 hover:text-pink-700 transition flex items-center gap-1 text-[10px] lowercase first-letter:uppercase font-extrabold bg-pink-50 hover:bg-pink-100 px-2 py-0.5 rounded-full cursor-pointer select-none active:scale-95"
+                      >
+                        <Ruler size={11} className="text-pink-600 animate-pulse" />
+                        <span>Descubra seu tamanho 📐</span>
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {(selectedProduct.sizes && selectedProduct.sizes.length > 0 ? selectedProduct.sizes : ['M']).map(sz => {
@@ -1829,6 +2046,77 @@ export default function PublicCatalog({
                     </div>
                   )}
                 </div>
+
+                {/* 2. COMBINE E MONTE SEU LOOK (CROSS-SELLING) */}
+                {(() => {
+                  const compProduct = getComplementaryProduct(selectedProduct);
+                  if (!compProduct) return null;
+
+                  const originalTotal = selectedProduct.price + compProduct.price;
+                  const comboTotal = originalTotal * 0.95;
+
+                  return (
+                    <div className="border border-pink-100 rounded-2xl bg-gradient-to-br from-pink-50/40 via-white to-pink-50/10 p-3.5 space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles size={12} className="text-pink-600 animate-pulse" />
+                          <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-800">Combine e Monte seu Look 🌸</span>
+                        </div>
+                        <span className="bg-pink-100 text-pink-700 text-[9px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider animate-pulse">
+                          Combo 5% OFF!
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0 flex items-center justify-center">
+                          <img 
+                            src={compProduct.image} 
+                            alt={compProduct.name} 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <h5 className="text-[11px] font-extrabold text-slate-800 truncate leading-tight">
+                            {compProduct.name}
+                          </h5>
+                          <p className="text-[10px] text-slate-400 font-bold leading-tight mt-0.5">
+                            Categoria: {compProduct.category}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[11px] font-extrabold text-pink-600">
+                              R$ {compProduct.price.toFixed(2)}
+                            </span>
+                            <span className="text-[9px] text-slate-400 line-through">
+                              R$ {(compProduct.price * 1.15).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Combo Sizing harmony help info */}
+                      <p className="text-[9.5px] text-slate-500 font-medium">
+                        Peça complementar recomendada no tamanho <strong className="text-pink-600">{compProduct.sizes && compProduct.sizes.includes(selectedSize) ? selectedSize : (compProduct.sizes?.[0] || 'M')}</strong> para perfeita harmonia estética do look.
+                      </p>
+
+                      <div className="grid grid-cols-1 gap-2 pt-1">
+                        <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl flex items-center justify-between text-[10px] text-slate-600 font-bold">
+                          <span>Total do Look: <span className="line-through text-slate-400">R$ {originalTotal.toFixed(2)}</span></span>
+                          <span className="text-pink-600 font-black text-xs">R$ {comboTotal.toFixed(2)}</span>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => handleAddComboToCart(compProduct)}
+                          className="w-full py-2 bg-slate-900 hover:bg-pink-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-97 cursor-pointer border-none"
+                        >
+                          <ShoppingBag size={12} />
+                          <span>Adicionar Look Completo (5% OFF)</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Primary Add to Bag Button right after configs */}
                 <div className="pt-2">
@@ -2168,6 +2456,178 @@ export default function PublicCatalog({
         <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 border border-white rounded-full animate-ping" />
         <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 border border-white rounded-full flex items-center justify-center text-[7px] font-extrabold text-white">1</span>
       </a>
+
+      {/* Provador Virtual Modal */}
+      {isFittingRoomOpen && selectedProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 font-sans animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] max-w-md w-full shadow-2xl border border-slate-150 overflow-hidden text-slate-800 flex flex-col p-6 space-y-4 animate-in zoom-in-95 duration-250 relative">
+            
+            {/* Close button */}
+            <button 
+              onClick={() => setIsFittingRoomOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1.5 rounded-full transition cursor-pointer border-none bg-transparent flex items-center justify-center w-8 h-8"
+              title="Fechar Provador"
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div className="text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mx-auto text-pink-600">
+                <Ruler size={24} />
+              </div>
+              <h3 className="text-base md:text-lg font-extrabold text-slate-900">
+                Provador Virtual Interativo 📏
+              </h3>
+              <p className="text-[10.5px] text-slate-500 leading-normal max-w-xs mx-auto font-medium">
+                Insira suas medidas para que nosso assistente calcule cientificamente o tamanho ideal para você!
+              </p>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-4">
+              
+              {/* Altura Input Slider combo */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
+                  <span className="flex items-center gap-1">📏 Altura</span>
+                  <span className="text-pink-600 font-extrabold font-mono">{fitHeight ? `${fitHeight} cm` : 'Selecione'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="range"
+                    min="140"
+                    max="200"
+                    value={fitHeight || "165"}
+                    onChange={(e) => {
+                      setFitHeight(e.target.value);
+                      const rec = calculateRecommendedSize(Number(e.target.value), Number(fitWeight || 60), fitPreference);
+                      setFitRecommendation(rec);
+                    }}
+                    className="flex-1 accent-pink-600 h-1 bg-slate-100 rounded-lg cursor-pointer"
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Ex: 165"
+                    value={fitHeight}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFitHeight(val);
+                      if (val && Number(val) >= 100) {
+                        const rec = calculateRecommendedSize(Number(val), Number(fitWeight || 60), fitPreference);
+                        setFitRecommendation(rec);
+                      }
+                    }}
+                    className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center text-slate-800 focus:outline-hidden focus:border-pink-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Peso Input Slider combo */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
+                  <span className="flex items-center gap-1">⚖️ Peso</span>
+                  <span className="text-pink-600 font-extrabold font-mono">{fitWeight ? `${fitWeight} kg` : 'Selecione'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="range"
+                    min="40"
+                    max="120"
+                    value={fitWeight || "60"}
+                    onChange={(e) => {
+                      setFitWeight(e.target.value);
+                      const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(e.target.value), fitPreference);
+                      setFitRecommendation(rec);
+                    }}
+                    className="flex-1 accent-pink-600 h-1 bg-slate-100 rounded-lg cursor-pointer"
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Ex: 60"
+                    value={fitWeight}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFitWeight(val);
+                      if (val && Number(val) >= 20) {
+                        const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(val), fitPreference);
+                        setFitRecommendation(rec);
+                      }
+                    }}
+                    className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center text-slate-800 focus:outline-hidden focus:border-pink-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Fit Preference Choice Row */}
+              <div className="space-y-2 text-left">
+                <span className="text-[10.5px] font-bold text-slate-600 block">🛍️ Estilo de Caimento Preferido:</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['justo', 'normal', 'largo'] as const).map((pref) => {
+                    const isSel = fitPreference === pref;
+                    const labels = { justo: 'Justinho 🏃‍♀️', normal: 'Normal 👍', largo: 'Mais Solto 👕' };
+                    return (
+                      <button
+                        key={pref}
+                        type="button"
+                        onClick={() => {
+                          setFitPreference(pref);
+                          if (fitHeight && fitWeight) {
+                            const rec = calculateRecommendedSize(Number(fitHeight), Number(fitWeight), pref);
+                            setFitRecommendation(rec);
+                          }
+                        }}
+                        className={`py-2 px-1 text-[10px] font-black rounded-xl border transition-all text-center cursor-pointer select-none
+                          ${isSel 
+                            ? 'bg-pink-600 border-pink-600 text-white shadow-xs' 
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}
+                      >
+                        {labels[pref]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Recommendation Result display block */}
+            {fitHeight && fitWeight ? (
+              <div className="bg-pink-50/45 border border-pink-100 p-4 rounded-2xl space-y-2 text-center animate-in fade-in zoom-in-95 duration-200">
+                <span className="text-[10px] text-pink-700 font-extrabold uppercase tracking-widest block">Tamanho Recomendado:</span>
+                <span className="text-4xl font-extrabold font-mono text-pink-600 block animate-pulse">
+                  {fitRecommendation || 'M'}
+                </span>
+                
+                {/* Custom feedback text based on calculation */}
+                <p className="text-[10px] text-slate-600 font-semibold leading-relaxed max-w-xs mx-auto">
+                  Este tamanho possui elasticidade ideal (tecido Suplex Power de alta densidade 310g) para se ajustar perfeitamente ao seu corpo com o caimento {fitPreference === 'justo' ? 'bem firme e compressivo' : fitPreference === 'largo' ? 'mais soltinho e confortável' : 'adequado e elegante'}.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyRecommendedSize(fitRecommendation || 'M')}
+                  className="w-full mt-2 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer border-none"
+                >
+                  <Check size={14} />
+                  <span>Aplicar Tamanho {fitRecommendation || 'M'}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-center text-slate-450 text-[10px] font-bold">
+                💡 Insira sua altura e peso acima para receber a recomendação.
+              </div>
+            )}
+
+            {/* Information Footnote */}
+            <div className="flex gap-1.5 items-start text-left text-[9px] text-slate-400 leading-normal pt-1">
+              <Info size={11} className="text-pink-400 mt-0.5 flex-shrink-0" />
+              <span className="font-medium">Dica: Nossas fôrmas seguem a tabela padrão brasileira de roupas fitness femininas de alta compressão. Se você estiver entre tamanhos, a preferência de caimento decide perfeitamente seu visual.</span>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Cart Drawer & Checkout Form */}
       {isCartOpen && (
