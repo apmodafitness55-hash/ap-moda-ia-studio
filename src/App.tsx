@@ -45,6 +45,7 @@ import PublicCatalog from './components/PublicCatalog';
 import LoginScreen from './components/LoginScreen';
 import PartnerPortal from './components/PartnerPortal';
 import CustomerPortal from './components/CustomerPortal';
+import SellerDashboard from './components/SellerDashboard';
 import SuppliersManagement from './components/SuppliersManagement';
 import StorefrontPaymentConfig from './components/StorefrontPaymentConfig';
 import { 
@@ -2348,6 +2349,7 @@ export default function App() {
             onAddClient={handleAddClient}
             setActiveTab={setActiveTab}
             sellers={sellers}
+            currentUser={currentUser}
           />
         );
       case ActiveTab.PEDIDOS:
@@ -2421,6 +2423,15 @@ export default function App() {
           />
         );
       case ActiveTab.METAS:
+        if (currentUser?.role === 'Vendedor') {
+          return (
+            <SellerDashboard 
+              currentUser={currentUser}
+              onLogout={() => setCurrentUser(null)}
+              sales={sales}
+            />
+          );
+        }
         return (
           <SalesGoalSimulator 
             sales={sales}

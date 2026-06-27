@@ -230,6 +230,7 @@ export default function SettingsSystem({
 
   // Load / Save Store settings to localStorage
   const [storeName, setStoreName] = useState(() => localStorage.getItem('ap_store_name') || 'AP Moda Fitness');
+  const [sellerCommissionRate, setSellerCommissionRate] = useState(() => localStorage.getItem('ap_commission_rate') || '5');
   const [storeSlogan, setStoreSlogan] = useState(() => localStorage.getItem('ap_store_slogan') || 'Onde o seu limite vira ponto de partida');
   const [storeCnpj, setStoreCnpj] = useState(() => localStorage.getItem('ap_store_cnpj') || '12.345.678/0001-90');
   const [storeAddress, setStoreAddress] = useState(() => localStorage.getItem('ap_store_address') || 'Av. Copacabana, 820 - Rio de Janeiro, RJ');
@@ -550,6 +551,7 @@ export default function SettingsSystem({
   const handleSaveStoreSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ap_store_name', storeName);
+    localStorage.setItem('ap_commission_rate', sellerCommissionRate);
     localStorage.setItem('ap_store_slogan', storeSlogan);
     localStorage.setItem('ap_store_cnpj', storeCnpj);
     localStorage.setItem('ap_store_address', storeAddress);
@@ -588,6 +590,7 @@ export default function SettingsSystem({
     
     // Immediate push to cloud
     await pushSystemConfigToSupabase('ap_store_name', storeName);
+    await pushSystemConfigToSupabase('ap_commission_rate', sellerCommissionRate);
     await pushSystemConfigToSupabase('ap_store_slogan', storeSlogan);
     await pushSystemConfigToSupabase('ap_store_cnpj', storeCnpj);
     await pushSystemConfigToSupabase('ap_store_address', storeAddress);
@@ -1253,6 +1256,23 @@ export default function SettingsSystem({
                     placeholder="Chave Pix de Recebimento"
                     className="w-full bg-slate-50 border border-slate-150 rounded-xl p-2.5 font-medium text-slate-755 focus:outline-hidden font-mono"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-pink-650 font-bold mb-1 uppercase text-[10px] tracking-wide">Comissão de Venda Padrão dos Vendedores (%)</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={sellerCommissionRate}
+                    onChange={(e) => setSellerCommissionRate(e.target.value)}
+                    className="w-full bg-pink-50/20 border border-pink-200 rounded-xl p-2.5 font-bold text-pink-700 focus:outline-hidden font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Taxa percentual padrão calculada sobre o valor das vendas concluídas (ex: 5.0 para 5%).</p>
                 </div>
               </div>
 

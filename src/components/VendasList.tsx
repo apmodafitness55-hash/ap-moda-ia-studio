@@ -139,10 +139,12 @@ export default function VendasList({ sales, setSales, products, setProducts, set
     
     // Commission ranking
     const commissionBySeller: { [name: string]: number } = {};
+    const rateSaved = localStorage.getItem('ap_commission_rate');
+    const commissionRate = rateSaved ? parseFloat(rateSaved) / 100 : 0.05;
+
     activeSales.forEach(s => {
       if (s.salesperson) {
-        // Assume 5% premium commission per salesman
-        const commission = s.total * 0.05;
+        const commission = s.total * commissionRate;
         commissionBySeller[s.salesperson] = (commissionBySeller[s.salesperson] || 0) + commission;
       }
     });
@@ -307,7 +309,9 @@ export default function VendasList({ sales, setSales, products, setProducts, set
       {/* Salesperson Comissions and rankings banner */}
       <div className="bg-slate-900 border border-slate-850 rounded-2xl p-5 text-white flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shadow-xl">
         <div className="space-y-1">
-          <span className="bg-pink-600 text-white font-bold text-[9px] uppercase font-sans tracking-widest px-2 py-0.5 rounded-full inline-block">Comissões de Vendedoras (5% Padrão)</span>
+          <span className="bg-pink-600 text-white font-bold text-[9px] uppercase font-sans tracking-widest px-2 py-0.5 rounded-full inline-block">
+            Comissões de Vendedoras ({(parseFloat(localStorage.getItem('ap_commission_rate') || '5')).toFixed(1)}% Padrão)
+          </span>
           <h3 className="text-sm font-bold tracking-tight">Ranking & Comissão do Mês</h3>
           <p className="text-[11px] text-slate-400">Prêmios parciais acumulados com base nas metas e vendas de balcão concluídas</p>
         </div>

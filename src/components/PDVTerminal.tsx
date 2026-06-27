@@ -36,9 +36,10 @@ interface PDVTerminalProps {
   onAddClient: (client: Client) => void;
   setActiveTab: (tab: ActiveTab) => void;
   sellers?: string[];
+  currentUser?: any;
 }
 
-export default function PDVTerminal({ products, clients, onAddSale, onUpdateClients, onAddClient, setActiveTab, sellers = [] }: PDVTerminalProps) {
+export default function PDVTerminal({ products, clients, onAddSale, onUpdateClients, onAddClient, setActiveTab, sellers = [], currentUser }: PDVTerminalProps) {
   const [selectedClientName, setSelectedClientName] = useState<string>('Maria Silva');
   const [selectedChannel, setSelectedChannel] = useState<SalesChannel>('Instagram');
   const [cart, setCart] = useState<{ product: Product; quantity: number; selectedSize?: string; selectedColor?: string }[]>([]);
@@ -72,11 +73,18 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
   }, [sellers]);
 
   const [selectedSalesperson, setSelectedSalesperson] = useState<string>(() => {
+    if (currentUser?.role === 'Vendedor' && currentUser?.name) {
+      return currentUser.name;
+    }
     return sellers.length > 0 ? sellers[0] : 'Sem Vendedor';
   });
 
   // Keep state updated in case sellers update dynamically
   React.useEffect(() => {
+    if (currentUser?.role === 'Vendedor' && currentUser?.name) {
+      setSelectedSalesperson(currentUser.name);
+      return;
+    }
     if (sellers.length > 0) {
       if (!sellers.includes(selectedSalesperson)) {
         setSelectedSalesperson(sellers[0]);
@@ -84,7 +92,7 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
     } else {
       setSelectedSalesperson('Sem Vendedor');
     }
-  }, [sellers, selectedSalesperson]);
+  }, [sellers, selectedSalesperson, currentUser]);
 
   // Quick Add Client states
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);

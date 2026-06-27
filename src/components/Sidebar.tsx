@@ -361,8 +361,13 @@ export default function Sidebar({
     
     // Limit views for salespeople
     if (currentUser?.role === 'Vendedor') {
-      const allowedSellersTabs = [ActiveTab.PDV, ActiveTab.CLIENTES];
-      items = items.filter(it => allowedSellersTabs.includes(it.tab));
+      const allowedSellersTabs = [ActiveTab.PDV, ActiveTab.CLIENTES, ActiveTab.METAS];
+      items = items.filter(it => allowedSellersTabs.includes(it.tab)).map(item => {
+        if (item.tab === ActiveTab.METAS) {
+          return { ...item, label: 'Minhas Metas & Comissões' };
+        }
+        return item;
+      });
     }
 
     // Limit views for managers (Gerente) - Oculta as abas críticas de infra e TI

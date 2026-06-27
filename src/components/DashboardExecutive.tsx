@@ -201,8 +201,9 @@ export default function DashboardExecutive({ products, sales, clients, transacti
       }
     });
 
-    // Compute commission dynamically (5.0%)
-    const commissionRate = 0.05;
+    // Compute commission dynamically
+    const rateSaved = localStorage.getItem('ap_commission_rate');
+    const commissionRate = rateSaved ? parseFloat(rateSaved) / 100 : 0.05;
     stats.forEach(item => {
       item.commission = item.revenue * commissionRate;
     });
@@ -515,7 +516,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-50 pb-4">
           <div>
             <h3 className="text-sm font-extrabold text-slate-800 tracking-tight flex items-center gap-1.5 font-sans">
-              <span>Desempenho de Equipe & Comissões (5,0%)</span>
+              <span>Desempenho de Equipe & Comissões ({(parseFloat(localStorage.getItem('ap_commission_rate') || '5')).toFixed(1)}%)</span>
               <span className="bg-pink-100 text-pink-700 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
                 Comissão Unificada
               </span>
@@ -540,7 +541,7 @@ export default function DashboardExecutive({ products, sales, clients, transacti
                   <th className="pb-2.5">Vendedora</th>
                   <th className="pb-2.5">Qtd Vendas</th>
                   <th className="pb-2.5">Total Faturado</th>
-                  <th className="pb-2.5 text-right font-black">Comissão (5%)</th>
+                  <th className="pb-2.5 text-right font-black">Comissão ({(parseFloat(localStorage.getItem('ap_commission_rate') || '5')).toFixed(0)}%)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
