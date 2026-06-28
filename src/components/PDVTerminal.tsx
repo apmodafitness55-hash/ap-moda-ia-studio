@@ -30,6 +30,28 @@ import { getCardMachinesConfig, CardMachineConfig } from '../lib/cardMachines';
 import ThermalReceipt from './ThermalReceipt';
 import CorreiosLabel from './CorreiosLabel';
 
+export function validateCPF(cpf: string): boolean {
+  const cleanCPF = cpf.replace(/\D/g, '');
+  if (cleanCPF.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cleanCPF)) return false;
+  let sum = 0;
+  let remainder;
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(9, 10))) return false;
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (12 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(10, 11))) return false;
+  return true;
+}
+
 interface PDVTerminalProps {
   products: Product[];
   clients: Client[];
@@ -417,6 +439,12 @@ export default function PDVTerminal({ products, clients, onAddSale, onUpdateClie
       alert("Por favor, digite o nome completo da cliente antes de salvar.");
       return;
     }
+
+    if (quickCpf.trim() && !validateCPF(quickCpf)) {
+      alert("O CPF informado é inválido. Por favor, digite um CPF válido ou deixe o campo em branco.");
+      return;
+    }
+
     const exists = clients.find(c => 
       c.name.toLowerCase() === selectedClientName.trim().toLowerCase() ||
       (quickCpf.trim() && c.cpf && c.cpf.replace(/\D/g, '') === quickCpf.trim().replace(/\D/g, ''))

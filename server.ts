@@ -305,6 +305,330 @@ app.post('/api/webhook/payment', async (req, res) => {
   }
 });
 
+// Helper to initialize Supabase on Server with bypass capabilities (service_role if available)
+function getSupabaseServerClient() {
+  const CONFIG_FILE_PATH = path.join(process.cwd(), 'supabase_config.json');
+  let url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+  let key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+
+  if (fs.existsSync(CONFIG_FILE_PATH)) {
+    try {
+      const data = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+      const config = JSON.parse(data);
+      if (config.url && config.key) {
+        url = config.url;
+        key = config.service_role_key || config.key;
+      }
+    } catch (err) {}
+  }
+  return createClient(url, key);
+}
+
+// ------------------- SUPABASE SECURE PROXY ROUTING -------------------
+
+// Upload de imagens diretamente no Supabase Storage Bucket (Substitui ImgBB)
+app.post('/api/proxy/upload-image', async (req, res) => {
+  try {
+    const { file, name } = req.body;
+    if (!file || !name) {
+      return res.status(400).json({ error: 'Arquivo e nome são obrigatórios.' });
+    }
+
+    const match = file.match(/^data:(.+);base64,(.+)$/);
+    if (!match) {
+      return res.status(400).json({ error: 'Formato Base64 inválido.' });
+    }
+
+    const contentType = match[1];
+    const base64Data = match[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const supabase = getSupabaseServerClient();
+
+    // Tenta criar o bucket 'ap_images' caso não exista
+    try {
+      await supabase.storage.createBucket('ap_images', {
+        public: true,
+        fileSizeLimit: 10485760 // 10MB
+      });
+    } catch (e) {}
+
+    // Gera um nome único para o arquivo
+    const sanitizedName = name.replace(/[^a-zA-Z0-9.]/g, '_');
+    const fileName = `${Date.now()}_${sanitizedName}`;
+
+    // Upload para o bucket
+    const { data, error } = await supabase.storage.from('ap_images').upload(fileName, buffer, {
+      contentType,
+      upsert: true
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    // Retorna a URL pública
+    const { data: publicUrlData } = supabase.storage.from('ap_images').getPublicUrl(fileName);
+    if (!publicUrlData || !publicUrlData.publicUrl) {
+      throw new Error('Falha ao gerar URL pública da imagem.');
+    }
+
+    res.json({ success: true, url: publicUrlData.publicUrl });
+  } catch (err: any) {
+    console.error('[Proxy Upload Image] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro durante o upload da imagem.' });
+  }
+});
+
+// Proxy for Clients CRM
+app.get('/api/proxy/clients', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_clients').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Clients GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar clientes.' });
+  }
+});
+
+app.post('/api/proxy/clients', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_clients').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Clients POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar clientes.' });
+  }
+});
+
+// Proxy for Sales Records
+app.get('/api/proxy/sales', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_sales').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Sales GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar vendas.' });
+  }
+});
+
+app.post('/api/proxy/sales', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_sales').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Sales POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar vendas.' });
+  }
+});
+
+app.delete('/api/proxy/sales/:id', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.from('ap_sales').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Sales DELETE] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao deletar venda.' });
+  }
+});
+
+// Proxy for Finance Transactions
+app.get('/api/proxy/transactions', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_transactions').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Transactions GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar transações.' });
+  }
+});
+
+app.post('/api/proxy/transactions', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_transactions').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Transactions POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar transações.' });
+  }
+});
+
+// Proxy for Online Orders
+app.get('/api/proxy/online-orders', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_online_orders').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Online Orders GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar pedidos.' });
+  }
+});
+
+app.post('/api/proxy/online-orders', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_online_orders').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Online Orders POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar pedidos.' });
+  }
+});
+
+// Proxy for Abandoned Checkouts
+app.get('/api/proxy/checkouts', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_checkouts').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Checkouts GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar checkouts.' });
+  }
+});
+
+app.post('/api/proxy/checkouts', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_checkouts').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Checkouts POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar checkouts.' });
+  }
+});
+
+// Proxy for Team Members
+app.get('/api/proxy/team-members', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_team_members').select('*');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Team GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar equipe.' });
+  }
+});
+
+app.post('/api/proxy/team-members', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_team_members').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Team POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar equipe.' });
+  }
+});
+
+app.delete('/api/proxy/team-members/:id', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.from('ap_team_members').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Team DELETE] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao remover integrante.' });
+  }
+});
+
+// Proxy for Products (Write Operations only)
+app.post('/api/proxy/products', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_products').upsert(payloads, { onConflict: 'id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Products POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar produtos.' });
+  }
+});
+
+app.delete('/api/proxy/products/:id', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.from('ap_products').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Products DELETE] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao deletar produto.' });
+  }
+});
+
+// Proxy for System Configs
+app.get('/api/proxy/system-configs', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.from('ap_system_configs').select('key, value');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error('[Proxy Configs GET] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao consultar configurações.' });
+  }
+});
+
+app.post('/api/proxy/system-configs', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const payloads = req.body;
+    const { error } = await supabase.from('ap_system_configs').upsert(payloads, { onConflict: 'key' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Configs POST] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar configurações.' });
+  }
+});
+
+app.post('/api/proxy/clear-all', async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    await supabase.from('ap_products').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_clients').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_sales').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_transactions').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_online_orders').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_checkouts').delete().neq('id', 'dummy_nonexistent_id_value');
+    await supabase.from('ap_team_members').delete().neq('role', 'Admin');
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Proxy Clear All] Erro:', err);
+    res.status(500).json({ error: err.message || 'Erro ao limpar dados.' });
+  }
+});
+
 // 1. Product Description Generator Agent
 app.post('/api/gemini/generate-description', async (req, res) => {
   try {

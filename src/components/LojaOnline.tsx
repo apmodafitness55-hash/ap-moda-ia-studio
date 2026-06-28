@@ -28,7 +28,11 @@ import {
   Save,
   Sliders,
   ChevronRight,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle,
+  Search,
+  X,
+  ChevronLeft
 } from 'lucide-react';
 import { Product } from '../types';
 import { getCatalogUrl } from '../config';
@@ -239,7 +243,29 @@ export default function LojaOnline({
   const [newProdColors, setNewProdColors] = useState<string[]>(['Preto', 'Bordô']);
 
   const [isSavingConfigs, setIsSavingConfigs] = useState(false);
-  const [activeConfigTab, setActiveConfigTab] = useState<'textos' | 'banners' | 'categorias' | 'cadastro'>('textos');
+  const [activeConfigTab, setActiveConfigTab] = useState<'textos' | 'banners' | 'categorias' | 'cadastro' | 'estoque'>('textos');
+
+  // Customer experience interactive states
+  const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string>('');
+  const [selectedColor, setSelectedColor] = useState<string>('');
+  const [detailQty, setDetailQty] = useState<number>(1);
+
+  // Simulated CEP / Freight Calculator
+  const [cepInput, setCepInput] = useState<string>('');
+  const [isCalculatingFreight, setIsCalculatingFreight] = useState<boolean>(false);
+  const [freightCalculated, setFreightCalculated] = useState<boolean>(false);
+  const [selectedFreightOption, setSelectedFreightOption] = useState<'pac' | 'sedex' | null>(null);
+  const [freightCost, setFreightCost] = useState<number>(0);
+  const [freightDuration, setFreightDuration] = useState<string>('');
+
+  // Inventory Quick Management Filter State
+  const [inventorySearch, setInventorySearch] = useState<string>('');
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [editingStockVal, setEditingStockVal] = useState<number>(0);
+
+  // Lookbook slider active index
+  const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
 
   const handleSaveStorefrontTexts = async () => {
     setIsSavingConfigs(true);
@@ -417,8 +443,8 @@ export default function LojaOnline({
   }, [appliedCoupon, cartSubtotal]);
 
   const cartTotal = useMemo(() => {
-    return Math.max(0, cartSubtotal - cartDiscountAmt);
-  }, [cartSubtotal, cartDiscountAmt]);
+    return Math.max(0, cartSubtotal - cartDiscountAmt + (freightCost || 0));
+  }, [cartSubtotal, cartDiscountAmt, freightCost]);
 
   // Generate WhatsApp payload for vitrine order checkout
   const sendVitrineOrderWhatsApp = () => {
@@ -429,7 +455,10 @@ export default function LojaOnline({
 
     const itemsText = vitrineCart.map(it => `• ${it.qty}x ${it.product.name} (R$ ${it.product.price.toFixed(2)})`).join('\n');
     const discountText = appliedCoupon ? `\n🏷️ Cupom Aplicado: *${appliedCoupon.code}* (-R$ ${cartDiscountAmt.toFixed(2)})` : '';
-    const message = `Olá, AP Moda Fitness! 🌸\n\nAcabei de ver suas peças na sua *Vitrine Online* e montei meu carrinho de compras!\n\n🛍️ *Meu Carrinho:*\n${itemsText}${discountText}\n\n💵 *Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n💸 *Total das Peças:* R$ ${cartTotal.toFixed(2)}\n\nPode confirmar se essas peças estão disponíveis no meu tamanho e o preço do frete? Obrigada!`;
+    const shippingText = freightCost > 0 ? `\n🚚 Frete (${selectedFreightOption?.toUpperCase()}): R$ ${freightCost.toFixed(2)} (Prazo: ${freightDuration})\n📍 CEP Destino: ${cepInput}` : '';
+    const totalPecas = Math.max(0, cartSubtotal - cartDiscountAmt);
+    
+    const message = `Olá, AP Moda Fitness! 🌸\n\nAcabei de ver suas peças na sua *Vitrine Online* e montei meu carrinho de compras!\n\n🛍️ *Meu Carrinho:*\n${itemsText}${discountText}${shippingText}\n\n💵 *Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n💸 *Total das Peças:* R$ ${totalPecas.toFixed(2)}\n💰 *Valor Final com Frete:* R$ ${cartTotal.toFixed(2)}\n\nPode confirmar se essas peças estão disponíveis e os prazos? Obrigada!`;
 
     try {
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
@@ -1133,26 +1162,289 @@ export default function LojaOnline({
               </div>
             </div>
 
+            {/* PUBLIC HERO BANNER (SLIDER / CATEGORY HEADER) */}
+            {previewCategory === 'Todos' ? (
+              /* LOOKBOOK SLIDE CAROUSEL */
+              <div className="relative h-44 rounded-2xl overflow-hidden mb-4 bg-slate-950 group">
+                {/* Active Slide Background */}
+                <div className="absolute inset-0">
+                  <img
+                    src={lookbookSlides[activeSlideIdx]?.image || "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80"}
+                    alt={lookbookSlides[activeSlideIdx]?.title}
+                    className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition duration-1000"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/20" />
+                </div>
+
+                {/* Content Overlay */}
+                <div className="absolute inset-0 flex flex-col justify-end p-4 text-left select-none">
+                  <span className="text-[8px] tracking-widest font-extrabold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2 py-0.5 rounded-full uppercase w-max mb-1">
+                    {lookbookSlides[activeSlideIdx]?.tag || 'COLEÇÃO EXCLUSIVA'}
+                  </span>
+                  <h3 className="text-sm font-extrabold text-white uppercase tracking-tight line-clamp-1">
+                    {lookbookSlides[activeSlideIdx]?.title || 'CONJUNTO ZERO TRANSPARÊNCIA'}
+                  </h3>
+                  <p className="text-[10px] text-slate-300 font-medium line-clamp-2 max-w-md">
+                    {lookbookSlides[activeSlideIdx]?.desc || 'Looks fitness modeladores com poliamida tecnológica e caimento anatômico.'}
+                  </p>
+                </div>
+
+                {/* Left/Right controls */}
+                <button
+                  type="button"
+                  onClick={() => setActiveSlideIdx(prev => prev === 0 ? lookbookSlides.length - 1 : prev - 1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-slate-900/60 hover:bg-pink-600 text-white rounded-full flex items-center justify-center cursor-pointer transition border-none text-[9px] z-10 font-bold"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSlideIdx(prev => prev === lookbookSlides.length - 1 ? 0 : prev + 1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-slate-900/60 hover:bg-pink-600 text-white rounded-full flex items-center justify-center cursor-pointer transition border-none text-[9px] z-10 font-bold"
+                >
+                  ▶
+                </button>
+
+                {/* Indicators dots */}
+                <div className="absolute bottom-2 right-4 flex gap-1 z-10">
+                  {lookbookSlides.map((_, idx) => (
+                    <span
+                      key={idx}
+                      onClick={() => setActiveSlideIdx(idx)}
+                      className={`w-1 h-1 rounded-full cursor-pointer transition-all ${activeSlideIdx === idx ? 'bg-pink-500 w-2.5' : 'bg-slate-500'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* SPECIFIC CATEGORY BANNER */
+              <div className="relative h-28 rounded-2xl overflow-hidden mb-4 bg-slate-950">
+                <div className="absolute inset-0">
+                  <img
+                    src={previewCategory === 'Calças e Leggings' ? categoryBanners.slimFit : previewCategory === 'Conjuntos' ? categoryBanners.plusSize : "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80"}
+                    alt={previewCategory}
+                    className="w-full h-full object-cover opacity-50"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                </div>
+
+                <div className="absolute inset-0 flex flex-col justify-end p-4 text-left select-none">
+                  <span className="text-[8px] font-extrabold uppercase tracking-wider text-pink-400 bg-pink-500/10 border border-pink-500/20 px-1.5 py-0.5 rounded-md w-max mb-1">PRODUTOS PREMIUM</span>
+                  <h3 className="text-xs font-extrabold text-white uppercase tracking-wider">Coleção {previewCategory}</h3>
+                  <p className="text-[9px] text-slate-400 font-medium">Os melhores lançamentos fitness em tecido tecnológico de alta densidade.</p>
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCT DETAILS MODAL (SIMULATED SMARTPHONE POPUP IN SMARTPHONE FRAME) */}
+            {selectedDetailProduct && (
+              <div className="absolute inset-x-2 bottom-2 top-14 z-50 bg-slate-950/98 backdrop-blur-md flex flex-col p-4 overflow-y-auto select-none rounded-2xl text-left text-white border border-slate-800">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-900 pb-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDetailProduct(null)}
+                    className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white bg-transparent border-none cursor-pointer"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Voltar</span>
+                  </button>
+                  <span className="text-[9px] bg-pink-600/30 border border-pink-500/20 text-pink-400 font-bold px-2 py-0.5 rounded-full">Visualizar Peça</span>
+                </div>
+
+                {/* Body Content */}
+                <div className="flex-grow space-y-3.5 overflow-y-auto pr-1">
+                  {/* Photo & Category */}
+                  <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-slate-900">
+                    <img src={selectedDetailProduct.image} alt={selectedDetailProduct.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <span className="absolute top-2 left-2 bg-slate-950/80 backdrop-blur-xs text-[8px] font-bold text-pink-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-mono">
+                      {selectedDetailProduct.category}
+                    </span>
+                  </div>
+
+                  {/* Title & Price */}
+                  <div>
+                    <h3 className="font-extrabold text-xs text-white tracking-wide">{selectedDetailProduct.name}</h3>
+                    <p className="text-[8px] text-slate-500 font-mono">REF: {selectedDetailProduct.sku}</p>
+                    
+                    <div className="mt-1.5 flex items-baseline gap-1.5">
+                      <span className="font-extrabold text-sm text-pink-400 font-mono">R$ {selectedDetailProduct.price.toFixed(2)}</span>
+                      <span className="text-[9px] text-slate-500 font-medium line-through">R$ {(selectedDetailProduct.price * 1.35).toFixed(2)}</span>
+                      <span className="text-[8px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">Atacado 35% OFF</span>
+                    </div>
+                  </div>
+
+                  {/* Tech specs highlights / benefits */}
+                  <div className="bg-slate-900/60 border border-slate-900 p-2.5 rounded-xl space-y-1 text-[9px]">
+                    <div className="flex items-center gap-1 text-emerald-400">
+                      <Check size={10} className="stroke-[3]" />
+                      <span className="text-slate-300"><strong>Zero Transparência:</strong> Tecido duplo de alta gramatura</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald-400">
+                      <Check size={10} className="stroke-[3]" />
+                      <span className="text-slate-300"><strong>Alta Compressão:</strong> Modela cintura de forma anatômica</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald-400">
+                      <Check size={10} className="stroke-[3]" />
+                      <span className="text-slate-300"><strong>Alta Performance:</strong> Tecnologia respirável e proteção UV50+</span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-0.5">
+                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider block">Destaque da Peça</span>
+                    <p className="text-[10px] text-slate-300 leading-relaxed font-medium">
+                      {selectedDetailProduct.description || "Peça fitness premium modeladora de alta qualidade. Confeccionada com elastano original para maior durabilidade e conforto em treinos intensos."}
+                    </p>
+                  </div>
+
+                  {/* Size Selector */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Selecione o Tamanho</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          alert(`📐 Guia de Medidas AP Moda Fitness:\n\n• PP: 34 (Busto: 76-81cm | Cintura: 58-63cm | Quadril: 86-91cm)\n• P: 36-38 (Busto: 82-87cm | Cintura: 64-69cm | Quadril: 92-97cm)\n• M: 40-42 (Busto: 88-93cm | Cintura: 70-75cm | Quadril: 98-103cm)\n• G: 44 (Busto: 94-99cm | Cintura: 76-81cm | Quadril: 104-109cm)\n• GG: 46 (Busto: 100-105cm | Cintura: 82-87cm | Quadril: 110-115cm)`);
+                        }}
+                        className="text-[8px] text-pink-400 font-bold hover:underline bg-transparent border-none cursor-pointer"
+                      >
+                        Tabela de Medidas 📐
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(selectedDetailProduct.sizes && selectedDetailProduct.sizes.length > 0 ? selectedDetailProduct.sizes : ['P', 'M', 'G']).map(sz => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => setSelectedSize(sz)}
+                          className={`w-8 h-7 text-[10px] font-bold rounded-lg transition-all border-none cursor-pointer
+                            ${selectedSize === sz ? 'bg-pink-600 text-white font-extrabold' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Color Selector */}
+                  <div className="space-y-1">
+                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider block">Selecione a Cor</span>
+                    <div className="flex flex-wrap gap-1">
+                      {(selectedDetailProduct.colors && selectedDetailProduct.colors.length > 0 ? selectedDetailProduct.colors : ['Preto', 'Bordô']).map(col => (
+                        <button
+                          key={col}
+                          type="button"
+                          onClick={() => setSelectedColor(col)}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all border cursor-pointer
+                            ${selectedColor === col ? 'bg-white text-slate-950 font-extrabold border-white' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'}`}
+                        >
+                          {col}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quantity Controller */}
+                  <div className="space-y-1">
+                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider block">Quantidade</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailQty(prev => Math.max(1, prev - 1))}
+                        className="w-6 h-6 rounded bg-slate-900 hover:bg-slate-800 flex items-center justify-center font-bold text-white cursor-pointer border-none text-[12px]"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono text-xs font-bold w-5 text-center">{detailQty}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDetailQty(prev => prev + 1)}
+                        className="w-6 h-6 rounded bg-slate-900 hover:bg-slate-800 flex items-center justify-center font-bold text-white cursor-pointer border-none text-[12px]"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Add button */}
+                <div className="mt-3 pt-2.5 border-t border-slate-900 flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sz = selectedSize || (selectedDetailProduct.sizes?.[0] || 'M');
+                      const col = selectedColor || (selectedDetailProduct.colors?.[0] || 'Preto');
+                      
+                      const productWithMeta = {
+                        ...selectedDetailProduct,
+                        name: `${selectedDetailProduct.name} (${sz} / ${col})`
+                      };
+
+                      setVitrineCart(prev => {
+                        const existing = prev.find(item => item.product.id === selectedDetailProduct.id && item.product.name === productWithMeta.name);
+                        if (existing) {
+                          return prev.map(item => (item.product.id === selectedDetailProduct.id && item.product.name === productWithMeta.name) ? { ...item, qty: item.qty + detailQty } : item);
+                        }
+                        return [...prev, { product: productWithMeta, qty: detailQty }];
+                      });
+
+                      setSelectedDetailProduct(null);
+                    }}
+                    className="flex-grow py-2 bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-[10px] rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/10 cursor-pointer border-none"
+                  >
+                    <ShoppingBag size={11} />
+                    <span>Adicionar • R$ {(selectedDetailProduct.price * detailQty).toFixed(2)}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Grid of items */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
               {vitrineProducts.map(prod => (
                 <div key={prod.id} className="bg-slate-950 border border-slate-850 rounded-xl p-2.5 hover:border-pink-600/30 transition-all flex flex-col justify-between">
                   <div>
-                    <div className="aspect-square w-full rounded-lg overflow-hidden bg-slate-850 relative mb-1.5">
+                    <div 
+                      className="aspect-square w-full rounded-lg overflow-hidden bg-slate-850 relative mb-1.5 cursor-pointer"
+                      onClick={() => {
+                        setSelectedDetailProduct(prod);
+                        setSelectedSize(prod.sizes?.[0] || 'M');
+                        setSelectedColor(prod.colors?.[0] || 'Preto');
+                        setDetailQty(1);
+                      }}
+                    >
                       <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       <span className="absolute top-1 left-1.5 bg-slate-900/85 backdrop-blur-xs text-[8px] font-bold text-pink-400 px-1 py-0.5 rounded uppercase font-mono">{prod.category}</span>
                     </div>
-                    <p className="text-[10px] font-bold text-white leading-tight line-clamp-2">{prod.name}</p>
+                    <p 
+                      className="text-[10px] font-bold text-white leading-tight line-clamp-2 cursor-pointer hover:text-pink-400 transition"
+                      onClick={() => {
+                        setSelectedDetailProduct(prod);
+                        setSelectedSize(prod.sizes?.[0] || 'M');
+                        setSelectedColor(prod.colors?.[0] || 'Preto');
+                        setDetailQty(1);
+                      }}
+                    >
+                      {prod.name}
+                    </p>
                   </div>
 
                   <div className="mt-2.5 flex items-center justify-between">
                     <span className="font-bold text-[11px] text-pink-400 font-mono">R$ {prod.price.toFixed(2)}</span>
                     <button
                       type="button"
-                      onClick={() => handleAddToVitrineCart(prod)}
-                      className="bg-pink-600 hover:bg-pink-700 text-white p-1 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      onClick={() => {
+                        setSelectedDetailProduct(prod);
+                        setSelectedSize(prod.sizes?.[0] || 'M');
+                        setSelectedColor(prod.colors?.[0] || 'Preto');
+                        setDetailQty(1);
+                      }}
+                      className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded-lg text-[9px] font-extrabold transition-all flex items-center gap-1 cursor-pointer border-none"
                     >
-                      <span>Adicionar</span>
+                      <span>Ver Peça</span>
                     </button>
                   </div>
                 </div>
@@ -1214,6 +1506,107 @@ export default function LojaOnline({
                   </div>
                 </div>
               )}
+
+              {/* CEP / Freight Calculator */}
+              {vitrineCart.length > 0 && (
+                <div className="mt-4 pt-3.5 border-t border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1 text-left">📍 Calcular Frete</span>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Digite seu CEP (ex: 01311-200)"
+                      value={cepInput}
+                      onChange={(e) => setCepInput(e.target.value)}
+                      className="flex-grow bg-slate-50 border border-slate-150 rounded-lg p-1.5 focus:outline-hidden font-mono text-[11px] font-bold text-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!cepInput.trim()) {
+                          alert('Por favor, informe um CEP válido.');
+                          return;
+                        }
+                        setIsCalculatingFreight(true);
+                        setTimeout(() => {
+                          setIsCalculatingFreight(false);
+                          setFreightCalculated(true);
+                          // Default to PAC on calculation
+                          setSelectedFreightOption('pac');
+                          const price = cartSubtotal >= 250 ? 0 : 14.90;
+                          setFreightCost(price);
+                          setFreightDuration('5 a 8 dias úteis');
+                        }, 700);
+                      }}
+                      disabled={isCalculatingFreight}
+                      className="bg-slate-800 hover:bg-slate-950 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg border-none cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      {isCalculatingFreight ? 'Calculando...' : 'Calcular'}
+                    </button>
+                  </div>
+
+                  {/* Freight Options Selection */}
+                  {freightCalculated && (
+                    <div className="mt-2.5 space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-[11px] text-left">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Opções de Entrega para {cepInput}:</p>
+                      
+                      {/* Option 1: PAC */}
+                      <label 
+                        className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer transition
+                          ${selectedFreightOption === 'pac' ? 'bg-pink-50/50 border-pink-400' : 'bg-white border-slate-150'}`}
+                        onClick={() => {
+                          setSelectedFreightOption('pac');
+                          const price = cartSubtotal >= 250 ? 0 : 14.90;
+                          setFreightCost(price);
+                          setFreightDuration('5 a 8 dias úteis');
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <input 
+                            type="radio" 
+                            name="freight" 
+                            checked={selectedFreightOption === 'pac'} 
+                            onChange={() => {}} 
+                            className="text-pink-600 focus:ring-pink-500"
+                          />
+                          <div className="text-slate-700 font-medium leading-tight">
+                            <span>PAC Correios</span>
+                            <span className="block text-[9px] text-slate-400 mt-0.5">Prazo: 5 a 8 dias úteis</span>
+                          </div>
+                        </div>
+                        <span className="font-bold text-slate-800 font-mono text-[10px]">
+                          {cartSubtotal >= 250 ? 'Grátis' : 'R$ 14,90'}
+                        </span>
+                      </label>
+
+                      {/* Option 2: SEDEX */}
+                      <label 
+                        className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer transition
+                          ${selectedFreightOption === 'sedex' ? 'bg-pink-50/50 border-pink-400' : 'bg-white border-slate-150'}`}
+                        onClick={() => {
+                          setSelectedFreightOption('sedex');
+                          setFreightCost(28.90);
+                          setFreightDuration('1 a 3 dias úteis');
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <input 
+                            type="radio" 
+                            name="freight" 
+                            checked={selectedFreightOption === 'sedex'} 
+                            onChange={() => {}} 
+                            className="text-pink-600 focus:ring-pink-500"
+                          />
+                          <div className="text-slate-700 font-medium leading-tight">
+                            <span>SEDEX Express</span>
+                            <span className="block text-[9px] text-slate-400 mt-0.5">Prazo: 1 a 3 dias úteis</span>
+                          </div>
+                        </div>
+                        <span className="font-bold text-slate-800 font-mono text-[10px]">R$ 28,90</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Calculations and checkout */}
@@ -1230,8 +1623,20 @@ export default function LojaOnline({
                       <span>-R$ {cartDiscountAmt.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-slate-800 pt-1.5 border-t border-slate-100 font-bold">
+                  <div className="flex justify-between">
                     <span>Valor Peças:</span>
+                    <span className="font-bold text-slate-800">R$ {Math.max(0, cartSubtotal - cartDiscountAmt).toFixed(2)}</span>
+                  </div>
+                  {freightCalculated && selectedFreightOption && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Frete ({selectedFreightOption.toUpperCase()}):</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        {freightCost === 0 ? 'Grátis' : `R$ ${freightCost.toFixed(2)}`}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-850 pt-1.5 border-t border-slate-100 font-extrabold">
+                    <span>Total Final:</span>
                     <span className="text-pink-600 tracking-tight font-mono text-sm">R$ {cartTotal.toFixed(2)}</span>
                   </div>
                 </div>
@@ -1292,6 +1697,13 @@ export default function LojaOnline({
                 className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'cadastro' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 Cadastrar Peça 🛍️
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveConfigTab('estoque')}
+                className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'estoque' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Estoque Rápido & Margens 📊
               </button>
             </div>
           </div>
@@ -1772,6 +2184,26 @@ export default function LojaOnline({
                 </div>
 
                 <div className="md:col-span-12 space-y-1">
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col sm:flex-row items-center justify-between text-[11px] gap-2">
+                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[9px] bg-slate-200/50 px-2 py-0.5 rounded">Calculadora de Precificação</span>
+                    <div className="text-slate-700 font-medium text-left">
+                      {(() => {
+                        const p = parseFloat(newProdPrice) || 0;
+                        const c = parseFloat(newProdCost) || parseFloat((p * 0.45).toFixed(2));
+                        if (p <= 0) return "Digite o preço de venda para simular a margem.";
+                        const profit = p - c;
+                        const margin = (profit / p) * 100;
+                        return (
+                          <span>
+                            Custo de <strong>R$ {c.toFixed(2)}</strong> e venda de <strong>R$ {p.toFixed(2)}</strong> gera um lucro bruto de <strong className="text-pink-600 font-extrabold">R$ {profit.toFixed(2)}</strong> por peça. Margem de lucro de <strong className={margin >= 45 ? "text-emerald-600 font-extrabold" : "text-amber-600 font-bold"}>{margin.toFixed(2)}%</strong>.
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-12 space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase block">URL de Imagem da Peça</label>
                   <input
                     type="text"
@@ -1847,6 +2279,189 @@ export default function LojaOnline({
                 </button>
               </div>
             </form>
+          )}
+
+          {/* Config: Gestão Rápida de Estoque & Margens */}
+          {activeConfigTab === 'estoque' && (
+            <div id="quick-stock-panel" className="space-y-4 text-left">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                    <span>📊 Gestão Rápida de Estoque e Margem de Lucro</span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500 font-medium">Controle de estoque instantâneo de peças da vitrine com avisos visuais de estoque crítico e cálculo automatizado de margem bruta.</p>
+                </div>
+                
+                {/* Search */}
+                <div className="relative w-full md:w-64">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar peça por nome ou SKU..."
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Stats Counters Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Total de Itens</span>
+                  <span className="text-sm font-extrabold text-slate-800">{products.length} referências</span>
+                </div>
+                <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-100">
+                  <span className="text-[9px] font-bold text-rose-500 block uppercase">Alerta de Crítico</span>
+                  <span className="text-sm font-extrabold text-rose-700">
+                    {products.filter(p => p.stock <= p.minStock).length} peças em risco
+                  </span>
+                </div>
+                <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                  <span className="text-[9px] font-bold text-emerald-500 block uppercase">Margem Média Estimada</span>
+                  <span className="text-sm font-extrabold text-emerald-700">
+                    {(() => {
+                      const list = products.filter(p => p.price > 0);
+                      if (list.length === 0) return '0%';
+                      const sum = list.reduce((acc, curr) => {
+                        const cost = curr.cost || (curr.price * 0.45);
+                        return acc + ((curr.price - cost) / curr.price);
+                      }, 0);
+                      return `${((sum / list.length) * 100).toFixed(0)}%`;
+                    })()}
+                  </span>
+                </div>
+                <div className="bg-pink-50/50 p-3 rounded-xl border border-pink-100">
+                  <span className="text-[9px] font-bold text-pink-500 block uppercase">Peças Ativas Vitrine</span>
+                  <span className="text-sm font-extrabold text-pink-700">
+                    {products.filter(p => p.stock > 0).length} visíveis online
+                  </span>
+                </div>
+              </div>
+
+              {/* Product Grid / Table */}
+              <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <tr>
+                        <th className="p-3">Peça</th>
+                        <th className="p-3">Preço Custo / Venda</th>
+                        <th className="p-3">Margem Lucro</th>
+                        <th className="p-3 text-center">Estoque Atual</th>
+                        <th className="p-3 text-right">Ação Rápida</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {products
+                        .filter(p => {
+                          if (!inventorySearch) return true;
+                          const term = inventorySearch.toLowerCase();
+                          return p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term);
+                        })
+                        .map(prod => {
+                          const cost = prod.cost || parseFloat((prod.price * 0.45).toFixed(2));
+                          const profit = prod.price - cost;
+                          const margin = prod.price > 0 ? (profit / prod.price) * 100 : 0;
+                          const isLowStock = prod.stock <= prod.minStock;
+
+                          return (
+                            <tr key={prod.id} className="hover:bg-slate-50/50 transition border-none">
+                              <td className="p-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-100 shrink-0">
+                                    <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-slate-800 text-[11px] leading-tight line-clamp-1">{prod.name}</p>
+                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">{prod.sku} • {prod.category}</p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3">
+                                <div className="space-y-0.5">
+                                  <div className="text-[10px] text-slate-400">
+                                    Custo: <span className="font-mono">R$ {cost.toFixed(2)}</span>
+                                  </div>
+                                  <div className="font-bold text-slate-800">
+                                    Venda: <span className="font-mono text-pink-600">R$ {prod.price.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3">
+                                <div className="space-y-1">
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono
+                                    ${margin >= 50 ? 'bg-emerald-100 text-emerald-800' : margin >= 35 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    {margin.toFixed(0)}% Margem
+                                  </span>
+                                  <p className="text-[9px] text-slate-400">Lucro: R$ {profit.toFixed(1)}/un</p>
+                                </div>
+                              </td>
+
+                              <td className="p-3 text-center">
+                                <div className="inline-flex flex-col items-center">
+                                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full
+                                    ${isLowStock ? 'bg-amber-100 text-amber-800 font-extrabold' : 'bg-slate-100 text-slate-700'}`}>
+                                    {prod.stock} un
+                                  </span>
+                                  {isLowStock && (
+                                    <span className="text-[8px] font-bold text-amber-600 uppercase tracking-tight mt-0.5">Estoque Mínimo ({prod.minStock})</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onUpdateProduct) {
+                                        onUpdateProduct({ ...prod, stock: Math.max(0, prod.stock - 1) });
+                                      }
+                                    }}
+                                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg cursor-pointer transition border-none text-[10px] font-bold"
+                                    title="Diminuir estoque"
+                                  >
+                                    -1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onUpdateProduct) {
+                                        onUpdateProduct({ ...prod, stock: prod.stock + 1 });
+                                      }
+                                    }}
+                                    className="p-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 font-bold rounded-lg cursor-pointer transition border-none text-[10px]"
+                                    title="Aumentar estoque"
+                                  >
+                                    +1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newVal = prompt(`Definir novo estoque para "${prod.name}":`, prod.stock.toString());
+                                      if (newVal !== null && !isNaN(parseInt(newVal))) {
+                                        if (onUpdateProduct) {
+                                          onUpdateProduct({ ...prod, stock: parseInt(newVal) });
+                                        }
+                                      }
+                                    }}
+                                    className="p-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold rounded-lg cursor-pointer transition border-none ml-1"
+                                  >
+                                    Ajustar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

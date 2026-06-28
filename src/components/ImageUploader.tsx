@@ -75,72 +75,46 @@ export default function ImageUploader({ onUploadSuccess, currentImageUrl, classN
     setUploadStatus('idle');
     setErrorMessage('');
 
-    const apiKey = getImgbbKey();
-
-    // If there is no real key, or if it failed, we can use a local storage / base64 fallback
-    if (!apiKey) {
-      // Local fallback using FileReader for session-durability
-      try {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
-          setUploadedUrl(base64data);
-          onUploadSuccess(base64data);
-          setUploadStatus('success');
-          setIsUploading(false);
-          // Show polite alert explaining base64 fallback
-          alert('Upload Simulado com Sucesso!\n\nVocê não configurou uma chave real do ImgBB nas configurações. O sistema converteu a imagem localmente (Base64) para que funcione perfeitamente no seu teste atual!\n\nPara ter links permanentes na nuvem, configure sua chave do ImgBB em "Ajustes".');
-        };
-        reader.readAsDataURL(file);
-      } catch (err) {
-        showError('Erro ao gerar preview local da imagem.');
-        setIsUploading(false);
-      }
-      return;
-    }
-
-    // Real ImgBB Upload Flow
+    // Convert to Base64 to send via JSON Proxy
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        try {
+          // Send to the secure Supabase proxy endpoint
+          const response = await fetch('/api/proxy/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: base64data, name: file.name })
+          });
 
-      // We send request to the modern ImgBB API
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-        method: 'POST',
-        body: formData,
-      });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Falha no servidor ao fazer upload da imagem.');
+          }
 
-      if (!response.ok) {
-        throw new Error('Falha na resposta do servidor ImgBB.');
-      }
-
-      const result = await response.json();
-
-      if (result && result.data && result.data.url) {
-        const cdnUrl = result.data.url;
-        setUploadedUrl(cdnUrl);
-        onUploadSuccess(cdnUrl);
-        setUploadStatus('success');
-      } else {
-        throw new Error('Formato de resposta inesperado do ImgBB.');
-      }
-    } catch (err) {
-      console.error(err);
-      // Fallback to local Base64 on failure so user experience isn't blocked
-      try {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
+          const result = await response.json();
+          if (result && result.success && result.url) {
+            setUploadedUrl(result.url);
+            onUploadSuccess(result.url);
+            setUploadStatus('success');
+          } else {
+            throw new Error('Falha ao obter URL pública da imagem.');
+          }
+        } catch (uploadErr: any) {
+          console.error('[Upload Proxy Error]:', uploadErr);
+          // Fallback to local Base64 on failure so user experience isn't blocked
           setUploadedUrl(base64data);
           onUploadSuccess(base64data);
           setUploadStatus('success');
-          alert('Upload ImgBB falhou (verifique sua chave de acesso em Ajustes). Usando fallback local para visualização!');
-        };
-        reader.readAsDataURL(file);
-      } catch (innerErr) {
-        showError('Falha ao conectar com o ImgBB e ao gerar fallback da imagem.');
-      }
-    } finally {
+          alert('Upload em nuvem falhou. Usando preview local temporário de imagem!');
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      showError('Erro ao ler o arquivo local.');
       setIsUploading(false);
     }
   };
@@ -269,16 +243,9 @@ export default function ImageUploader({ onUploadSuccess, currentImageUrl, classN
               </div>
             )}
             
-            {getImgbbKey() ? (
-              <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 bg-emerald-50 rounded-lg p-2 border border-emerald-100 mt-2 max-w-xs justify-center leading-relaxed font-medium">
-                <span>Chave ImgBB integrada! Imagens enviadas direto para a nuvem 🎉</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[9px] text-amber-600 bg-amber-50 rounded-lg p-2 border border-amber-100 mt-2 max-w-xs justify-center leading-relaxed font-medium">
-                <Settings size={12} className="shrink-0" />
-                <span>Sem chave ImgBB ativa nas configurações. Usaremos conversão local!</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 bg-emerald-50 rounded-lg p-2 border border-emerald-100 mt-2 max-w-xs justify-center leading-relaxed font-medium">
+              <span>Nuvem Segura Ativa! Imagens salvas direto no Supabase Storage 🎉</span>
+            </div>
           </>
         )}
       </div>

@@ -48,6 +48,28 @@ import {
 import { Product, Client } from '../types';
 import { pushSystemConfigToSupabase } from '../supabase';
 
+export function validateCPF(cpf: string): boolean {
+  const cleanCPF = cpf.replace(/\D/g, '');
+  if (cleanCPF.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cleanCPF)) return false;
+  let sum = 0;
+  let remainder;
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(9, 10))) return false;
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (12 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(10, 11))) return false;
+  return true;
+}
+
 const COLOR_HEXES: Record<string, string> = {
   'fúcsia': '#d946ef',
   'fucsia': '#d946ef',
@@ -379,6 +401,24 @@ export default function PublicCatalog({
   const [addressCidade, setAddressCidade] = useState('');
   const [addressEstado, setAddressEstado] = useState('');
   const [addressCep, setAddressCep] = useState('');
+
+  // Busca inteligente de CEP (ViaCEP) no formulário de endereço
+  useEffect(() => {
+    const cleanCep = addressCep.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.erro) {
+            setAddressStreet(data.logradouro || '');
+            setAddressBairro(data.bairro || '');
+            setAddressCidade(data.localidade || '');
+            setAddressEstado(data.uf || '');
+          }
+        })
+        .catch(err => console.error('[ViaCEP Error] Falha ao consultar CEP:', err));
+    }
+  }, [addressCep]);
 
   const [isVipRegisteredJustNow, setIsVipRegisteredJustNow] = useState(false);
   const [vipMessage, setVipMessage] = useState('');
@@ -1066,6 +1106,10 @@ export default function PublicCatalog({
     }
     if (!clientCpf.trim()) {
       alert('Por favor, preencha o seu CPF.');
+      return;
+    }
+    if (!validateCPF(clientCpf)) {
+      alert('Por favor, informe um CPF válido (com 11 dígitos, seguindo o padrão nacional).');
       return;
     }
     if (!clientPhone.trim()) {

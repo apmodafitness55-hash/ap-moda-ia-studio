@@ -12,38 +12,41 @@ export interface TeamMember {
   avatar?: string;
 }
 
-// Retrieves configuration dynamically from Vite environment variables (no default mock fallbacks)
+let memoryConfig: { url: string; key: string } | null = null;
+
+// Retrieves configuration dynamically from memory or environment variables
 export function getSupabaseConfig() {
+  if (memoryConfig) {
+    return memoryConfig;
+  }
+  
   const metaEnv = (import.meta as any).env || {};
   let url = (metaEnv.VITE_SUPABASE_URL || '').trim();
   let key = (metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_KEY || '').trim();
 
-  // Fallback ONLY to user-defined localStorage values if Vite environment variables are not active/present
-  if (!url) {
-    url = (localStorage.getItem('ap_supabase_url') || '').trim();
-  }
-  if (!key) {
-    key = (localStorage.getItem('ap_supabase_key') || '').trim();
+  if (url && key) {
+    memoryConfig = { url, key };
+    return memoryConfig;
   }
   
-  if (!url || !key) {
-    return null;
-  }
-  
-  return { url, key };
+  return null;
 }
 
-// Sincroniza as credenciais do Supabase do servidor central para o localStorage local
+// Sincroniza as credenciais do Supabase do servidor central para a memória (blindando o localStorage)
 export async function initializeSupabaseConfig() {
   try {
     const response = await fetch('/api/supabase-config');
     if (response.ok) {
       const data = await response.json();
       if (data.url && data.key) {
-        localStorage.setItem('ap_supabase_url', data.url);
-        localStorage.setItem('ap_supabase_key', data.key);
-        console.log('[Supabase Config] Credenciais de sincronização unificadas recebidas do servidor central:', data.url);
-        return { url: data.url, key: data.key };
+        memoryConfig = { url: data.url, key: data.key };
+        
+        // Remove do localStorage para blindar contra inspeção física
+        localStorage.removeItem('ap_supabase_url');
+        localStorage.removeItem('ap_supabase_key');
+        
+        console.log('[Supabase Config] Credenciais de sincronização recebidas e guardadas com segurança em memória.');
+        return memoryConfig;
       }
     }
   } catch (err) {
@@ -53,15 +56,16 @@ export async function initializeSupabaseConfig() {
 }
 
 // Salva as credenciais do Supabase local no backend central para compartilhar com todos os aparelhos
-export async function saveSupabaseConfigToServer(url: string, key: string) {
+export async function saveSupabaseConfigToServer(url: string, key: string, service_role_key?: string) {
   try {
     const response = await fetch('/api/supabase-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, key })
+      body: JSON.stringify({ url, key, service_role_key })
     });
     if (response.ok) {
-      console.log('[Supabase Config] Credenciais salvas com sucesso no servidor central e replicadas para novos aparelhos!');
+      memoryConfig = { url, key };
+      console.log('[Supabase Config] Credenciais salvas com sucesso no servidor central e ativas em memória!');
       return true;
     }
   } catch (err) {
@@ -296,15 +300,15 @@ CREATE TABLE IF NOT EXISTS ap_checkouts (
 
 -- Como múltiplos aparelhos de funcionários sincronizam de forma pareada compartilhando a mesma chave de acesso unificada (token de API)
 -- sem a necessidade de criar contas de e-mail individuais no painel de Autenticação do Supabase (usando o sistema local simples de equipe),
--- desabilitamos o Row Level Security (RLS) de todas as tabelas. Isso garante que todos os celulares e computadores conectados possam ler e gravar perfeitamente.
-ALTER TABLE ap_team_members DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_sales DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_transactions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_online_orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_system_configs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE ap_checkouts DISABLE ROW LEVEL SECURITY;
+-- habilitamos o Row Level Security (RLS) para proteger os dados. O servidor acessará via proxies ou com a service_role que ignora RLS.
+ALTER TABLE ap_team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_sales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_online_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_system_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ap_checkouts ENABLE ROW LEVEL SECURITY;
 
 -- Apagar políticas antigas para evitar conflitos residuais
 DROP POLICY IF EXISTS "Acesso Total para AP Moda" ON ap_team_members;
@@ -326,6 +330,36 @@ DROP POLICY IF EXISTS "Fluxo de caixa restrito a Admin e Gerente" ON ap_transact
 DROP POLICY IF EXISTS "Segurança em pedidos de logística" ON ap_online_orders;
 DROP POLICY IF EXISTS "Leitura de configurações gerais" ON ap_system_configs;
 DROP POLICY IF EXISTS "Escrita de configurações apenas Admin e Gerente" ON ap_system_configs;
+
+-- Novas Políticas RLS Estritas e Blindadas
+-- 1. ap_products: Leitura pública para a vitrine funcionar, mas gravação restrita
+DROP POLICY IF EXISTS "Produtos: Leitura Pública" ON ap_products;
+CREATE POLICY "Produtos: Leitura Pública" ON ap_products FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Produtos: Modificação Restrita" ON ap_products;
+CREATE POLICY "Produtos: Modificação Restrita" ON ap_products FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+-- 2. Outras tabelas: Completamente bloqueadas para anon (sem política para anon), liberadas apenas para authenticated ou service_role
+DROP POLICY IF EXISTS "Team Members: Acesso Administrativo" ON ap_team_members;
+CREATE POLICY "Team Members: Acesso Administrativo" ON ap_team_members FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Clients: Acesso Administrativo" ON ap_clients;
+CREATE POLICY "Clients: Acesso Administrativo" ON ap_clients FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Sales: Acesso Administrativo" ON ap_sales;
+CREATE POLICY "Sales: Acesso Administrativo" ON ap_sales FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Transactions: Acesso Administrativo" ON ap_transactions;
+CREATE POLICY "Transactions: Acesso Administrativo" ON ap_transactions FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Online Orders: Acesso Administrativo" ON ap_online_orders;
+CREATE POLICY "Online Orders: Acesso Administrativo" ON ap_online_orders FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Configs: Acesso Administrativo" ON ap_system_configs;
+CREATE POLICY "Configs: Acesso Administrativo" ON ap_system_configs FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Checkouts: Acesso Administrativo" ON ap_checkouts;
+CREATE POLICY "Checkouts: Acesso Administrativo" ON ap_checkouts FOR ALL TO authenticated, service_role USING (true) WITH CHECK (true);
 
 -- Inserir Administrador Padrão Inicial (Ana Paula Admin / Ap01695*) caso já não exista
 INSERT INTO ap_team_members (id, name, login, password, role, details, createdAt)
@@ -430,17 +464,10 @@ export async function resilientUpsert(tableName: string, originalPayloads: any[]
  * ------------------- 1. TEAM MEMBERS SYNC -------------------
  */
 export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client
-      .from('ap_team_members')
-      .select('*')
-      .order('id', { ascending: true });
-    if (error) {
-      handleSchemaError(error, 'ap_team_members');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/team-members');
+    if (!response.ok) throw new Error('Falha ao consultar equipe.');
+    const data = await response.json();
     return (data || []).map((item: any) => ({
       id: getTolerantValue(item, 'id'),
       name: getTolerantValue(item, 'name'),
@@ -459,33 +486,34 @@ export async function fetchTeamMembersFromSupabase(): Promise<TeamMember[] | nul
 }
 
 export async function syncBulkTeamMembersToSupabase(members: TeamMember[]): Promise<boolean> {
-  const payloads = members.map(m => ({
-    id: getTolerantValue(m, 'id'),
-    name: getTolerantValue(m, 'name'),
-    login: String(getTolerantValue(m, 'login', '')).toLowerCase().trim().replace(/\s+/g, ''),
-    password: getTolerantValue(m, 'password') || '123',
-    role: getTolerantValue(m, 'role'),
-    details: getTolerantValue(m, 'details', ''),
-    birthDate: getTolerantValue(m, 'birthDate', ''),
-    createdAt: getTolerantValue(m, 'createdAt', new Date().toISOString()),
-    avatar: getTolerantValue(m, 'avatar', '')
-  }));
-  return resilientUpsert('ap_team_members', payloads);
+  try {
+    const payloads = members.map(m => ({
+      id: getTolerantValue(m, 'id'),
+      name: getTolerantValue(m, 'name'),
+      login: String(getTolerantValue(m, 'login', '')).toLowerCase().trim().replace(/\s+/g, ''),
+      password: getTolerantValue(m, 'password') || '123',
+      role: getTolerantValue(m, 'role'),
+      details: getTolerantValue(m, 'details', ''),
+      birthDate: getTolerantValue(m, 'birthDate', ''),
+      createdAt: getTolerantValue(m, 'createdAt', new Date().toISOString()),
+      avatar: getTolerantValue(m, 'avatar', '')
+    }));
+    const response = await fetch('/api/proxy/team-members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing members:', err);
+    return false;
+  }
 }
 
 export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
   try {
-    const { error } = await client
-      .from('ap_team_members')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      handleSchemaError(error, 'ap_team_members');
-      return false;
-    }
-    return true;
+    const response = await fetch(`/api/proxy/team-members/${id}`, { method: 'DELETE' });
+    return response.ok;
   } catch (err) {
     console.error('Failed deleting member:', err);
     return false;
@@ -493,18 +521,9 @@ export async function deleteTeamMemberFromSupabase(id: string): Promise<boolean>
 }
 
 export async function deleteProductFromSupabase(id: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
   try {
-    const { error } = await client
-      .from('ap_products')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      handleSchemaError(error, 'ap_products');
-      return false;
-    }
-    return true;
+    const response = await fetch(`/api/proxy/products/${id}`, { method: 'DELETE' });
+    return response.ok;
   } catch (err) {
     console.error('Failed deleting product:', err);
     return false;
@@ -512,18 +531,9 @@ export async function deleteProductFromSupabase(id: string): Promise<boolean> {
 }
 
 export async function deleteSaleFromSupabase(id: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
   try {
-    const { error } = await client
-      .from('ap_sales')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      handleSchemaError(error, 'ap_sales');
-      return false;
-    }
-    return true;
+    const response = await fetch(`/api/proxy/sales/${id}`, { method: 'DELETE' });
+    return response.ok;
   } catch (err) {
     console.error('Failed deleting sale:', err);
     return false;
@@ -570,27 +580,37 @@ export async function fetchProductsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkProductsToSupabase(products: any[]): Promise<boolean> {
-  const payloads = products.map(p => ({
-    id: p.id,
-    name: p.name || '',
-    sku: p.sku || '',
-    category: p.category || '',
-    price: Number(p.price || 0),
-    cost: Number(p.cost || 0),
-    stock: Number(p.stock || 0),
-    minStock: Number(p.minStock || 0),
-    image: p.image || '',
-    images: Array.isArray(p.images) ? p.images : [],
-    salesCount: Number(p.salesCount || 0),
-    description: p.description || '',
-    videoUrl: p.videoUrl || '',
-    colors: Array.isArray(p.colors) ? p.colors : [],
-    sizes: Array.isArray(p.sizes) ? p.sizes : [],
-    sizeColors: p.sizeColors || p.size_colors || {},
-    colorStocks: p.colorStocks || p.color_stocks || {},
-    sizeColorStocks: p.sizeColorStocks || p.size_color_stocks || {}
-  }));
-  return resilientUpsert('ap_products', payloads);
+  try {
+    const payloads = products.map(p => ({
+      id: p.id,
+      name: p.name || '',
+      sku: p.sku || '',
+      category: p.category || '',
+      price: Number(p.price || 0),
+      cost: Number(p.cost || 0),
+      stock: Number(p.stock || 0),
+      minStock: Number(p.minStock || 0),
+      image: p.image || '',
+      images: Array.isArray(p.images) ? p.images : [],
+      salesCount: Number(p.salesCount || 0),
+      description: p.description || '',
+      videoUrl: p.videoUrl || '',
+      colors: Array.isArray(p.colors) ? p.colors : [],
+      sizes: Array.isArray(p.sizes) ? p.sizes : [],
+      sizeColors: p.sizeColors || p.size_colors || {},
+      colorStocks: p.colorStocks || p.color_stocks || {},
+      sizeColorStocks: p.sizeColorStocks || p.size_color_stocks || {}
+    }));
+    const response = await fetch('/api/proxy/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing products:', err);
+    return false;
+  }
 }
 
 
@@ -598,14 +618,10 @@ export async function syncBulkProductsToSupabase(products: any[]): Promise<boole
  * ------------------- 3. CLIENTS SYNC -------------------
  */
 export async function fetchClientsFromSupabase(): Promise<any[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client.from('ap_clients').select('*');
-    if (error) {
-      handleSchemaError(error, 'ap_clients');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/clients');
+    if (!response.ok) throw new Error('Falha ao consultar clientes.');
+    const data = await response.json();
     return (data || []).map((c: any) => ({
       id: getTolerantValue(c, 'id'),
       name: getTolerantValue(c, 'name'),
@@ -641,34 +657,44 @@ export async function fetchClientsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boolean> {
-  const payloads = clientsList.map(c => ({
-    id: getTolerantValue(c, 'id'),
-    name: getTolerantValue(c, 'name'),
-    email: getTolerantValue(c, 'email', ''),
-    phone: getTolerantValue(c, 'phone', ''),
-    cpf: getTolerantValue(c, 'cpf', ''),
-    birthDate: getTolerantValue(c, 'birthDate', ''),
-    whatsapp: getTolerantValue(c, 'whatsapp', ''),
-    addressStreet: getTolerantValue(c, 'addressStreet', ''),
-    addressNum: getTolerantValue(c, 'addressNum', ''),
-    addressComp: getTolerantValue(c, 'addressComp', ''),
-    addressBairro: getTolerantValue(c, 'addressBairro', ''),
-    addressCidade: getTolerantValue(c, 'addressCidade', ''),
-    addressEstado: getTolerantValue(c, 'addressEstado', ''),
-    addressCep: getTolerantValue(c, 'addressCep', ''),
-    channel: getTolerantValue(c, 'channel', 'Balcão'),
-    npsScore: Number(getTolerantValue(c, 'npsScore', 0)),
-    totalSpent: Number(getTolerantValue(c, 'totalSpent', 0)),
-    ordersCount: Number(getTolerantValue(c, 'ordersCount', 0)),
-    cashbackBalance: Number(getTolerantValue(c, 'cashbackBalance', 0)),
-    busto: getTolerantValue(c, 'busto') !== undefined ? Number(getTolerantValue(c, 'busto')) : null,
-    cintura: getTolerantValue(c, 'cintura') !== undefined ? Number(getTolerantValue(c, 'cintura')) : null,
-    quadril: getTolerantValue(c, 'quadril') !== undefined ? Number(getTolerantValue(c, 'quadril')) : null,
-    coxa: getTolerantValue(c, 'coxa') !== undefined ? Number(getTolerantValue(c, 'coxa')) : null,
-    altura: getTolerantValue(c, 'altura') !== undefined ? Number(getTolerantValue(c, 'altura')) : null,
-    peso: getTolerantValue(c, 'peso') !== undefined ? Number(getTolerantValue(c, 'peso')) : null
-  }));
-  return resilientUpsert('ap_clients', payloads);
+  try {
+    const payloads = clientsList.map(c => ({
+      id: getTolerantValue(c, 'id'),
+      name: getTolerantValue(c, 'name'),
+      email: getTolerantValue(c, 'email', ''),
+      phone: getTolerantValue(c, 'phone', ''),
+      cpf: getTolerantValue(c, 'cpf', ''),
+      birthDate: getTolerantValue(c, 'birthDate', ''),
+      whatsapp: getTolerantValue(c, 'whatsapp', ''),
+      addressStreet: getTolerantValue(c, 'addressStreet', ''),
+      addressNum: getTolerantValue(c, 'addressNum', ''),
+      addressComp: getTolerantValue(c, 'addressComp', ''),
+      addressBairro: getTolerantValue(c, 'addressBairro', ''),
+      addressCidade: getTolerantValue(c, 'addressCidade', ''),
+      addressEstado: getTolerantValue(c, 'addressEstado', ''),
+      addressCep: getTolerantValue(c, 'addressCep', ''),
+      channel: getTolerantValue(c, 'channel', 'Balcão'),
+      npsScore: Number(getTolerantValue(c, 'npsScore', 0)),
+      totalSpent: Number(getTolerantValue(c, 'totalSpent', 0)),
+      ordersCount: Number(getTolerantValue(c, 'ordersCount', 0)),
+      cashbackBalance: Number(getTolerantValue(c, 'cashbackBalance', 0)),
+      busto: getTolerantValue(c, 'busto') !== undefined ? Number(getTolerantValue(c, 'busto')) : null,
+      cintura: getTolerantValue(c, 'cintura') !== undefined ? Number(getTolerantValue(c, 'cintura')) : null,
+      quadril: getTolerantValue(c, 'quadril') !== undefined ? Number(getTolerantValue(c, 'quadril')) : null,
+      coxa: getTolerantValue(c, 'coxa') !== undefined ? Number(getTolerantValue(c, 'coxa')) : null,
+      altura: getTolerantValue(c, 'altura') !== undefined ? Number(getTolerantValue(c, 'altura')) : null,
+      peso: getTolerantValue(c, 'peso') !== undefined ? Number(getTolerantValue(c, 'peso')) : null
+    }));
+    const response = await fetch('/api/proxy/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing clients:', err);
+    return false;
+  }
 }
 
 
@@ -676,14 +702,10 @@ export async function syncBulkClientsToSupabase(clientsList: any[]): Promise<boo
  * ------------------- 4. SALES SYNC -------------------
  */
 export async function fetchSalesFromSupabase(): Promise<any[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client.from('ap_sales').select('*');
-    if (error) {
-      handleSchemaError(error, 'ap_sales');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/sales');
+    if (!response.ok) throw new Error('Falha ao consultar vendas.');
+    const data = await response.json();
     return (data || []).map((s: any) => ({
       id: getTolerantValue(s, 'id'),
       clientName: getTolerantValue(s, 'clientName', ''),
@@ -707,23 +729,33 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean> {
-  const payloads = salesList.map(s => ({
-    id: s.id,
-    clientName: s.clientName !== undefined ? s.clientName : (s.client_name || ''),
-    clientDoc: s.clientDoc !== undefined ? s.clientDoc : (s.client_doc || ''),
-    channel: s.channel || 'Balcão',
-    items: Array.isArray(s.items) ? s.items : [],
-    total: Number(s.total || 0),
-    costTotal: s.costTotal !== undefined ? Number(s.costTotal) : (s.cost_total !== undefined && s.cost_total !== null ? Number(s.cost_total) : 0),
-    status: s.status || '',
-    createdAt: s.createdAt !== undefined ? s.createdAt : (s.created_at || ''),
-    payments: Array.isArray(s.payments) ? s.payments : [],
-    salesperson: s.salesperson || '',
-    trackingCode: s.trackingCode || '',
-    deliveryMethod: s.deliveryMethod || '',
-    address: s.address || ''
-  }));
-  return resilientUpsert('ap_sales', payloads);
+  try {
+    const payloads = salesList.map(s => ({
+      id: s.id,
+      clientName: s.clientName !== undefined ? s.clientName : (s.client_name || ''),
+      clientDoc: s.clientDoc !== undefined ? s.clientDoc : (s.client_doc || ''),
+      channel: s.channel || 'Balcão',
+      items: Array.isArray(s.items) ? s.items : [],
+      total: Number(s.total || 0),
+      costTotal: s.costTotal !== undefined ? Number(s.costTotal) : (s.cost_total !== undefined && s.cost_total !== null ? Number(s.cost_total) : 0),
+      status: s.status || '',
+      createdAt: s.createdAt !== undefined ? s.createdAt : (s.created_at || ''),
+      payments: Array.isArray(s.payments) ? s.payments : [],
+      salesperson: s.salesperson || '',
+      trackingCode: s.trackingCode || '',
+      deliveryMethod: s.deliveryMethod || '',
+      address: s.address || ''
+    }));
+    const response = await fetch('/api/proxy/sales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing sales:', err);
+    return false;
+  }
 }
 
 
@@ -731,14 +763,10 @@ export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean
  * ------------------- 5. TRANSACTIONS SYNC -------------------
  */
 export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client.from('ap_transactions').select('*');
-    if (error) {
-      handleSchemaError(error, 'ap_transactions');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/transactions');
+    if (!response.ok) throw new Error('Falha ao consultar transações.');
+    const data = await response.json();
     return (data || []).map((t: any) => ({
       id: getTolerantValue(t, 'id'),
       type: getTolerantValue(t, 'type'),
@@ -759,20 +787,30 @@ export async function fetchTransactionsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkTransactionsToSupabase(transactionsList: any[]): Promise<boolean> {
-  const payloads = transactionsList.map(t => ({
-    id: t.id,
-    type: t.type || '',
-    category: t.category || '',
-    description: t.description || '',
-    amount: Number(t.amount || 0),
-    date: t.date || '',
-    status: t.status || 'pago',
-    due_date: t.dueDate || t.due_date || t.date || '',
-    installments_group: t.installmentsGroup !== undefined ? t.installmentsGroup : (t.installments_group || null),
-    installment_number: t.installmentNumber !== undefined && t.installmentNumber !== null ? Number(t.installmentNumber) : (t.installment_number !== undefined && t.installment_number !== null ? Number(t.installment_number) : null),
-    total_installments: t.totalInstallments !== undefined && t.totalInstallments !== null ? Number(t.totalInstallments) : (t.total_installments !== undefined && t.total_installments !== null ? Number(t.total_installments) : null)
-  }));
-  return resilientUpsert('ap_transactions', payloads);
+  try {
+    const payloads = transactionsList.map(t => ({
+      id: t.id,
+      type: t.type || '',
+      category: t.category || '',
+      description: t.description || '',
+      amount: Number(t.amount || 0),
+      date: t.date || '',
+      status: t.status || 'pago',
+      due_date: t.dueDate || t.due_date || t.date || '',
+      installments_group: t.installmentsGroup !== undefined ? t.installmentsGroup : (t.installments_group || null),
+      installment_number: t.installmentNumber !== undefined && t.installmentNumber !== null ? Number(t.installmentNumber) : (t.installment_number !== undefined && t.installment_number !== null ? Number(t.installment_number) : null),
+      total_installments: t.totalInstallments !== undefined && t.totalInstallments !== null ? Number(t.totalInstallments) : (t.total_installments !== undefined && t.total_installments !== null ? Number(t.total_installments) : null)
+    }));
+    const response = await fetch('/api/proxy/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing transactions:', err);
+    return false;
+  }
 }
 
 
@@ -780,14 +818,10 @@ export async function syncBulkTransactionsToSupabase(transactionsList: any[]): P
  * ------------------- 6. ONLINE ORDERS SYNC -------------------
  */
 export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client.from('ap_online_orders').select('*');
-    if (error) {
-      handleSchemaError(error, 'ap_online_orders');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/online-orders');
+    if (!response.ok) throw new Error('Falha ao consultar pedidos.');
+    const data = await response.json();
     return (data || []).map((o: any) => ({
       id: getTolerantValue(o, 'id'),
       clientName: getTolerantValue(o, 'clientName', ''),
@@ -809,21 +843,31 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise<boolean> {
-  const payloads = ordersList.map(o => ({
-    id: getTolerantValue(o, 'id'),
-    clientName: getTolerantValue(o, 'clientName'),
-    total: Number(getTolerantValue(o, 'total', 0)),
-    status: getTolerantValue(o, 'status'),
-    status_pagamento: getTolerantValue(o, 'status_pagamento', 'pendente'),
-    items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
-    createdAt: getTolerantValue(o, 'createdAt'),
-    phone: getTolerantValue(o, 'phone', ''),
-    address: getTolerantValue(o, 'address', ''),
-    paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
-    trackingCode: o.trackingCode || '',
-    deliveryMethod: o.deliveryMethod || ''
-  }));
-  return resilientUpsert('ap_online_orders', payloads);
+  try {
+    const payloads = ordersList.map(o => ({
+      id: getTolerantValue(o, 'id'),
+      clientName: getTolerantValue(o, 'clientName'),
+      total: Number(getTolerantValue(o, 'total', 0)),
+      status: getTolerantValue(o, 'status'),
+      status_pagamento: getTolerantValue(o, 'status_pagamento', 'pendente'),
+      items: Array.isArray(getTolerantValue(o, 'items')) ? getTolerantValue(o, 'items') : [],
+      createdAt: getTolerantValue(o, 'createdAt'),
+      phone: getTolerantValue(o, 'phone', ''),
+      address: getTolerantValue(o, 'address', ''),
+      paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
+      trackingCode: o.trackingCode || '',
+      deliveryMethod: o.deliveryMethod || ''
+    }));
+    const response = await fetch('/api/proxy/online-orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing online orders:', err);
+    return false;
+  }
 }
 
 
@@ -831,14 +875,10 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
  * ------------------- 6.5. CHECKOUTS SYNC (For abandoned carts recovery) -------------------
  */
 export async function fetchCheckoutsFromSupabase(): Promise<any[] | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
   try {
-    const { data, error } = await client.from('ap_checkouts').select('*');
-    if (error) {
-      handleSchemaError(error, 'ap_checkouts');
-      throw error;
-    }
+    const response = await fetch('/api/proxy/checkouts');
+    if (!response.ok) throw new Error('Falha ao consultar checkouts.');
+    const data = await response.json();
     return (data || []).map((c: any) => ({
       id: getTolerantValue(c, 'id'),
       clientName: getTolerantValue(c, 'client_name', ''),
@@ -857,18 +897,28 @@ export async function fetchCheckoutsFromSupabase(): Promise<any[] | null> {
 }
 
 export async function syncBulkCheckoutsToSupabase(checkoutsList: any[]): Promise<boolean> {
-  const payloads = checkoutsList.map(c => ({
-    id: getTolerantValue(c, 'id'),
-    client_name: getTolerantValue(c, 'clientName') || getTolerantValue(c, 'client_name', ''),
-    phone: getTolerantValue(c, 'phone', ''),
-    email: getTolerantValue(c, 'email', ''),
-    items: Array.isArray(getTolerantValue(c, 'items')) ? getTolerantValue(c, 'items') : [],
-    total: Number(getTolerantValue(c, 'total', 0)),
-    status: getTolerantValue(c, 'status', 'pendente'),
-    created_at: getTolerantValue(c, 'createdAt') || getTolerantValue(c, 'created_at') || new Date().toISOString(),
-    updated_at: getTolerantValue(c, 'updatedAt') || getTolerantValue(c, 'updated_at') || new Date().toISOString()
-  }));
-  return resilientUpsert('ap_checkouts', payloads);
+  try {
+    const payloads = checkoutsList.map(c => ({
+      id: getTolerantValue(c, 'id'),
+      client_name: getTolerantValue(c, 'clientName') || getTolerantValue(c, 'client_name', ''),
+      phone: getTolerantValue(c, 'phone', ''),
+      email: getTolerantValue(c, 'email', ''),
+      items: Array.isArray(getTolerantValue(c, 'items')) ? getTolerantValue(c, 'items') : [],
+      total: Number(getTolerantValue(c, 'total', 0)),
+      status: getTolerantValue(c, 'status', 'pendente'),
+      created_at: getTolerantValue(c, 'createdAt') || getTolerantValue(c, 'created_at') || new Date().toISOString(),
+      updated_at: getTolerantValue(c, 'updatedAt') || getTolerantValue(c, 'updated_at') || new Date().toISOString()
+    }));
+    const response = await fetch('/api/proxy/checkouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloads)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error('Failed syncing checkouts:', err);
+    return false;
+  }
 }
 
 
@@ -910,15 +960,10 @@ const CRITICAL_CONFIG_KEYS = [
  * Resolves local/remote conflicts by merging newer values back into local storage dynamically.
  */
 export async function syncSystemConfigsWithSupabase(): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
   try {
-    // 1. Fetch current remote configs
-    const { data, error } = await client.from('ap_system_configs').select('key, value');
-    if (error) {
-      handleSchemaError(error, 'ap_system_configs');
-      return false;
-    }
+    const response = await fetch('/api/proxy/system-configs');
+    if (!response.ok) throw new Error('Falha ao consultar configurações.');
+    const data = await response.json();
 
     const remoteConfigs = new Map<string, string>();
     if (data) {
@@ -928,37 +973,30 @@ export async function syncSystemConfigsWithSupabase(): Promise<boolean> {
     const updatesToPush: { key: string; value: string }[] = [];
     let localModified = false;
 
-    // 2. Iterate keys we care about
     for (const key of CRITICAL_CONFIG_KEYS) {
       const localVal = localStorage.getItem(key);
       const remoteVal = remoteConfigs.get(key);
 
       if (localVal !== null && remoteVal === undefined) {
-        // Exists locally but not remotely -> Push to cloud
         updatesToPush.push({ key, value: localVal });
       } else if (localVal === null && remoteVal !== undefined && remoteVal !== null) {
-        // Exists remotely but not locally -> Download to machine
         localStorage.setItem(key, remoteVal);
         localModified = true;
       } else if (localVal !== null && remoteVal !== undefined && localVal !== remoteVal) {
-        // Both exist but differ: For active settings slots, prefer the remote value to pull edits across tablets/devices, 
-        // OR let the latest local interaction overwrite it when saved.
-        // Let's safe-sync by saving remote state to this local instance so tablets gather what anaerobic changes were done.
         localStorage.setItem(key, remoteVal);
         localModified = true;
       }
     }
 
-    // 3. If there are local additions to push
     if (updatesToPush.length > 0) {
       console.log(`[Supabase Config Sync] Uploading ${updatesToPush.length} system parameters back to cloud...`);
-      const { error: upsertErr } = await client.from('ap_system_configs').upsert(updatesToPush, { onConflict: 'key' });
-      if (upsertErr) {
-        console.warn('Failed to upsert configurations to Supabase:', upsertErr);
-      }
+      await fetch('/api/proxy/system-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatesToPush)
+      });
     }
 
-    // Return whether browser state reload is required
     return localModified;
   } catch (err) {
     console.error('Failed system config sync:', err);
@@ -970,16 +1008,13 @@ export async function syncSystemConfigsWithSupabase(): Promise<boolean> {
  * Force pushes a single system config key immediately to Supabase on UI Save operations
  */
 export async function pushSystemConfigToSupabase(key: string, value: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
   try {
-    const { error } = await client.from('ap_system_configs').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) {
-      handleInsertError(error, 'ap_system_configs');
-      handleSchemaError(error, 'ap_system_configs');
-      return false;
-    }
-    return true;
+    const response = await fetch('/api/proxy/system-configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ key, value }])
+    });
+    return response.ok;
   } catch (err) {
     console.error(`Failed pushing config key ${key}:`, err);
     return false;
@@ -991,15 +1026,10 @@ export async function pushSystemConfigToSupabase(key: string, value: string): Pr
  * ------------------- REAL-TIME PING / KEEP-ALIVE -------------------
  */
 export async function pingSupabaseOnLogin(userName: string, userRole: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) {
-    console.log('[Supabase Ping] Sem chaves instaladas no momento para ping automático.');
-    return false;
-  }
   try {
     console.log(`[Supabase Keep-Alive] Enviando sinal de uso na nuvem para o login de: ${userName} (${userRole})...`);
-    const { error } = await client.from('ap_team_members').select('id').limit(1);
-    if (!error) {
+    const response = await fetch('/api/proxy/team-members');
+    if (response.ok) {
       console.log('[Supabase Keep-Alive] Sucesso! Sinal enviado e banco de dados respondendo perfeitamente.');
       return true;
     }
@@ -1015,27 +1045,14 @@ export async function pingSupabaseOnLogin(userName: string, userRole: string): P
  * Para a equipe, preserva os usuários que possuam função Admin.
  */
 export async function clearAllSupabaseData(): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) {
-    console.log('[Supabase Clear] Sem conexão de banco de dados ativa.');
-    return false;
-  }
   try {
     console.log('[Supabase Clear] Formatando tabelas na nuvem (limpando dados fantasmas)...');
-    
-    // Deleta com filtro genérico para satisfazer requisitos de segurança do Supabase que barram deletes incondicionais
-    await client.from('ap_products').delete().neq('id', 'dummy_nonexistent_id_value');
-    await client.from('ap_clients').delete().neq('id', 'dummy_nonexistent_id_value');
-    await client.from('ap_sales').delete().neq('id', 'dummy_nonexistent_id_value');
-    await client.from('ap_transactions').delete().neq('id', 'dummy_nonexistent_id_value');
-    await client.from('ap_online_orders').delete().neq('id', 'dummy_nonexistent_id_value');
-    await client.from('ap_checkouts').delete().neq('id', 'dummy_nonexistent_id_value');
-    
-    // Para funcionários, deleta tudo que não for Admin (evita trancar os admins atuais para fora)
-    await client.from('ap_team_members').delete().neq('role', 'Admin');
-    
-    console.log('[Supabase Clear] Todas as tabelas foram limpas na nuvem com sucesso!');
-    return true;
+    const response = await fetch('/api/proxy/clear-all', { method: 'POST' });
+    if (response.ok) {
+      console.log('[Supabase Clear] Todas as tabelas foram limpas na nuvem com sucesso!');
+      return true;
+    }
+    return false;
   } catch (err) {
     console.error('[Supabase Clear Error] Falha crítica ao limpar banco na nuvem:', err);
     return false;
