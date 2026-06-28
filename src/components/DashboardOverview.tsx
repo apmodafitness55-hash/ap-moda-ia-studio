@@ -688,6 +688,33 @@ export default function DashboardOverview({ products, sales, clients, transactio
             ))}
           </div>
 
+          {/* Alerta de Reposição - Estoque Crítico */}
+          {criticalStockVariations.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-1.5 text-red-600 mb-3">
+                <AlertTriangle size={15} className="animate-pulse shrink-0" />
+                <span className="font-extrabold text-[10.5px] uppercase tracking-wider font-sans">
+                  Estoque Crítico / Reposição ({criticalStockVariations.length})
+                </span>
+              </div>
+              <div className="bg-red-50/50 border border-red-100 rounded-xl p-3 space-y-2.5 max-h-48 overflow-y-auto text-left">
+                {criticalStockVariations.map((v, i) => (
+                  <div key={`critical-${i}`} className="flex justify-between items-start text-[10px] leading-tight font-sans">
+                    <div className="min-w-0 pr-2">
+                      <p className="font-extrabold text-slate-800 truncate">{v.productName}</p>
+                      <p className="text-slate-500 font-semibold text-[9px] mt-0.5">
+                        Tamanho: <span className="text-slate-700 font-bold">{v.size}</span> • Cor: <span className="text-slate-700 font-bold">{v.color}</span>
+                      </p>
+                    </div>
+                    <span className="bg-red-100 text-red-700 font-bold font-mono text-[9px] px-2 py-0.5 rounded-full shrink-0">
+                      {v.stock} un
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button 
             onClick={() => setActiveTab(ActiveTab.PRODUTOS)}
             className="w-full py-2.5 mt-4 text-[11px] font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl transition-all cursor-pointer text-center"

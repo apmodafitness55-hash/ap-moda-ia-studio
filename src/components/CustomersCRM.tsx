@@ -134,9 +134,9 @@ export default function CustomersCRM({
   const [cashbackRateConfig, setCashbackRateConfig] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('ap_moda_cashback_rate');
-      return saved ? parseFloat(saved) : 10;
+      return saved ? parseFloat(saved) : 5;
     } catch (e) {
-      return 10;
+      return 5;
     }
   });
 
