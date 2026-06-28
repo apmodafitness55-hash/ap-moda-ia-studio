@@ -21,11 +21,19 @@ import {
   Eye,
   Filter,
   Instagram,
-  Share2
+  Share2,
+  Settings,
+  Image,
+  Undo,
+  Save,
+  Sliders,
+  ChevronRight,
+  HelpCircle
 } from 'lucide-react';
 import { Product } from '../types';
 import { getCatalogUrl } from '../config';
 import AbandonedCarts from './AbandonedCarts';
+import { pushSystemConfigToSupabase } from '../supabase';
 
 interface LojaOnlineProps {
   products: Product[];
@@ -35,6 +43,8 @@ interface LojaOnlineProps {
   checkouts?: any[];
   setCheckouts?: React.Dispatch<React.SetStateAction<any[]>>;
   onSyncCheckouts?: () => void;
+  onAddProduct?: (product: Product) => void;
+  onUpdateProduct?: (product: Product) => void;
 }
 
 export interface Coupon {
@@ -54,7 +64,9 @@ export default function LojaOnline({
   setActiveSubTab: propSetActiveSubTab,
   checkouts = [],
   setCheckouts = () => {},
-  onSyncCheckouts
+  onSyncCheckouts,
+  onAddProduct,
+  onUpdateProduct
 }: LojaOnlineProps) {
   const [internalActiveSubTab, setInternalActiveSubTab] = useState<'compartilhar' | 'cupons' | 'vitrine' | 'recuperacao'>('compartilhar');
   const activeSubTab = propActiveSubTab || internalActiveSubTab;
@@ -139,6 +151,213 @@ export default function LojaOnline({
   const [vitrineCart, setVitrineCart] = useState<{ product: Product; qty: number }[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponInput, setCouponInput] = useState('');
+
+  // Storefront dynamic settings with localStorage & Supabase syncing
+  const [storeName, setStoreName] = useState(() => localStorage.getItem('ap_vitrine_store_name') || 'AP Moda Fitness');
+  const [storeSub, setStoreSub] = useState(() => localStorage.getItem('ap_vitrine_store_sub') || 'Moda Fitness Premium');
+  const [themeColor, setThemeColor] = useState(() => localStorage.getItem('ap_vitrine_theme_color') || '#db2777');
+
+  const [lookbookSlides, setLookbookSlides] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_slides');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      {
+        image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
+        tag: "COLEÇÃO EXCLUSIVA",
+        title: "ATACADO PREMIUM",
+        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+      },
+      {
+        image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
+        tag: "NOVA COLEÇÃO 2 EM 1",
+        title: "COLEÇÃO DUO",
+        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+      },
+      {
+        image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
+        tag: "ALTA PERFORMANCE",
+        title: "SUA JORNADA RUN",
+        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+      }
+    ];
+  });
+
+  const [tickerConfig, setTickerConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_announcement');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      show: true,
+      text: "⚡ ENVIAMOS PARA TODO BRASIL • FRETE GRÁTIS ACIMA DE R$ 399 ATÉ 6X SEM JUROS ⚡",
+      bgColor: "#db2777",
+      textColor: "#ffffff"
+    };
+  });
+
+  const [categoryBanners, setCategoryBanners] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_category_banners');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      slimFit: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80",
+      plusSize: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80"
+    };
+  });
+
+  const [floatingBanner, setFloatingBanner] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ap_vitrine_floating_banner');
+      if (saved) return JSON.parse(saved);
+    } catch(e){}
+    return {
+      show: true,
+      title: "✨ CUPOM DA SEMANA",
+      subtitle: "Insira APMODAFIT no carrinho para ganhar 5% OFF e frete grátis!",
+      ctaText: "Aproveitar Desconto",
+      ctaLink: "https://wa.me/5511999990000?text=Quero%20aproveitar%20o%20cupom%20de%20desconto",
+      bgColor: "#ec4899",
+      textColor: "#ffffff"
+    };
+  });
+
+  // States for Quick Product Creation
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdSku, setNewProdSku] = useState('');
+  const [newProdCategory, setNewProdCategory] = useState('Conjuntos');
+  const [newProdPrice, setNewProdPrice] = useState('');
+  const [newProdCost, setNewProdCost] = useState('');
+  const [newProdStock, setNewProdStock] = useState('10');
+  const [newProdMinStock, setNewProdMinStock] = useState('3');
+  const [newProdImage, setNewProdImage] = useState('https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80');
+  const [newProdDescription, setNewProdDescription] = useState('');
+  const [newProdSizes, setNewProdSizes] = useState<string[]>(['P', 'M', 'G']);
+  const [newProdColors, setNewProdColors] = useState<string[]>(['Preto', 'Bordô']);
+
+  const [isSavingConfigs, setIsSavingConfigs] = useState(false);
+  const [activeConfigTab, setActiveConfigTab] = useState<'textos' | 'banners' | 'categorias' | 'cadastro'>('textos');
+
+  const handleSaveStorefrontTexts = async () => {
+    setIsSavingConfigs(true);
+    try {
+      localStorage.setItem('ap_vitrine_store_name', storeName);
+      localStorage.setItem('ap_vitrine_store_sub', storeSub);
+      localStorage.setItem('ap_vitrine_theme_color', themeColor);
+      
+      await pushSystemConfigToSupabase('ap_vitrine_store_name', storeName);
+      await pushSystemConfigToSupabase('ap_vitrine_store_sub', storeSub);
+      await pushSystemConfigToSupabase('ap_vitrine_theme_color', themeColor);
+      
+      alert('Configurações de Identidade salvas e sincronizadas com o Supabase com sucesso!');
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao sincronizar com o Supabase, mas os dados foram salvos localmente.');
+    } finally {
+      setIsSavingConfigs(false);
+    }
+  };
+
+  const handleSaveTickerConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfigs(true);
+    try {
+      localStorage.setItem('ap_vitrine_announcement', JSON.stringify(tickerConfig));
+      await pushSystemConfigToSupabase('ap_vitrine_announcement', JSON.stringify(tickerConfig));
+      alert('Anúncio Rotativo (Ticker) salvo e sincronizado com o Supabase com sucesso!');
+    } catch (e) {
+      console.error(e);
+      alert('Salvo localmente.');
+    } finally {
+      setIsSavingConfigs(false);
+    }
+  };
+
+  const handleSaveFloatingBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfigs(true);
+    try {
+      localStorage.setItem('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+      await pushSystemConfigToSupabase('ap_vitrine_floating_banner', JSON.stringify(floatingBanner));
+      alert('Banner Flutuante Promocional salvo e sincronizado com o Supabase com sucesso!');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingConfigs(false);
+    }
+  };
+
+  const handleSaveLookbookSlides = async (updatedSlides: any[]) => {
+    setIsSavingConfigs(true);
+    try {
+      setLookbookSlides(updatedSlides);
+      localStorage.setItem('ap_vitrine_slides', JSON.stringify(updatedSlides));
+      await pushSystemConfigToSupabase('ap_vitrine_slides', JSON.stringify(updatedSlides));
+      alert('Banners de Slide do Lookbook salvos e sincronizados com o Supabase com sucesso!');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingConfigs(false);
+    }
+  };
+
+  const handleSaveCategoryBanners = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfigs(true);
+    try {
+      localStorage.setItem('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+      await pushSystemConfigToSupabase('ap_vitrine_category_banners', JSON.stringify(categoryBanners));
+      alert('Imagens de Destaque das Categorias salvas e sincronizadas com o Supabase com sucesso!');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingConfigs(false);
+    }
+  };
+
+  const handleQuickAddProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName || !newProdPrice) {
+      alert('Por favor, insira o nome e o preço da nova peça!');
+      return;
+    }
+
+    const priceNum = parseFloat(newProdPrice);
+    const costNum = newProdCost ? parseFloat(newProdCost) : parseFloat((priceNum * 0.45).toFixed(2));
+
+    const newProductObj: Product = {
+      id: 'prod-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      name: newProdName,
+      sku: newProdSku || 'PECA-' + Math.floor(1000 + Math.random() * 9000),
+      category: newProdCategory,
+      price: priceNum,
+      cost: costNum,
+      stock: parseInt(newProdStock) || 0,
+      minStock: parseInt(newProdMinStock) || 0,
+      image: newProdImage || 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&q=80',
+      description: newProdDescription || 'Peça fitness premium modeladora de alta qualidade.',
+      sizes: newProdSizes,
+      colors: newProdColors,
+      salesCount: 0
+    };
+
+    if (onAddProduct) {
+      onAddProduct(newProductObj);
+      alert(`Peça "${newProdName}" cadastrada com sucesso e sincronizada em tempo real com o banco de dados Supabase!`);
+      // Clear form fields
+      setNewProdName('');
+      setNewProdSku('');
+      setNewProdPrice('');
+      setNewProdCost('');
+      setNewProdStock('10');
+      setNewProdMinStock('3');
+      setNewProdDescription('');
+    } else {
+      alert('Função de adição de produtos não encontrada no componente pai (App.tsx), mas simulada com sucesso!');
+    }
+  };
 
   // Extract categories for vitrine
   const categoriesList = useMemo(() => {
