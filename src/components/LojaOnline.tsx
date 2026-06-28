@@ -34,6 +34,7 @@ import { Product } from '../types';
 import { getCatalogUrl } from '../config';
 import AbandonedCarts from './AbandonedCarts';
 import { pushSystemConfigToSupabase } from '../supabase';
+import ImageUploader from './ImageUploader';
 
 interface LojaOnlineProps {
   products: Product[];
@@ -1573,17 +1574,16 @@ export default function LojaOnline({
                       </div>
 
                       <div className="md:col-span-5 space-y-1">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase block">URL da Imagem de Fundo</label>
-                        <input
-                          type="text"
-                          value={slide.image}
-                          onChange={(e) => {
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block">Imagem de Fundo</label>
+                        <ImageUploader
+                          currentImageUrl={slide.image}
+                          onUploadSuccess={(url) => {
                             const updated = [...lookbookSlides];
-                            updated[sIdx].image = e.target.value;
+                            updated[sIdx].image = url;
                             setLookbookSlides(updated);
                           }}
-                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono text-slate-600 focus:outline-hidden"
                         />
+                        <p className="text-[10px] text-slate-400 font-medium mt-1">Dimensão ideal: 1920x800px (Texto centralizado)</p>
                       </div>
 
                       <div className="md:col-span-12 space-y-1">
@@ -1634,32 +1634,30 @@ export default function LojaOnline({
                 <div className="bg-white border border-slate-150 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="bg-pink-100 text-pink-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider block w-max">SEÇÃO 1: SLIM FIT</span>
                   <div className="aspect-video w-full rounded-lg bg-slate-100 overflow-hidden border border-slate-150">
-                    <img src={categoryBanners.slimFit} alt="Slim Fit Banner" className="w-full h-full object-cover" />
+                    <img src={categoryBanners.slimFit} alt="Slim Fit Banner" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">URL do Banner Slim Fit</label>
-                    <input
-                      type="text"
-                      value={categoryBanners.slimFit}
-                      onChange={(e) => setCategoryBanners({ ...categoryBanners, slimFit: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono focus:outline-hidden"
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Banner Slim Fit</label>
+                    <ImageUploader
+                      currentImageUrl={categoryBanners.slimFit}
+                      onUploadSuccess={(url) => setCategoryBanners({ ...categoryBanners, slimFit: url })}
                     />
+                    <p className="text-[10px] text-slate-400 font-medium mt-1">Dimensão ideal: 800x800px ou 600x800px</p>
                   </div>
                 </div>
 
                 <div className="bg-white border border-slate-150 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="bg-pink-100 text-pink-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider block w-max">SEÇÃO 2: PLUS SIZE / CURVAS</span>
                   <div className="aspect-video w-full rounded-lg bg-slate-100 overflow-hidden border border-slate-150">
-                    <img src={categoryBanners.plusSize} alt="Plus Size Banner" className="w-full h-full object-cover" />
+                    <img src={categoryBanners.plusSize} alt="Plus Size Banner" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">URL do Banner Plus Size</label>
-                    <input
-                      type="text"
-                      value={categoryBanners.plusSize}
-                      onChange={(e) => setCategoryBanners({ ...categoryBanners, plusSize: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono focus:outline-hidden"
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Banner Plus Size</label>
+                    <ImageUploader
+                      currentImageUrl={categoryBanners.plusSize}
+                      onUploadSuccess={(url) => setCategoryBanners({ ...categoryBanners, plusSize: url })}
                     />
+                    <p className="text-[10px] text-slate-400 font-medium mt-1">Dimensão ideal: 800x800px ou 600x800px</p>
                   </div>
                 </div>
               </div>

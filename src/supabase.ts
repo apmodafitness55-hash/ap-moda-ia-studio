@@ -851,7 +851,7 @@ export async function fetchCheckoutsFromSupabase(): Promise<any[] | null> {
       updatedAt: getTolerantValue(c, 'updated_at', '') || getTolerantValue(c, 'updatedAt', '')
     }));
   } catch (err) {
-    console.error('Failed fetching checkouts from Supabase:', err);
+    console.warn('[Supabase Sync Warning] Tabela ap_checkouts não disponível no banco de dados. Sincronização continuará usando armazenamento local temporário. Erro:', err);
     return null;
   }
 }
