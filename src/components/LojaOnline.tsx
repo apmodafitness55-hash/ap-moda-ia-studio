@@ -1248,6 +1248,610 @@ export default function LojaOnline({
 
           </div>
         </div>
+
+        {/* PAINEL DE CONTROLE DA VITRINE (ADMIN) */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm mt-6 font-sans">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-pink-50 text-pink-600 rounded-xl">
+                <Settings size={20} className="animate-pulse" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">Painel Administrativo da Vitrine</h3>
+                <p className="text-[10px] text-slate-500 font-medium">Altere textos, banners rotativos, seções de destaque e cadastre peças com sincronização Supabase instantânea.</p>
+              </div>
+            </div>
+
+            {/* Tabs inside Admin Panel */}
+            <div className="flex gap-1 bg-slate-50 p-1 rounded-xl self-start md:self-auto overflow-x-auto max-w-full scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveConfigTab('textos')}
+                className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'textos' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Identidade & Textos
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveConfigTab('banners')}
+                className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'banners' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Banners (Slide)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveConfigTab('categorias')}
+                className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'categorias' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Seções / Categorias
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveConfigTab('cadastro')}
+                className={`px-3 py-1.5 text-[11px] font-extrabold rounded-lg transition-all cursor-pointer whitespace-nowrap border-none ${activeConfigTab === 'cadastro' ? 'bg-white text-pink-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Cadastrar Peça 🛍️
+              </button>
+            </div>
+          </div>
+
+          {/* Config: Identidade & Textos */}
+          {activeConfigTab === 'textos' && (
+            <div className="space-y-6 text-left">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Nome Comercial da Loja</label>
+                  <input
+                    type="text"
+                    value={storeName}
+                    onChange={(e) => setStoreName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-medium focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="Ex: AP Moda Fitness"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Subtítulo / Descrição da Vitrine</label>
+                  <input
+                    type="text"
+                    value={storeSub}
+                    onChange={(e) => setStoreSub(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-medium focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="Ex: Moda Fitness Premium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Cor do Tema (Hex)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className="w-10 h-10 border border-slate-150 rounded-lg cursor-pointer bg-transparent p-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className="flex-grow bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-mono focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                      placeholder="#db2777"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2 border-b border-slate-100 pb-6">
+                <button
+                  type="button"
+                  onClick={handleSaveStorefrontTexts}
+                  disabled={isSavingConfigs}
+                  className="bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition shadow-xs border-none"
+                >
+                  <Save size={14} />
+                  <span>{isSavingConfigs ? 'Salvando...' : 'Salvar Textos & Identidade'}</span>
+                </button>
+              </div>
+
+              {/* Sub-section: Ticker & Announcement */}
+              <form onSubmit={handleSaveTickerConfig} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-slate-50/50 p-4 rounded-2xl border border-slate-100 text-left">
+                <div className="md:col-span-12">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5 mb-1">
+                    <span>⚡ Anúncio Rotativo (Ticker Superior)</span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500">Exibido no topo da vitrine para avisos urgentes, frete grátis ou cupons especiais.</p>
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Mostrar Ticker?</label>
+                  <select
+                    value={tickerConfig.show ? "true" : "false"}
+                    onChange={(e) => setTickerConfig({ ...tickerConfig, show: e.target.value === "true" })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs focus:outline-hidden"
+                  >
+                    <option value="true">Sim (Ativo)</option>
+                    <option value="false">Não (Inativo)</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-6 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Texto do Anúncio</label>
+                  <input
+                    type="text"
+                    value={tickerConfig.text}
+                    onChange={(e) => setTickerConfig({ ...tickerConfig, text: e.target.value })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Cor de Fundo</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="color"
+                      value={tickerConfig.bgColor}
+                      onChange={(e) => setTickerConfig({ ...tickerConfig, bgColor: e.target.value })}
+                      className="w-8 h-8 border border-slate-150 rounded-md cursor-pointer p-0"
+                    />
+                    <input
+                      type="text"
+                      value={tickerConfig.bgColor}
+                      onChange={(e) => setTickerConfig({ ...tickerConfig, bgColor: e.target.value })}
+                      className="w-full bg-white border border-slate-150 rounded-lg p-1 text-[10px] font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Cor da Fonte</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="color"
+                      value={tickerConfig.textColor}
+                      onChange={(e) => setTickerConfig({ ...tickerConfig, textColor: e.target.value })}
+                      className="w-8 h-8 border border-slate-150 rounded-md cursor-pointer p-0"
+                    />
+                    <input
+                      type="text"
+                      value={tickerConfig.textColor}
+                      onChange={(e) => setTickerConfig({ ...tickerConfig, textColor: e.target.value })}
+                      className="w-full bg-white border border-slate-150 rounded-lg p-1 text-[10px] font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-12 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingConfigs}
+                    className="bg-slate-800 hover:bg-slate-950 text-white font-bold text-[11px] px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition border-none"
+                  >
+                    <Save size={13} />
+                    <span>{isSavingConfigs ? 'Salvando...' : 'Salvar Ticker'}</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Sub-section: Floating Promo Banner */}
+              <form onSubmit={handleSaveFloatingBanner} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-pink-50/20 p-4 rounded-2xl border border-pink-100 text-left">
+                <div className="md:col-span-12">
+                  <h4 className="text-xs font-bold text-pink-700 uppercase tracking-wide flex items-center gap-1.5 mb-1">
+                    <span>🎁 Banner Promocional Flutuante (Cupom Ativo)</span>
+                  </h4>
+                  <p className="text-[10px] text-slate-500">Exibido de forma elegante na parte inferior da tela para engajar clientes no fechamento.</p>
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Mostrar Banner?</label>
+                  <select
+                    value={floatingBanner.show ? "true" : "false"}
+                    onChange={(e) => setFloatingBanner({ ...floatingBanner, show: e.target.value === "true" })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs focus:outline-hidden"
+                  >
+                    <option value="true">Sim (Ativo)</option>
+                    <option value="false">Não (Inativo)</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Título Principal</label>
+                  <input
+                    type="text"
+                    value={floatingBanner.title}
+                    onChange={(e) => setFloatingBanner({ ...floatingBanner, title: e.target.value })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-4 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Subtítulo Informativo</label>
+                  <input
+                    type="text"
+                    value={floatingBanner.subtitle}
+                    onChange={(e) => setFloatingBanner({ ...floatingBanner, subtitle: e.target.value })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Link de Destino do Botão</label>
+                  <input
+                    type="text"
+                    value={floatingBanner.ctaLink}
+                    onChange={(e) => setFloatingBanner({ ...floatingBanner, ctaLink: e.target.value })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Texto do Botão</label>
+                  <input
+                    type="text"
+                    value={floatingBanner.ctaText}
+                    onChange={(e) => setFloatingBanner({ ...floatingBanner, ctaText: e.target.value })}
+                    className="w-full bg-white border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Cor de Fundo</label>
+                  <div className="flex gap-1">
+                    <input
+                      type="color"
+                      value={floatingBanner.bgColor}
+                      onChange={(e) => setFloatingBanner({ ...floatingBanner, bgColor: e.target.value })}
+                      className="w-8 h-8 border border-slate-150 rounded-md cursor-pointer p-0"
+                    />
+                    <input
+                      type="text"
+                      value={floatingBanner.bgColor}
+                      onChange={(e) => setFloatingBanner({ ...floatingBanner, bgColor: e.target.value })}
+                      className="w-full bg-white border border-slate-150 rounded-lg p-1 text-[9px] font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-8 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingConfigs}
+                    className="bg-pink-600 hover:bg-pink-700 text-white font-bold text-[11px] px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition shadow-xs border-none"
+                  >
+                    <Save size={13} />
+                    <span>{isSavingConfigs ? 'Salvando...' : 'Salvar Banner Flutuante'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Config: Banners Rotativos (Slides) */}
+          {activeConfigTab === 'banners' && (
+            <div className="space-y-6 text-left">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  <Sliders size={14} className="text-pink-600" />
+                  <span>Gerenciar Lookbook de Slides Rotativos</span>
+                </h4>
+                <p className="text-[10px] text-slate-500 font-medium">Banners dinâmicos em carrossel exibidos no catálogo público. Ideal para divulgar coleções sazonais, liquidações ou atacado.</p>
+              </div>
+
+              <div className="space-y-6">
+                {lookbookSlides.map((slide, sIdx) => (
+                  <div key={sIdx} className="bg-white border border-slate-150 rounded-2xl p-5 shadow-2xs relative hover:border-pink-200 transition-all">
+                    <span className="absolute -top-2.5 -left-2.5 w-6 h-6 bg-slate-800 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm font-mono">
+                      {sIdx + 1}
+                    </span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-2">
+                      <div className="md:col-span-3 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block">Tag Indicadora (Balão)</label>
+                        <input
+                          type="text"
+                          value={slide.tag}
+                          onChange={(e) => {
+                            const updated = [...lookbookSlides];
+                            updated[sIdx].tag = e.target.value;
+                            setLookbookSlides(updated);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-bold focus:outline-hidden"
+                          placeholder="EX: COLEÇÃO EXCLUSIVA"
+                        />
+                      </div>
+
+                      <div className="md:col-span-4 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block">Título Principal do Slide</label>
+                        <input
+                          type="text"
+                          value={slide.title}
+                          onChange={(e) => {
+                            const updated = [...lookbookSlides];
+                            updated[sIdx].title = e.target.value;
+                            setLookbookSlides(updated);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-extrabold text-slate-800 focus:outline-hidden"
+                          placeholder="EX: ATACADO PREMIUM"
+                        />
+                      </div>
+
+                      <div className="md:col-span-5 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block">URL da Imagem de Fundo</label>
+                        <input
+                          type="text"
+                          value={slide.image}
+                          onChange={(e) => {
+                            const updated = [...lookbookSlides];
+                            updated[sIdx].image = e.target.value;
+                            setLookbookSlides(updated);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono text-slate-600 focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="md:col-span-12 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block">Texto Descritivo / Chamada CTA</label>
+                        <textarea
+                          rows={2}
+                          value={slide.desc}
+                          onChange={(e) => {
+                            const updated = [...lookbookSlides];
+                            updated[sIdx].desc = e.target.value;
+                            setLookbookSlides(updated);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs focus:outline-hidden font-medium"
+                          placeholder="Descreva as características especiais das peças do slide..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveLookbookSlides(lookbookSlides)}
+                  disabled={isSavingConfigs}
+                  className="bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition shadow-xs border-none"
+                >
+                  <Save size={14} />
+                  <span>{isSavingConfigs ? 'Salvando...' : 'Salvar Todos os Banners de Slide'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Config: Categorias / Seções */}
+          {activeConfigTab === 'categorias' && (
+            <form onSubmit={handleSaveCategoryBanners} className="space-y-6 text-left">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  <Image size={14} className="text-pink-600" />
+                  <span>Banners de Destaque das Seções</span>
+                </h4>
+                <p className="text-[10px] text-slate-500 font-medium">As imagens abaixo aparecem como cabeçalhos das categorias de peças na navegação do cliente.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white border border-slate-150 rounded-2xl p-4 space-y-3 shadow-2xs">
+                  <span className="bg-pink-100 text-pink-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider block w-max">SEÇÃO 1: SLIM FIT</span>
+                  <div className="aspect-video w-full rounded-lg bg-slate-100 overflow-hidden border border-slate-150">
+                    <img src={categoryBanners.slimFit} alt="Slim Fit Banner" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">URL do Banner Slim Fit</label>
+                    <input
+                      type="text"
+                      value={categoryBanners.slimFit}
+                      onChange={(e) => setCategoryBanners({ ...categoryBanners, slimFit: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-150 rounded-2xl p-4 space-y-3 shadow-2xs">
+                  <span className="bg-pink-100 text-pink-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider block w-max">SEÇÃO 2: PLUS SIZE / CURVAS</span>
+                  <div className="aspect-video w-full rounded-lg bg-slate-100 overflow-hidden border border-slate-150">
+                    <img src={categoryBanners.plusSize} alt="Plus Size Banner" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">URL do Banner Plus Size</label>
+                    <input
+                      type="text"
+                      value={categoryBanners.plusSize}
+                      onChange={(e) => setCategoryBanners({ ...categoryBanners, plusSize: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingConfigs}
+                  className="bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition shadow-xs border-none"
+                >
+                  <Save size={14} />
+                  <span>{isSavingConfigs ? 'Salvando...' : 'Salvar Banners de Categoria'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Config: Cadastrar Nova Peça */}
+          {activeConfigTab === 'cadastro' && (
+            <form onSubmit={handleQuickAddProductSubmit} className="space-y-6 text-left">
+              <div className="bg-pink-50/50 p-4 rounded-2xl border border-pink-100">
+                <h4 className="text-xs font-bold text-pink-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  <span>🛍️ Cadastro de Nova Peça / Produto centralizado</span>
+                </h4>
+                <p className="text-[10px] text-pink-700 font-medium">Cadastre novas peças diretamente no banco de dados central do Supabase. Aparece imediatamente na vitrine e no PDV.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-4 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Nome Comercial da Peça *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProdName}
+                    onChange={(e) => setNewProdName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-medium focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="Ex: Legging Empina Bumbum Sensorial"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Referência (SKU)</label>
+                  <input
+                    type="text"
+                    value={newProdSku}
+                    onChange={(e) => setNewProdSku(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-mono focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="Ex: LEG-09"
+                  />
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Categoria da Peça *</label>
+                  <select
+                    value={newProdCategory}
+                    onChange={(e) => setNewProdCategory(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                  >
+                    <option value="Conjuntos">Conjuntos</option>
+                    <option value="Blusa Dry-Fit">Blusa Dry-Fit</option>
+                    <option value="Calças e Leggings">Calças e Leggings</option>
+                    <option value="Tops e Macacões">Tops e Macacões</option>
+                    <option value="Acessórios Fitness">Acessórios Fitness</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Preço de Venda (R$) *</label>
+                  <input
+                    type="number"
+                    required
+                    step="0.01"
+                    value={newProdPrice}
+                    onChange={(e) => setNewProdPrice(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-bold text-pink-600 focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="99.90"
+                  />
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Preço de Custo (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newProdCost}
+                    onChange={(e) => setNewProdCost(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-medium focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="40.00 (Opcional)"
+                  />
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Estoque Inicial (Unidades)</label>
+                  <input
+                    type="number"
+                    value={newProdStock}
+                    onChange={(e) => setNewProdStock(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="10"
+                  />
+                </div>
+
+                <div className="md:col-span-3 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Alerta Estoque Mínimo</label>
+                  <input
+                    type="number"
+                    value={newProdMinStock}
+                    onChange={(e) => setNewProdMinStock(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                    placeholder="3"
+                  />
+                </div>
+
+                <div className="md:col-span-12 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">URL de Imagem da Peça</label>
+                  <input
+                    type="text"
+                    value={newProdImage}
+                    onChange={(e) => setNewProdImage(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs font-mono focus:ring-1 focus:ring-pink-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="md:col-span-6 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Tamanhos Disponíveis</label>
+                  <div className="flex flex-wrap gap-2 pt-1.5">
+                    {['PP', 'P', 'M', 'G', 'GG', 'XG'].map(sz => {
+                      const hasSz = newProdSizes.includes(sz);
+                      return (
+                        <button
+                          type="button"
+                          key={sz}
+                          onClick={() => {
+                            if (hasSz) setNewProdSizes(newProdSizes.filter(s => s !== sz));
+                            else setNewProdSizes([...newProdSizes, sz]);
+                          }}
+                          className={`px-3 py-1 text-xs font-bold rounded-lg transition-all border-none ${hasSz ? 'bg-pink-600 text-white' : 'bg-slate-50 text-slate-600 border border-slate-150'}`}
+                        >
+                          {sz}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-6 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Cores Disponíveis</label>
+                  <div className="flex flex-wrap gap-2 pt-1.5">
+                    {['Preto', 'Bordô', 'Azul Marinho', 'Cinza Mescla', 'Rosa Neon', 'Branco'].map(col => {
+                      const hasCol = newProdColors.includes(col);
+                      return (
+                        <button
+                          type="button"
+                          key={col}
+                          onClick={() => {
+                            if (hasCol) setNewProdColors(newProdColors.filter(c => c !== col));
+                            else setNewProdColors([...newProdColors, col]);
+                          }}
+                          className={`px-3 py-1 text-xs font-bold rounded-lg transition-all border-none ${hasCol ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-600 border border-slate-150'}`}
+                        >
+                          {col}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-12 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Descrição de Destaques Técnicos</label>
+                  <textarea
+                    rows={3}
+                    value={newProdDescription}
+                    onChange={(e) => setNewProdDescription(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-pink-500 focus:outline-hidden font-medium"
+                    placeholder="Descreva a compressão, toque sensorial, e outros detalhes importantes..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center gap-2 cursor-pointer transition shadow-md shadow-pink-500/10 border-none"
+                >
+                  <Plus size={16} />
+                  <span>Cadastrar Peça na Nuvem & Vitrine 🚀</span>
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
       </div>
       )}
 

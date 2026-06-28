@@ -2605,6 +2605,8 @@ export default function App() {
             checkouts={checkouts}
             setCheckouts={setCheckouts}
             onSyncCheckouts={() => performSync(true)}
+            onAddProduct={handleAddProduct}
+            onUpdateProduct={handleUpdateProduct}
           />
         );
       case ActiveTab.AGENTES_IA:
