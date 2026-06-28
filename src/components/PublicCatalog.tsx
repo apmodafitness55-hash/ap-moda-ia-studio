@@ -390,6 +390,7 @@ export default function PublicCatalog({
 
   // Perfil / Área VIP Cliente States
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState(false);
   const [loggedClient, setLoggedClient] = useState<Client | null>(null);
   const [loginCpf, setLoginCpf] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -1335,7 +1336,7 @@ export default function PublicCatalog({
         <div className="flex items-center gap-3">
           <button 
             type="button"
-            onClick={() => alert('Modo Visita: Você está navegando na vitrine online completa para clientes!')}
+            onClick={() => setIsMenuDrawerOpen(true)}
             className="p-2 text-slate-700 hover:text-pink-600 hover:bg-slate-50 rounded-full transition cursor-pointer"
           >
             <Menu size={20} />
@@ -3565,6 +3566,104 @@ export default function PublicCatalog({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 12. Public Sidebar Category Drawer */}
+      {isMenuDrawerOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[150] transition-opacity duration-300 animate-in fade-in"
+          onClick={() => setIsMenuDrawerOpen(false)}
+        >
+          <div 
+            className="fixed inset-y-0 left-0 w-80 max-w-[90%] bg-white shadow-2xl flex flex-col z-[160] animate-in slide-in-from-left duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-pink-50/20">
+              <div className="flex flex-col">
+                <span className="font-serif italic text-lg font-bold text-slate-950">
+                  {storeName}
+                </span>
+                <span className="text-[8px] font-bold uppercase tracking-widest mt-0.5" style={{ color: themeColor }}>
+                  {storeSub}
+                </span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsMenuDrawerOpen(false)}
+                className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-full transition text-slate-700 cursor-pointer border-none"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Categories Navigation */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              <div className="space-y-3">
+                <p className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400">Navegar por Categorias</p>
+                <div className="space-y-1">
+                  {categoriesList.map(cat => {
+                    const isSelected = selectedCategory === cat;
+                    return (
+                      <button
+                        key={`menu-cat-${cat}`}
+                        onClick={() => {
+                          setSelectedCategory(cat);
+                          setIsMenuDrawerOpen(false);
+                          // Scroll to catalog section if needed
+                          const section = document.getElementById('search-catalog-bar');
+                          if (section) {
+                            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+                        }}
+                        className={`w-full px-4 py-3 rounded-2xl text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer border border-transparent
+                          ${isSelected 
+                            ? 'bg-pink-600 text-white shadow-md shadow-pink-500/10' 
+                            : 'bg-slate-50 text-slate-700 hover:bg-slate-100/80 active:bg-slate-200/50'}`}
+                        style={isSelected ? { backgroundColor: themeColor } : {}}
+                      >
+                        <span className="flex items-center gap-2">
+                          {cat === 'Todos' ? '🌸' : '⚡'} {cat}
+                        </span>
+                        <ChevronRight size={14} className={isSelected ? 'text-white' : 'text-slate-400'} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick advantages */}
+              <div className="border-t border-slate-100 pt-5 space-y-4 text-[11px] text-slate-500 font-medium">
+                <p className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400 block">Vantagens da Loja</p>
+                
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">🚚</span>
+                  <span>Frete Grátis acima de R$ 399</span>
+                </div>
+                
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">💳</span>
+                  <span>Até 6x Sem Juros no Cartão</span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">👑</span>
+                  <span>Ganhe 5% de Cashback VIP</span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">🔒</span>
+                  <span>Compra 100% Protegida</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400 text-center">
+              <span>{storeName} • Todos os direitos reservados.</span>
             </div>
           </div>
         </div>
