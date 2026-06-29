@@ -187,7 +187,12 @@ export default function PublicCatalog({
       const saved = localStorage.getItem('ap_vitrine_slides');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) return parsed;
+        if (parsed && parsed.length > 0) {
+          return parsed.map((slide, idx) => ({
+            ...slide,
+            category: slide.category || (idx === 0 ? 'Todos' : idx === 1 ? 'Conjuntos' : 'Slim Fit')
+          }));
+        }
       }
     } catch (e) {}
     return [
@@ -195,19 +200,22 @@ export default function PublicCatalog({
         image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
         tag: "COLEÇÃO EXCLUSIVA",
         title: "ATACADO PREMIUM",
-        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica.",
+        category: "Todos"
       },
       {
         image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
         tag: "NOVA COLEÇÃO 2 EM 1",
         title: "COLEÇÃO DUO",
-        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!",
+        category: "Conjuntos"
       },
       {
         image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
         tag: "ALTA PERFORMANCE",
         title: "SUA JORNADA RUN",
-        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium.",
+        category: "Slim Fit"
       }
     ];
   });
@@ -297,7 +305,12 @@ export default function PublicCatalog({
         const savedSlides = localStorage.getItem('ap_vitrine_slides');
         if (savedSlides) {
           const parsed = JSON.parse(savedSlides);
-          if (Array.isArray(parsed) && parsed.length > 0) setLookbookSlides(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLookbookSlides(parsed.map((slide, idx) => ({
+              ...slide,
+              category: slide.category || (idx === 0 ? 'Todos' : idx === 1 ? 'Conjuntos' : 'Slim Fit')
+            })));
+          }
         }
       } catch (e) {}
 
@@ -1442,16 +1455,33 @@ export default function PublicCatalog({
           
           {/* Animated Background image based on lookbook model collection */}
           <div 
-            className="absolute inset-0 bg-cover bg-center transition-all duration-1000 transform scale-102"
+            onClick={() => {
+              const slide = lookbookSlides[currentSlide];
+              const cat = slide.category || 'Todos';
+              setSelectedCategory(cat);
+              const target = document.getElementById('colecao-run-anchor');
+              if (target) target.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="absolute inset-0 bg-cover bg-center transition-all duration-1000 transform scale-102 cursor-pointer hover:scale-[1.03]"
             style={{ 
               backgroundImage: `url('${lookbookSlides[currentSlide].image}')`,
               filter: 'brightness(0.65)'
             }}
+            title={`Clique para ver a coleção de ${lookbookSlides[currentSlide].category || 'novidades'}`}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-slate-900/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-slate-900/10 pointer-events-none" />
 
           {/* Slogan overlaid details with slide elements */}
-          <div className="relative max-w-xl pl-6 pr-6 md:pl-16 space-y-4 z-10 text-left">
+          <div 
+            onClick={() => {
+              const slide = lookbookSlides[currentSlide];
+              const cat = slide.category || 'Todos';
+              setSelectedCategory(cat);
+              const target = document.getElementById('colecao-run-anchor');
+              if (target) target.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="relative max-w-xl pl-6 pr-6 md:pl-16 space-y-4 z-10 text-left cursor-pointer hover:opacity-95"
+          >
             <span style={{ backgroundColor: themeColor }} className="inline-flex items-center gap-1.5 text-white font-sans font-extrabold text-[9px] uppercase tracking-widest px-3 py-1 rounded-full shadow-md">
               <Sparkles size={10} />
               <span>{lookbookSlides[currentSlide].tag}</span>
@@ -1465,13 +1495,19 @@ export default function PublicCatalog({
             <div>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const slide = lookbookSlides[currentSlide];
+                  const cat = slide.category || 'Todos';
+                  setSelectedCategory(cat);
                   const target = document.getElementById('colecao-run-anchor');
                   if (target) target.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className="bg-white hover:bg-pink-600 text-slate-900 hover:text-white font-bold text-[10px] uppercase tracking-wider py-2.5 px-5 rounded-full transition duration-300 shadow-md cursor-pointer border-none"
               >
-                Comprar Coleção
+                {lookbookSlides[currentSlide].category && lookbookSlides[currentSlide].category !== 'Todos' 
+                  ? `Ver ${lookbookSlides[currentSlide].category} →` 
+                  : 'Comprar Coleção'}
               </button>
             </div>
           </div>
@@ -1482,7 +1518,10 @@ export default function PublicCatalog({
               <button
                 key={idx}
                 type="button"
-                onClick={() => setCurrentSlide(idx)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentSlide(idx);
+                }}
                 className={`w-2 h-2 rounded-full transition-all duration-300
                   ${currentSlide === idx ? 'w-5 bg-white' : 'bg-white/40'}`}
               />

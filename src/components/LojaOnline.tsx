@@ -165,26 +165,37 @@ export default function LojaOnline({
   const [lookbookSlides, setLookbookSlides] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('ap_vitrine_slides');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((slide, idx) => ({
+            ...slide,
+            category: slide.category || (idx === 0 ? 'Todos' : idx === 1 ? 'Conjuntos' : 'Slim Fit')
+          }));
+        }
+      }
     } catch (e) {}
     return [
       {
         image: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=1100&q=80",
         tag: "COLEÇÃO EXCLUSIVA",
         title: "ATACADO PREMIUM",
-        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica."
+        desc: "Compre no atacado a partir de 15 unidades com preços imbatíveis de fábrica.",
+        category: "Todos"
       },
       {
         image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1100&q=80",
         tag: "NOVA COLEÇÃO 2 EM 1",
         title: "COLEÇÃO DUO",
-        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!"
+        desc: "Experimente peças de alta compressão e toque sensorial único. Confira Lançamentos!",
+        category: "Conjuntos"
       },
       {
         image: "https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=1100&q=80",
         tag: "ALTA PERFORMANCE",
         title: "SUA JORNADA RUN",
-        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium."
+        desc: "Tecnologia respirável com costura reforçada e poliamida biodegradável premium.",
+        category: "Slim Fit"
       }
     ];
   });
@@ -2011,6 +2022,46 @@ export default function LojaOnline({
                           className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs focus:outline-hidden font-medium"
                           placeholder="Descreva as características especiais das peças do slide..."
                         />
+                      </div>
+
+                      <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block">Categoria Vinculada (Selecione)</label>
+                          <select
+                            value={categoriesList.includes(slide.category) ? slide.category : 'custom'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const updated = [...lookbookSlides];
+                              if (val === 'custom') {
+                                updated[sIdx].category = '';
+                              } else {
+                                updated[sIdx].category = val;
+                              }
+                              setLookbookSlides(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-bold text-slate-700 focus:outline-hidden"
+                          >
+                            {categoriesList.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                            <option value="custom">-- Digitar Categoria Customizada --</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block">Ou Digite o Filtro de Categoria</label>
+                          <input
+                            type="text"
+                            value={slide.category || ''}
+                            onChange={(e) => {
+                              const updated = [...lookbookSlides];
+                              updated[sIdx].category = e.target.value;
+                              setLookbookSlides(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs font-medium focus:outline-hidden"
+                            placeholder="Todos, Conjuntos, Blusa Dry-Fit, etc."
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
