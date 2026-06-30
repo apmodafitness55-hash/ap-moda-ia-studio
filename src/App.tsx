@@ -2593,6 +2593,8 @@ export default function App() {
             transactions={transactions}
             setTransactions={handleUpdateTransactionsList}
             onAddTransaction={handleAddTransaction}
+            sales={sales}
+            products={products}
           />
         );
       case ActiveTab.LOJA_ONLINE:

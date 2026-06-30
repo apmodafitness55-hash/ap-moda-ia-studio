@@ -27,15 +27,26 @@ import {
   Filter,
   Check
 } from 'lucide-react';
-import { Transaction } from '../types';
+import { Transaction, Sale, Product } from '../types';
 
 interface FinanceCashflowProps {
   transactions: Transaction[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   onAddTransaction: (tx: Transaction) => void;
+  sales?: Sale[];
+  products?: Product[];
 }
 
-export default function FinanceCashflow({ transactions, setTransactions, onAddTransaction }: FinanceCashflowProps) {
+export default function FinanceCashflow({ 
+  transactions, 
+  setTransactions, 
+  onAddTransaction,
+  sales = [],
+  products = []
+}: FinanceCashflowProps) {
+  const [activeMainTab, setActiveMainTab] = useState<'caixa' | 'saude'>('caixa');
+  const [saudePeriod, setSaudePeriod] = useState<'current_month' | 'last_month' | 'last_30' | 'last_90' | 'all'>('current_month');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<'All' | 'Inflow' | 'Outflow'>('All');
   
@@ -104,6 +115,123 @@ export default function FinanceCashflow({ transactions, setTransactions, onAddTr
       balanceProjetado
     };
   }, [transactions]);
+
+  // Helper function to filter records by selected period/month
+  const filterByPeriod = (dateStr: string, period: string): boolean => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    
+    const now = new Date();
+    
+    switch (period) {
+      case 'current_month': {
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+      case 'last_month': {
+        const prev = new Date();
+        prev.setMonth(prev.getMonth() - 1);
+        return d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+      }
+      case 'last_30': {
+        const diffMs = now.getTime() - d.getTime();
+        return diffMs >= 0 && diffMs <= 30 * 24 * 60 * 60 * 1000;
+      }
+      case 'last_90': {
+        const diffMs = now.getTime() - d.getTime();
+        return diffMs >= 0 && diffMs <= 90 * 24 * 60 * 60 * 1000;
+      }
+      case 'all':
+      default:
+        return true;
+    }
+  };
+
+  // Calculations for Saúde Financeira (Health Metrics)
+  const saudeMetrics = useMemo(() => {
+    // Filter sales and transactions by the selected period
+    const filteredSales = sales.filter(s => filterByPeriod(s.createdAt, saudePeriod) && s.status !== 'Cancelada');
+    const filteredTxs = transactions.filter(t => filterByPeriod(t.dueDate || t.date, saudePeriod));
+
+    // 1. MARGEM BRUTA:
+    // Faturamento Total (Total Revenue)
+    const faturamentoTotal = filteredSales.reduce((acc, s) => acc + (s.total || 0), 0);
+    // CMV (Cost of Goods Sold)
+    const cmvTotal = filteredSales.reduce((acc, s) => acc + (s.costTotal || 0), 0);
+    // Gross Profit
+    const grossProfit = faturamentoTotal - cmvTotal;
+    const margemBruta = faturamentoTotal > 0 ? (grossProfit / faturamentoTotal) * 100 : 0;
+
+    // 2. MARGEM LÍQUIDA:
+    // Operational/Administrative expenses excluding Supplier/Inventory direct costs to avoid double-counting
+    const despesasOperacionais = filteredTxs
+      .filter(t => t.type === 'Outflow' && t.category !== 'Fornecedores' && t.category !== 'Compra de Estoque')
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
+
+    const netProfit = faturamentoTotal - cmvTotal - despesasOperacionais;
+    const margemLiquida = faturamentoTotal > 0 ? (netProfit / faturamentoTotal) * 100 : 0;
+
+    // 3. MARGEM DE CONTRIBUIÇÃO:
+    // Estimated direct transaction expenses (e.g. 5% representing average credit card/Pix processing fees + Simples tax)
+    const taxAndCardRate = 0.05; 
+    const estimatedFees = faturamentoTotal * taxAndCardRate;
+    
+    // Total Contribution Margin = Faturamento Total - CMV - Estimated Fees
+    const margemContribuicaoTotal = faturamentoTotal - cmvTotal - estimatedFees;
+    const margemContribuicaoMediaPerc = faturamentoTotal > 0 ? (margemContribuicaoTotal / faturamentoTotal) * 100 : 0;
+
+    // 4. PONTO DE EQUILÍBRIO (Break-Even Point):
+    // Custo Fixo Total = Despesas Operacionais (excluding supplier inventory acquisitions)
+    // If 0, fallback to R$ 2.500,00 so there is always a realistic baseline scenario
+    const custoFixoTotal = despesasOperacionais > 0 ? despesasOperacionais : 2500;
+    
+    // Break-Even Point = Custo Fixo Total / (Margem de Contribuição Média em decimal)
+    const breakEvenPoint = margemContribuicaoMediaPerc > 0 
+      ? custoFixoTotal / (margemContribuicaoMediaPerc / 100)
+      : (faturamentoTotal > 0 ? custoFixoTotal / 0.5 : custoFixoTotal / 0.5); 
+
+    // 5. TAXA DE INADIMPLÊNCIA:
+    // Overdue Inflows = Inflows pending whose dueDate is past
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    const receitasVencidasNaoPagas = filteredTxs
+      .filter(t => t.type === 'Inflow' && t.status === 'pendente' && (t.dueDate || t.date.split('T')[0]) < todayStr)
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
+
+    // Unpaid/overdue sales (e.g., pending sales which are past-due or over 7 days old)
+    const salesVencidosNaoPagos = filteredSales
+      .filter(s => s.status === 'Pendente' && s.createdAt.split('T')[0] < todayStr)
+      .reduce((acc, s) => acc + (s.total || 0), 0);
+
+    const totalInadimplente = receitasVencidasNaoPagas + salesVencidosNaoPagos;
+
+    // Faturamento Total Esperado = Faturamento Realizado + Total de Receitas Pendentes/Vencidas do período
+    const faturamentoTotalEsperado = faturamentoTotal + receitasVencidasNaoPagas + salesVencidosNaoPagos;
+    const taxaInadimplencia = faturamentoTotalEsperado > 0 
+      ? (totalInadimplente / faturamentoTotalEsperado) * 100 
+      : 0;
+
+    return {
+      faturamentoTotal,
+      cmvTotal,
+      grossProfit,
+      margemBruta,
+      despesasOperacionais,
+      custoFixoTotal,
+      netProfit,
+      margemLiquida,
+      estimatedFees,
+      margemContribuicaoTotal,
+      margemContribuicaoMediaPerc,
+      breakEvenPoint,
+      receitasVencidasNaoPagas,
+      salesVencidosNaoPagos,
+      totalInadimplente,
+      faturamentoTotalEsperado,
+      taxaInadimplencia,
+      filteredSalesCount: filteredSales.length
+    };
+  }, [sales, transactions, saudePeriod]);
 
   // Master filters implementation 
   const filteredTransactions = useMemo(() => {
@@ -298,76 +426,102 @@ export default function FinanceCashflow({ transactions, setTransactions, onAddTr
         </button>
       </div>
 
-      {/* Advanced Finance KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Caixa Realizado (Real Realized Safe) */}
-        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Saldo de Caixa Real</span>
-            <div className="flex items-baseline gap-1">
-              <h3 className={`text-xl font-bold font-mono ${metrics.balanceRealizado >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                {formatCurrency(metrics.balanceRealizado)}
-              </h3>
-            </div>
-            <span className="text-[9px] text-slate-400 font-sans block">
-              Dinheiro real em mãos (Liquidados)
-            </span>
-          </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 
-            ${metrics.balanceRealizado >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
-            <DollarSign size={18} />
-          </div>
-        </div>
-
-        {/* Total Contas a Receber (Receivables Pending) */}
-        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Contas a Receber</span>
-            <h3 className="text-xl font-bold font-mono text-blue-600">{formatCurrency(metrics.inflowPending)}</h3>
-            <span className="text-[9px] text-blue-500 font-bold font-sans flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block"></span> Receitas agendadas / pendentes
-            </span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shrink-0">
-            <ArrowUpRight size={18} />
-          </div>
-        </div>
-
-        {/* Total Contas a Pagar (Payables Pending) */}
-        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Contas a Pagar</span>
-            <h3 className="text-xl font-bold font-mono text-amber-600">{formatCurrency(metrics.outflowPending)}</h3>
-            <span className="text-[9px] text-amber-600 font-bold font-sans flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 block animate-pulse"></span> Despesas futuras ou em aberto
-            </span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shrink-0">
-            <ArrowDownLeft size={18} />
-          </div>
-        </div>
-
-        {/* Projeção Financeira Comercial (Projected flows) */}
-        <div className="bg-slate-900 border border-slate-900 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans select-none">Saldo Projetado</span>
-            <h3 className={`text-xl font-bold font-mono ${metrics.balanceProjetado >= 0 ? 'text-pink-400' : 'text-rose-400'}`}>
-              {formatCurrency(metrics.balanceProjetado)}
-            </h3>
-            <span className="text-[9px] text-slate-350 font-sans block">
-              Real + Receber - Pagar (Consolidado)
-            </span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-800 text-pink-400 flex items-center justify-center border border-slate-700 shrink-0">
-            <TrendingUp size={18} />
-          </div>
-        </div>
+      {/* Navigation tabs */}
+      <div className="flex border-b border-slate-100 gap-1 overflow-x-auto select-none">
+        <button
+          onClick={() => setActiveMainTab('caixa')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeMainTab === 'caixa'
+              ? 'border-pink-600 text-pink-600 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          💳 Fluxo de Caixa & Lançamentos
+        </button>
+        <button
+          onClick={() => setActiveMainTab('saude')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeMainTab === 'saude'
+              ? 'border-pink-600 text-pink-600 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          🏥 Saúde Financeira da Empresa
+        </button>
       </div>
 
-      {/* Ledger lists, sorting and subtabs selection */}
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden">
-        
-        {/* Ledger quick sub-tabs filter bar */}
+      {activeMainTab === 'caixa' ? (
+        <>
+          {/* Advanced Finance KPI cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Caixa Realizado (Real Realized Safe) */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Saldo de Caixa Real</span>
+                <div className="flex items-baseline gap-1">
+                  <h3 className={`text-xl font-bold font-mono ${metrics.balanceRealizado >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {formatCurrency(metrics.balanceRealizado)}
+                  </h3>
+                </div>
+                <span className="text-[9px] text-slate-400 font-sans block">
+                  Dinheiro real em mãos (Liquidados)
+                </span>
+              </div>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 
+                ${metrics.balanceRealizado >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                <DollarSign size={18} />
+              </div>
+            </div>
+
+            {/* Total Contas a Receber (Receivables Pending) */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Contas a Receber</span>
+                <h3 className="text-xl font-bold font-mono text-blue-600">{formatCurrency(metrics.inflowPending)}</h3>
+                <span className="text-[9px] text-blue-500 font-bold font-sans flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block"></span> Receitas agendadas / pendentes
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shrink-0">
+                <ArrowUpRight size={18} />
+              </div>
+            </div>
+
+            {/* Total Contas a Pagar (Payables Pending) */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-xs transition-all hover:border-slate-200">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans select-none">Contas a Pagar</span>
+                <h3 className="text-xl font-bold font-mono text-amber-600">{formatCurrency(metrics.outflowPending)}</h3>
+                <span className="text-[9px] text-amber-600 font-bold font-sans flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 block animate-pulse"></span> Despesas futuras ou em aberto
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shrink-0">
+                <ArrowDownLeft size={18} />
+              </div>
+            </div>
+
+            {/* Projeção Financeira Comercial (Projected flows) */}
+            <div className="bg-slate-900 border border-slate-900 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans select-none">Saldo Projetado</span>
+                <h3 className={`text-xl font-bold font-mono ${metrics.balanceProjetado >= 0 ? 'text-pink-400' : 'text-rose-400'}`}>
+                  {formatCurrency(metrics.balanceProjetado)}
+                </h3>
+                <span className="text-[9px] text-slate-350 font-sans block">
+                  Real + Receber - Pagar (Consolidado)
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-slate-800 text-pink-400 flex items-center justify-center border border-slate-700 shrink-0">
+                <TrendingUp size={18} />
+              </div>
+            </div>
+          </div>
+
+          {/* Ledger lists, sorting and subtabs selection */}
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden">
+            
+            {/* Ledger quick sub-tabs filter bar */}
         <div className="p-4 bg-slate-50/55 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-sans">
           
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start font-bold">
@@ -551,6 +705,297 @@ export default function FinanceCashflow({ transactions, setTransactions, onAddTr
           )}
         </div>
       </div>
+        </>
+      ) : (
+        /* SAÚDE FINANCEIRA TAB CONTENT */
+        <div className="space-y-6 animate-fade-in">
+          {/* Period Selector Bar */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-0.5">
+              <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Filtrar Período de Análise</h4>
+              <p className="text-[10px] text-slate-400 font-medium">Os indicadores de margem e saúde serão recalculados dinamicamente.</p>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 font-bold self-start sm:self-auto">
+              {(['current_month', 'last_month', 'last_30', 'last_90', 'all'] as const).map((period) => {
+                const labels: Record<typeof period, string> = {
+                  current_month: 'Mês Atual',
+                  last_month: 'Mês Anterior',
+                  last_30: 'Últimos 30 Dias',
+                  last_90: 'Últimos 90 Dias',
+                  all: 'Todo o Histórico'
+                };
+                return (
+                  <button
+                    key={period}
+                    type="button"
+                    onClick={() => setSaudePeriod(period)}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer text-[10px] uppercase font-bold ${
+                      saudePeriod === period 
+                        ? 'bg-white text-pink-600 shadow-xs' 
+                        : 'text-slate-450 hover:text-slate-700'
+                    }`}
+                  >
+                    {labels[period]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quick Metrics Dashboard Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Margem Bruta Card */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Margem Bruta (Lucratividade Direta)</span>
+                  <span className="text-emerald-500 font-bold text-[10px] bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100/50">Ideal: &gt; 50%</span>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-extrabold font-mono text-slate-800">
+                      {(saudeMetrics.margemBruta || 0).toFixed(1)}%
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-400 font-mono">
+                      (Retorno de {formatCurrency(saudeMetrics.grossProfit || 0)})
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${saudeMetrics.margemBruta >= 50 ? 'bg-emerald-500' : saudeMetrics.margemBruta >= 30 ? 'bg-amber-400' : 'bg-rose-500'}`}
+                      style={{ width: `${Math.min(100, Math.max(0, saudeMetrics.margemBruta || 0))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50 text-[10px] font-sans">
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Faturamento Bruto:</span>
+                    <span className="font-mono font-bold text-slate-700">{formatCurrency(saudeMetrics.faturamentoTotal || 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">CMV (Custo de Vendas):</span>
+                    <span className="font-mono font-bold text-rose-500">-{formatCurrency(saudeMetrics.cmvTotal || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-[9.5px] text-slate-400 mt-4 leading-relaxed font-medium">
+                Indica o quanto de sobra resta das vendas comerciais após abater o custo real de aquisição/fabricação das peças (CMV).
+              </p>
+            </div>
+
+            {/* Margem Líquida Card */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Margem Líquida (Resultado Real)</span>
+                  <span className="text-pink-600 font-bold text-[10px] bg-pink-50 px-2 py-0.5 rounded-md border border-pink-100/30">Ideal: 15% a 25%</span>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-3xl font-extrabold font-mono ${saudeMetrics.margemLiquida >= 15 ? 'text-emerald-600' : saudeMetrics.margemLiquida >= 5 ? 'text-amber-500' : 'text-rose-500'}`}>
+                      {(saudeMetrics.margemLiquida || 0).toFixed(1)}%
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-400 font-mono">
+                      (Sobrou {formatCurrency(saudeMetrics.netProfit || 0)})
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${saudeMetrics.margemLiquida >= 15 ? 'bg-emerald-500' : saudeMetrics.margemLiquida >= 5 ? 'bg-amber-400' : 'bg-rose-500'}`}
+                      style={{ width: `${Math.min(100, Math.max(0, saudeMetrics.margemLiquida || 0))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50 text-[10px] font-sans">
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Despesas Gerais:</span>
+                    <span className="font-mono font-bold text-rose-400">-{formatCurrency(saudeMetrics.despesasOperacionais || 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Resultado Final:</span>
+                    <span className={`font-mono font-bold ${saudeMetrics.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                      {formatCurrency(saudeMetrics.netProfit || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-[9.5px] text-slate-400 mt-4 leading-relaxed font-medium">
+                Mede o lucro líquido final real do negócio após pagar todas as peças, impostos, salários, aluguel, marketing e taxas administrativas.
+              </p>
+            </div>
+
+            {/* Margem de Contribuição Card */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Margem de Contribuição</span>
+                  <span className="text-blue-500 font-bold text-[10px] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100/50">Alvo: &gt; 40%</span>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-extrabold font-mono text-slate-800">
+                      {(saudeMetrics.margemContribuicaoMediaPerc || 0).toFixed(1)}%
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-400 font-mono">
+                      ({formatCurrency(saudeMetrics.margemContribuicaoTotal || 0)})
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full rounded-full bg-blue-500"
+                      style={{ width: `${Math.min(100, Math.max(0, saudeMetrics.margemContribuicaoMediaPerc || 0))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50 text-[10px] font-sans">
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Impostos/Taxas Est.:</span>
+                    <span className="font-mono font-bold text-rose-400">-{formatCurrency(saudeMetrics.estimatedFees || 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Sobra Unitária:</span>
+                    <span className="font-mono font-bold text-slate-700">{formatCurrency(saudeMetrics.margemContribuicaoTotal || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-[9.5px] text-slate-400 mt-4 leading-relaxed font-medium">
+                Faturamento menos CMV e custos variáveis (ex: taxa de cartão de crédito e impostos aproximados). Mostra o que sobra para cobrir custos fixos.
+              </p>
+            </div>
+
+          </div>
+
+          {/* Break-Even & Overdue Analytics Blocks */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Ponto de Equilíbrio (Break-Even Point Analysis) */}
+            <div className="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                    <TrendingUp size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs uppercase tracking-wide">Ponto de Equilíbrio Operacional</h4>
+                    <p className="text-[9px] text-slate-400 font-medium">Faturamento mínimo para a loja cobrir todos os custos e empatar.</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-850 rounded-xl border border-slate-800 space-y-3">
+                  <div className="flex justify-between items-center bg-transparent">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Faturamento Mínimo Requerido</span>
+                    <span className="text-xs font-bold text-pink-400 font-mono">Meta de Sobrevivência</span>
+                  </div>
+                  <div className="text-2xl font-black font-mono text-white">
+                    {formatCurrency(saudeMetrics.breakEvenPoint || 0)}
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    {saudeMetrics.faturamentoTotal > 0 ? (
+                      <div 
+                        className={`h-full rounded-full ${saudeMetrics.faturamentoTotal >= saudeMetrics.breakEvenPoint ? 'bg-emerald-400' : 'bg-pink-500'}`}
+                        style={{ width: `${Math.min(100, ((saudeMetrics.faturamentoTotal || 0) / (saudeMetrics.breakEvenPoint || 1)) * 100)}%` }}
+                      />
+                    ) : (
+                      <div className="h-full rounded-full bg-slate-700 w-0" />
+                    )}
+                  </div>
+                  <div className="flex justify-between text-[9px] text-slate-400 font-semibold font-mono">
+                    <span>Faturamento Atual: {formatCurrency(saudeMetrics.faturamentoTotal || 0)}</span>
+                    <span>
+                      {saudeMetrics.faturamentoTotal >= saudeMetrics.breakEvenPoint 
+                        ? '🟢 Lucro Operacional' 
+                        : `🔴 Faltam ${formatCurrency((saudeMetrics.breakEvenPoint || 0) - (saudeMetrics.faturamentoTotal || 0))} para empatar`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-[10px] text-slate-350 leading-relaxed font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-pink-500"></span>
+                    <span>Custos Fixos Mensais Considerados: <strong className="font-mono text-white">{formatCurrency(saudeMetrics.custoFixoTotal || 0)}</strong> (despesas de marketing, aluguel, salários, etc.)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-pink-500"></span>
+                    <span>Margem de Contribuição Média: <strong className="font-mono text-white">{(saudeMetrics.margemContribuicaoMediaPerc || 0).toFixed(1)}%</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-800 text-[9.5px] text-slate-400">
+                💡 <strong>Como atingir:</strong> Para bater o ponto de equilíbrio de <strong>{formatCurrency(saudeMetrics.breakEvenPoint || 0)}</strong>, tente aumentar as vendas de produtos com maior margem de contribuição ou reduzir despesas operacionais fixas (como cortar assinaturas ociosas ou otimizar anúncios).
+              </div>
+            </div>
+
+            {/* Taxa de Inadimplência & Contas Vencidas */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center border border-rose-100">
+                    <AlertTriangle size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Contas Vencidas & Taxa de Inadimplência</h4>
+                    <p className="text-[9px] text-slate-400 font-medium">Mapeamento de parcelas ou cobranças pendentes expiradas sem pagamento.</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Taxa de Inadimplência</span>
+                    <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase border
+                      ${saudeMetrics.taxaInadimplencia > 10 
+                        ? 'bg-rose-50 text-rose-600 border-rose-100 animate-pulse' 
+                        : saudeMetrics.taxaInadimplencia > 3 
+                          ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                      {saudeMetrics.taxaInadimplencia > 10 ? 'Alta (Risco de Caixa)' : saudeMetrics.taxaInadimplencia > 3 ? 'Moderada' : 'Saudável'}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black font-mono text-slate-800">
+                    {(saudeMetrics.taxaInadimplencia || 0).toFixed(1)}%
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] pt-1 font-sans font-semibold">
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Prejuízo por Inadimplência:</span>
+                      <span className="font-mono text-rose-500 font-bold">{formatCurrency(saudeMetrics.totalInadimplente || 0)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Receita Esperada Total:</span>
+                      <span className="font-mono text-slate-600 font-bold">{formatCurrency(saudeMetrics.faturamentoTotalEsperado || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden text-[10px]">
+                  <div className="p-2.5 flex items-center justify-between font-sans">
+                    <span className="text-slate-500 font-bold uppercase">Lançamentos de Contas a Receber Vencidos:</span>
+                    <span className="font-mono font-bold text-slate-700">{formatCurrency(saudeMetrics.receitasVencidasNaoPagas || 0)}</span>
+                  </div>
+                  <div className="p-2.5 flex items-center justify-between font-sans">
+                    <span className="text-slate-500 font-bold uppercase">Vendas a Clientes com Status Pendente:</span>
+                    <span className="font-mono font-bold text-slate-700">{formatCurrency(saudeMetrics.salesVencidosNaoPagos || 0)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 text-[9.5px] text-slate-400 leading-relaxed font-medium">
+                ⚠️ <strong>Atenção:</strong> Uma taxa de inadimplência acima de <strong>8%</strong> prejudica seriamente as compras de estoque da coleção futura. Considere adotar lembretes automáticos de cobrança no WhatsApp ou reduzir parcelamento no boleto/crediário próprio para novos clientes.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Insert Flow entry Dialog Modal Portal */}
       {isAddTxOpen && (
