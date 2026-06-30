@@ -31,19 +31,32 @@ interface CatalogInventoryProps {
 
 const colorToHex = (colorName: string): string => {
   const norm = colorName.toLowerCase().trim();
-  if (norm === 'preto' || norm === 'black') return '#1e293b';
-  if (norm === 'branco' || norm === 'white') return '#f8fafc';
-  if (norm.includes('rosa') || norm.includes('pink') || norm.includes('pink glow')) return '#db2777';
-  if (norm.includes('fucsia') || norm.includes('fúcsia')) return '#d946ef';
-  if (norm.includes('magenta')) return '#d946ef';
-  if (norm.includes('azul') || norm.includes('blue') || norm.includes('marinho')) return '#1e40af';
-  if (norm.includes('verde') || norm.includes('green') || norm.includes('militar')) return '#15803d';
-  if (norm.includes('vermelho') || norm.includes('red') || norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô')) return '#991b1b';
+  if (norm === 'preto' || norm === 'black') return '#0f172a';
+  if (norm === 'branco' || norm === 'white') return '#ffffff';
+  
+  // Specific checks first
+  if (norm.includes('pink glow')) return '#ec4899';
+  if (norm.includes('rosa') || norm.includes('pink')) return '#db2777';
+  if (norm.includes('fucsia') || norm.includes('fúcsia') || norm.includes('magenta')) return '#d946ef';
+  
+  if (norm.includes('marinho') || norm.includes('navy')) return '#1e3a8a';
+  if (norm.includes('azul') || norm.includes('blue')) return '#2563eb';
+  
+  if (norm.includes('militar')) return '#15803d';
+  if (norm.includes('verde') || norm.includes('green')) return '#16a34a';
+  
+  if (norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô')) return '#991b1b';
+  if (norm.includes('vermelho') || norm.includes('red')) return '#ef4444';
+  
   if (norm.includes('amarelo') || norm.includes('yellow')) return '#eab308';
   if (norm.includes('cinza') || norm.includes('gray') || norm.includes('grey') || norm.includes('chumbo') || norm.includes('grafite')) return '#64748b';
   if (norm.includes('laranja') || norm.includes('orange')) return '#ea580c';
-  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('violeta') || norm.includes('lilas') || norm.includes('lilás')) return '#7c3aed';
-  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#d97706';
+  
+  // Lilac/Purple definitions
+  if (norm.includes('lilas') || norm.includes('lilás') || norm.includes('lilais')) return '#c084fc'; // elegant lilac/purple light
+  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('violeta')) return '#7c3aed';
+  
+  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#e4d5be'; // true elegant fashion beige
   if (norm.includes('marrom') || norm.includes('brown')) return '#78350f';
   if (norm.includes('coral') || norm.includes('salmao') || norm.includes('salmão')) return '#f97316';
   

@@ -97,18 +97,19 @@ const COLOR_HEXES: Record<string, string> = {
   'amarelo': '#eab308',
   'amarelo neon': '#ccff00',
   'roxo': '#a855f7',
-  'lilas': '#7c3aed',
-  'lilás': '#7c3aed',
+  'lilas': '#c084fc',
+  'lilás': '#c084fc',
+  'lilais': '#c084fc',
   'violeta': '#7c3aed',
   'cinza': '#64748b',
   'gray': '#64748b',
   'grey': '#64748b',
   'chumbo': '#475569',
   'grafite': '#334155',
-  'bege': '#d97706',
-  'beige': '#d97706',
-  'caqui': '#d97706',
-  'creme': '#d97706',
+  'bege': '#e4d5be',
+  'beige': '#e4d5be',
+  'caqui': '#e4d5be',
+  'creme': '#e4d5be',
   'coral': '#f97316',
   'salmao': '#f97316',
   'salmão': '#f97316'
@@ -126,12 +127,14 @@ const getColorHex = (name: string) => {
   if (norm.includes('marinho')) return '#1e3a8a';
   if (norm.includes('azul')) return '#3b82f6';
   if (norm.includes('militar') || norm.includes('verde')) return '#15803d';
-  if (norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô') || norm.includes('vermelho')) return '#991b1b';
+  if (norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô')) return '#991b1b';
+  if (norm.includes('vermelho')) return '#ef4444';
   if (norm.includes('amarelo')) return '#eab308';
   if (norm.includes('cinza') || norm.includes('gray') || norm.includes('grey') || norm.includes('chumbo') || norm.includes('grafite')) return '#64748b';
   if (norm.includes('laranja')) return '#ea580c';
-  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('lilas') || norm.includes('lilás')) return '#7c3aed';
-  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#d97706';
+  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('violeta')) return '#7c3aed';
+  if (norm.includes('lilas') || norm.includes('lilás') || norm.includes('lilais')) return '#c084fc';
+  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#e4d5be';
   if (norm.includes('marrom')) return '#78350f';
   if (norm.includes('coral') || norm.includes('salmao') || norm.includes('salmão')) return '#f97316';
 
