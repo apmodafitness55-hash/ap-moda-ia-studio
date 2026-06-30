@@ -952,7 +952,8 @@ const CRITICAL_CONFIG_KEYS = [
   'ap_vitrine_floating_banner',
   'ap_moda_payment_config',
   'ap_moda_card_terminals',
-  'ap_card_machines_rates'
+  'ap_card_machines_rates',
+  'ap_custom_color_map'
 ];
 
 /**

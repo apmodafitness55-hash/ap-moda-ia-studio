@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
+import { pushSystemConfigToSupabase } from '../supabase';
 
 interface CatalogInventoryProps {
   products: Product[];
@@ -29,38 +30,70 @@ interface CatalogInventoryProps {
   setActiveSubTab?: (subTab: 'inventario' | 'restoque' | 'cadastro') => void;
 }
 
-const colorToHex = (colorName: string): string => {
+const colorToHex = (colorName: string | undefined | null): string => {
+  if (!colorName || typeof colorName !== 'string') return '#cccccc';
   const norm = colorName.toLowerCase().trim();
-  if (norm === 'preto' || norm === 'black') return '#0f172a';
-  if (norm === 'branco' || norm === 'white') return '#ffffff';
   
-  // Specific checks first
-  if (norm.includes('pink glow')) return '#ec4899';
-  if (norm.includes('rosa') || norm.includes('pink')) return '#db2777';
-  if (norm.includes('fucsia') || norm.includes('fúcsia') || norm.includes('magenta')) return '#d946ef';
-  
-  if (norm.includes('marinho') || norm.includes('navy')) return '#1e3a8a';
-  if (norm.includes('azul') || norm.includes('blue')) return '#2563eb';
-  
-  if (norm.includes('militar')) return '#15803d';
-  if (norm.includes('verde') || norm.includes('green')) return '#16a34a';
-  
-  if (norm.includes('vinho') || norm.includes('bordo') || norm.includes('bordô')) return '#991b1b';
-  if (norm.includes('vermelho') || norm.includes('red')) return '#ef4444';
-  
-  if (norm.includes('amarelo') || norm.includes('yellow')) return '#eab308';
-  if (norm.includes('cinza') || norm.includes('gray') || norm.includes('grey') || norm.includes('chumbo') || norm.includes('grafite')) return '#64748b';
-  if (norm.includes('laranja') || norm.includes('orange')) return '#ea580c';
-  
-  // Lilac/Purple definitions
-  if (norm.includes('lilas') || norm.includes('lilás') || norm.includes('lilais')) return '#c084fc'; // elegant lilac/purple light
-  if (norm.includes('roxo') || norm.includes('purple') || norm.includes('violeta')) return '#7c3aed';
-  
-  if (norm.includes('bege') || norm.includes('beige') || norm.includes('caqui') || norm.includes('creme')) return '#e4d5be'; // true elegant fashion beige
-  if (norm.includes('marrom') || norm.includes('brown')) return '#78350f';
-  if (norm.includes('coral') || norm.includes('salmao') || norm.includes('salmão')) return '#f97316';
-  
-  // Custom hash logic to get a deterministic nice light color instead of a fallback grey
+  // 1. Look up in dynamic custom color map first
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('ap_custom_color_map');
+      if (saved) {
+        const map = JSON.parse(saved);
+        if (map[norm]) return map[norm];
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 2. Simple fallbacks for common names
+  const fallbacks: Record<string, string> = {
+    'preto': '#0f172a',
+    'black': '#0f172a',
+    'branco': '#ffffff',
+    'white': '#ffffff',
+    'vermelho': '#ef4444',
+    'red': '#ef4444',
+    'azul': '#3b82f6',
+    'blue': '#3b82f6',
+    'verde': '#10b981',
+    'green': '#10b981',
+    'amarelo': '#eab308',
+    'yellow': '#eab308',
+    'cinza': '#64748b',
+    'gray': '#64748b',
+    'grey': '#64748b',
+    'laranja': '#f97316',
+    'orange': '#f97316',
+    'rosa': '#db2777',
+    'pink': '#db2777',
+    'lilas': '#c084fc',
+    'lilás': '#c084fc',
+    'lilais': '#c084fc',
+    'roxo': '#7c3aed',
+    'purple': '#7c3aed',
+    'violeta': '#7c3aed',
+    'bege': '#e4d5be',
+    'beige': '#e4d5be',
+    'creme': '#e4d5be',
+    'marrom': '#78350f',
+    'brown': '#78350f',
+    'fucsia': '#d946ef',
+    'fúcsia': '#d946ef',
+    'magenta': '#d946ef',
+    'marinho': '#1e3a8a',
+    'navy': '#1e3a8a'
+  };
+
+  if (fallbacks[norm]) return fallbacks[norm];
+
+  // Try sub-matches for simple compound terms
+  for (const [key, value] of Object.entries(fallbacks)) {
+    if (norm.includes(key)) return value;
+  }
+
+  // 3. Dynamic HSL fallback (elegant HSL tone based on name hash)
   let hash = 0;
   for (let i = 0; i < norm.length; i++) {
     hash = norm.charCodeAt(i) + ((hash << 5) - hash);
@@ -80,6 +113,37 @@ export default function CatalogInventory({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  // Dynamic custom color map state
+  const [customColorMap, setCustomColorMap] = useState<Record<string, string>>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('ap_custom_color_map');
+        return saved ? JSON.parse(saved) : {};
+      }
+    } catch {
+      // fallback
+    }
+    return {};
+  });
+
+  const handleColorHexChange = async (colorName: string, hex: string) => {
+    const norm = colorName.toLowerCase().trim();
+    if (!norm) return;
+    
+    const updatedMap = {
+      ...customColorMap,
+      [norm]: hex
+    };
+    setCustomColorMap(updatedMap);
+    localStorage.setItem('ap_custom_color_map', JSON.stringify(updatedMap));
+    
+    try {
+      await pushSystemConfigToSupabase('ap_custom_color_map', JSON.stringify(updatedMap));
+    } catch (err) {
+      console.error('Failed to push color map to Supabase:', err);
+    }
+  };
 
   // States for size-specific colors
   const [newSizeColors, setNewSizeColors] = useState<Record<string, string>>({});
@@ -1316,6 +1380,32 @@ export default function CatalogInventory({
                 </div>
               </div>
 
+              {/* Seletor Dinâmico de Cores */}
+              {newColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                <div className="mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 animate-in fade-in duration-200">
+                  <div className="font-extrabold text-[8px] text-slate-500 uppercase tracking-wider">Ajustar Tons de Cores (Seletor Dinâmico):</div>
+                  <div className="flex flex-wrap gap-2">
+                    {newColors.split(',').map(c => c.trim()).filter(Boolean).map(color => {
+                      const normColor = color.toLowerCase().trim();
+                      const hex = customColorMap[normColor] || colorToHex(color);
+                      const displayHex = hex.startsWith('#') ? hex : '#cccccc';
+                      return (
+                        <div key={color} className="flex items-center gap-1.5 bg-white border border-slate-150 px-2 py-0.5 rounded-lg shadow-3xs hover:border-pink-200 transition-all">
+                          <input
+                            type="color"
+                            value={displayHex}
+                            onChange={(e) => handleColorHexChange(color, e.target.value)}
+                            className="w-5 h-5 rounded-md cursor-pointer border-none bg-transparent shrink-0 p-0"
+                            title={`Escolher tom para ${color}`}
+                          />
+                          <span className="text-[9px] font-bold text-slate-700 capitalize truncate max-w-[80px]">{color}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 ? (
                 <div className="space-y-3 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs animate-fadeIn">
                   <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
@@ -1731,6 +1821,32 @@ export default function CatalogInventory({
                   />
                 </div>
               </div>
+
+              {/* Seletor Dinâmico de Cores (Edição) */}
+              {editColors.split(',').map(c => c.trim()).filter(Boolean).length > 0 && (
+                <div className="mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 animate-in fade-in duration-200">
+                  <div className="font-extrabold text-[8px] text-slate-500 uppercase tracking-wider">Ajustar Tons de Cores (Seletor Dinâmico):</div>
+                  <div className="flex flex-wrap gap-2">
+                    {editColors.split(',').map(c => c.trim()).filter(Boolean).map(color => {
+                      const normColor = color.toLowerCase().trim();
+                      const hex = customColorMap[normColor] || colorToHex(color);
+                      const displayHex = hex.startsWith('#') ? hex : '#cccccc';
+                      return (
+                        <div key={color} className="flex items-center gap-1.5 bg-white border border-slate-150 px-2 py-0.5 rounded-lg shadow-3xs hover:border-pink-200 transition-all">
+                          <input
+                            type="color"
+                            value={displayHex}
+                            onChange={(e) => handleColorHexChange(color, e.target.value)}
+                            className="w-5 h-5 rounded-md cursor-pointer border-none bg-transparent shrink-0 p-0"
+                            title={`Escolher tom para ${color}`}
+                          />
+                          <span className="text-[9px] font-bold text-slate-700 capitalize truncate max-w-[80px]">{color}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 ? (
                 <div className="space-y-3 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs animate-fadeIn">

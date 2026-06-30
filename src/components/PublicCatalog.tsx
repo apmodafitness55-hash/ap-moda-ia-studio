@@ -115,8 +115,23 @@ const COLOR_HEXES: Record<string, string> = {
   'salmão': '#f97316'
 };
 
-const getColorHex = (name: string) => {
+const getColorHex = (name: string | undefined | null) => {
+  if (!name || typeof name !== 'string') return '#cccccc';
   const norm = name.trim().toLowerCase();
+  
+  // 1. Look up in dynamic custom color map first
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('ap_custom_color_map');
+      if (saved) {
+        const map = JSON.parse(saved);
+        if (map[norm]) return map[norm];
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
   if (COLOR_HEXES[norm]) return COLOR_HEXES[norm];
   
   // Try sub-matches for compound color names like "verde militar" or "azul marinho"
