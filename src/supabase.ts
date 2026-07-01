@@ -29,7 +29,12 @@ export function getSupabaseConfig() {
     return memoryConfig;
   }
   
-  return null;
+  // Fallback para o banco de dados padrão do ecossistema AP Moda Fitness
+  const defaultUrl = 'https://ckrwmdaocoyigpmzpdyz.supabase.co';
+  const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcndtZGFvY295aWdwbXpwZHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDk2NzMsImV4cCI6MjA5NzEyNTY3M30.20vJ4pjavzl06v1dOIbx9rkxf7kc_72ApGgD6jCRiss';
+  
+  memoryConfig = { url: defaultUrl, key: defaultKey };
+  return memoryConfig;
 }
 
 // Sincroniza as credenciais do Supabase do servidor central para a memória (blindando o localStorage)
@@ -229,6 +234,8 @@ ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS salesperson TEXT;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "trackingCode" TEXT;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "deliveryMethod" TEXT;
 ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "tipo_envio" TEXT DEFAULT 'correios';
+ALTER TABLE ap_sales ADD COLUMN IF NOT EXISTS "status_logistico" TEXT DEFAULT 'pendente';
 
 -- 5. Criação da Tabela de Transações de Fluxo de Caixa (Financeiro / Contas a Pagar e Receber)
 CREATE TABLE IF NOT EXISTS ap_transactions (
@@ -277,6 +284,8 @@ ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS status_pagamento TEXT DEFAULT 'pendente';
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "trackingCode" TEXT;
 ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "deliveryMethod" TEXT;
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "tipo_envio" TEXT DEFAULT 'correios';
+ALTER TABLE ap_online_orders ADD COLUMN IF NOT EXISTS "status_logistico" TEXT DEFAULT 'pendente';
 
 -- 7. Criação da Tabela de Configurações do Sistema Geral (Google Workspace, Dados da Loja, Logo, etc.)
 CREATE TABLE IF NOT EXISTS ap_system_configs (
@@ -720,7 +729,9 @@ export async function fetchSalesFromSupabase(): Promise<any[] | null> {
       salesperson: getTolerantValue(s, 'salesperson', ''),
       trackingCode: getTolerantValue(s, 'trackingCode', ''),
       deliveryMethod: getTolerantValue(s, 'deliveryMethod', ''),
-      address: getTolerantValue(s, 'address', '')
+      address: getTolerantValue(s, 'address', ''),
+      tipo_envio: getTolerantValue(s, 'tipo_envio', 'correios'),
+      status_logistico: getTolerantValue(s, 'status_logistico', 'pendente')
     }));
   } catch (err) {
     console.error('Failed fetching sales:', err);
@@ -744,7 +755,9 @@ export async function syncBulkSalesToSupabase(salesList: any[]): Promise<boolean
       salesperson: s.salesperson || '',
       trackingCode: s.trackingCode || '',
       deliveryMethod: s.deliveryMethod || '',
-      address: s.address || ''
+      address: s.address || '',
+      tipo_envio: s.tipo_envio || s.tipoEnvio || 'correios',
+      status_logistico: s.status_logistico || s.statusLogistico || 'pendente'
     }));
     const response = await fetch('/api/proxy/sales', {
       method: 'POST',
@@ -834,7 +847,9 @@ export async function fetchOnlineOrdersFromSupabase(): Promise<any[] | null> {
       address: getTolerantValue(o, 'address', ''),
       paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
       trackingCode: getTolerantValue(o, 'trackingCode', ''),
-      deliveryMethod: getTolerantValue(o, 'deliveryMethod', '')
+      deliveryMethod: getTolerantValue(o, 'deliveryMethod', ''),
+      tipo_envio: getTolerantValue(o, 'tipo_envio', 'correios'),
+      status_logistico: getTolerantValue(o, 'status_logistico', 'pendente')
     }));
   } catch (err) {
     console.error('Failed fetching online orders:', err);
@@ -856,7 +871,9 @@ export async function syncBulkOnlineOrdersToSupabase(ordersList: any[]): Promise
       address: getTolerantValue(o, 'address', ''),
       paymentMethod: getTolerantValue(o, 'paymentMethod', ''),
       trackingCode: o.trackingCode || '',
-      deliveryMethod: o.deliveryMethod || ''
+      deliveryMethod: o.deliveryMethod || '',
+      tipo_envio: o.tipo_envio || o.tipoEnvio || 'correios',
+      status_logistico: o.status_logistico || o.statusLogistico || 'pendente'
     }));
     const response = await fetch('/api/proxy/online-orders', {
       method: 'POST',
@@ -953,7 +970,8 @@ const CRITICAL_CONFIG_KEYS = [
   'ap_moda_payment_config',
   'ap_moda_card_terminals',
   'ap_card_machines_rates',
-  'ap_custom_color_map'
+  'ap_custom_color_map',
+  'ap_melhor_envio_token'
 ];
 
 /**

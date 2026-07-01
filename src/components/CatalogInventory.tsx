@@ -15,7 +15,9 @@ import {
   Check,
   ChevronDown,
   X,
-  Sparkles
+  Sparkles,
+  Ruler,
+  Maximize
 } from 'lucide-react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
@@ -102,6 +104,27 @@ const colorToHex = (colorName: string | undefined | null): string => {
   return `hsl(${h}, 65%, 55%)`;
 };
 
+export const DEFAULT_MEASUREMENT_SPECS: Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }> = {
+  P: { bustoMin: 80, bustoMax: 88, cinturaMin: 60, cinturaMax: 68, quadrilMin: 88, quadrilMax: 96 },
+  M: { bustoMin: 89, bustoMax: 96, cinturaMin: 69, cinturaMax: 76, quadrilMin: 97, quadrilMax: 104 },
+  G: { bustoMin: 97, bustoMax: 104, cinturaMin: 77, cinturaMax: 84, quadrilMin: 105, quadrilMax: 112 },
+  GG: { bustoMin: 105, bustoMax: 112, cinturaMin: 85, cinturaMax: 92, quadrilMin: 113, quadrilMax: 120 }
+};
+
+export const getFallbackSpecsForSize = (sz: string) => {
+  const norm = sz.toUpperCase().trim();
+  if (DEFAULT_MEASUREMENT_SPECS[norm]) {
+    return { ...DEFAULT_MEASUREMENT_SPECS[norm] };
+  }
+  if (norm === 'PP' || norm === '34' || norm === '36') {
+    return { bustoMin: 74, bustoMax: 79, cinturaMin: 54, cinturaMax: 59, quadrilMin: 80, quadrilMax: 87 };
+  }
+  if (norm === 'XG' || norm === 'EG' || norm === 'EXG' || norm === 'G1' || norm === '46') {
+    return { bustoMin: 113, bustoMax: 120, cinturaMin: 93, cinturaMax: 100, quadrilMin: 121, quadrilMax: 128 };
+  }
+  return { bustoMin: 90, bustoMax: 98, cinturaMin: 70, cinturaMax: 78, quadrilMin: 98, quadrilMax: 106 };
+};
+
 export default function CatalogInventory({ 
   products, 
   onAddProduct, 
@@ -156,6 +179,10 @@ export default function CatalogInventory({
   // States for size-color specific stocks
   const [newSizeColorStocks, setNewSizeColorStocks] = useState<Record<string, Record<string, number>>>({});
   const [editSizeColorStocks, setEditSizeColorStocks] = useState<Record<string, Record<string, number>>>({});
+
+  // States for measurement specifications (Provador Virtual)
+  const [newMeasurementSpecs, setNewMeasurementSpecs] = useState<Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }>>({});
+  const [editMeasurementSpecs, setEditMeasurementSpecs] = useState<Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }>>({});
 
   // Product Sub-Tab Switcher (Inventário, Combos, Markup, Curva ABC)
   const [internalSubTab, setInternalSubTab] = useState<'inventario' | 'combos' | 'markup' | 'abc'>('inventario');
@@ -403,6 +430,12 @@ export default function CatalogInventory({
       });
     }
 
+    const finalMeasurementSpecs: Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }> = {};
+    sizesArray.forEach(sz => {
+      const normSz = sz.toUpperCase().trim();
+      finalMeasurementSpecs[sz] = newMeasurementSpecs[normSz] || newMeasurementSpecs[sz] || getFallbackSpecsForSize(sz);
+    });
+
     const newProd: Product = {
       id: `prod-${Date.now()}`,
       name: newName.trim(),
@@ -421,7 +454,8 @@ export default function CatalogInventory({
       sizes: sizesArray,
       sizeColors: finalSizeColors,
       colorStocks: finalColorStocks,
-      sizeColorStocks: finalSizeColorStocks
+      sizeColorStocks: finalSizeColorStocks,
+      measurementSpecs: finalMeasurementSpecs
     };
 
     onAddProduct(newProd);
@@ -446,6 +480,7 @@ export default function CatalogInventory({
     setNewSizeColors({});
     setNewColorStocks({});
     setNewSizeColorStocks({});
+    setNewMeasurementSpecs({});
   };
 
   const handleOpenEditModal = (p: Product) => {
@@ -478,6 +513,7 @@ export default function CatalogInventory({
     setEditSizeColors(scObj);
     setEditColorStocks(p.colorStocks || {});
     setEditSizeColorStocks(p.sizeColorStocks || {});
+    setEditMeasurementSpecs(p.measurementSpecs || {});
     setIsEditModalOpen(true);
   };
 
@@ -536,6 +572,12 @@ export default function CatalogInventory({
       });
     }
 
+    const finalMeasurementSpecs: Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }> = {};
+    sizesArray.forEach(sz => {
+      const normSz = sz.toUpperCase().trim();
+      finalMeasurementSpecs[sz] = editMeasurementSpecs[normSz] || editMeasurementSpecs[sz] || getFallbackSpecsForSize(sz);
+    });
+
     onUpdateProduct({
       ...editingProduct,
       name: editName.trim(),
@@ -553,7 +595,8 @@ export default function CatalogInventory({
       sizes: sizesArray,
       sizeColors: finalSizeColors,
       colorStocks: finalColorStocks,
-      sizeColorStocks: finalSizeColorStocks
+      sizeColorStocks: finalSizeColorStocks,
+      measurementSpecs: finalMeasurementSpecs
     });
 
     setIsEditModalOpen(false);
@@ -1406,6 +1449,109 @@ export default function CatalogInventory({
                 </div>
               )}
 
+              {/* Tabela de Medidas de Referência (Provador Virtual) */}
+              {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-extrabold text-[9px] text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <Ruler size={11} className="text-pink-600" />
+                      Tabela de Medidas de Referência (cm)
+                    </div>
+                    <span className="text-[8px] text-slate-400 font-bold">Provador Virtual</span>
+                  </div>
+                  <p className="text-[8.5px] text-slate-400">Insira as faixas de medida recomendadas para cada tamanho.</p>
+                  <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
+                    {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const normSz = sz.toUpperCase().trim();
+                      const currentSpec = newMeasurementSpecs[normSz] || newMeasurementSpecs[sz] || getFallbackSpecsForSize(sz);
+                      
+                      const updateSpec = (field: 'bustoMin' | 'bustoMax' | 'cinturaMin' | 'cinturaMax' | 'quadrilMin' | 'quadrilMax', value: number) => {
+                        setNewMeasurementSpecs(prev => ({
+                          ...prev,
+                          [sz]: {
+                            ...(prev[sz] || getFallbackSpecsForSize(sz)),
+                            [field]: value
+                          }
+                        }));
+                      };
+
+                      return (
+                        <div key={sz} className="p-2 bg-white rounded-lg border border-slate-150 space-y-1.5">
+                          <div className="flex justify-between items-center text-[10px] font-extrabold text-slate-700 bg-slate-100/60 px-1.5 py-0.5 rounded">
+                            <span>Tamanho {sz}</span>
+                            <span className="text-[8px] text-pink-600">Recomendado padrão ativo</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[9px]">
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Busto (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.bustoMin}
+                                  onChange={(e) => updateSpec('bustoMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.bustoMax}
+                                  onChange={(e) => updateSpec('bustoMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Cintura (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.cinturaMin}
+                                  onChange={(e) => updateSpec('cinturaMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.cinturaMax}
+                                  onChange={(e) => updateSpec('cinturaMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Quadril (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.quadrilMin}
+                                  onChange={(e) => updateSpec('quadrilMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.quadrilMax}
+                                  onChange={(e) => updateSpec('quadrilMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {newSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 ? (
                 <div className="space-y-3 mt-1 border border-pink-100 bg-pink-50/10 p-3 rounded-xl text-xs animate-fadeIn">
                   <div className="flex items-center gap-1.5 text-pink-700 font-bold uppercase text-[9px] tracking-widest">
@@ -1841,6 +1987,109 @@ export default function CatalogInventory({
                             title={`Escolher tom para ${color}`}
                           />
                           <span className="text-[9px] font-bold text-slate-700 capitalize truncate max-w-[80px]">{color}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabela de Medidas de Referência (Provador Virtual - Edição) */}
+              {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-extrabold text-[9px] text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <Ruler size={11} className="text-pink-600" />
+                      Tabela de Medidas de Referência (cm)
+                    </div>
+                    <span className="text-[8px] text-slate-400 font-bold">Provador Virtual</span>
+                  </div>
+                  <p className="text-[8.5px] text-slate-400">Insira as faixas de medida recomendadas para cada tamanho.</p>
+                  <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
+                    {editSizes.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sz => {
+                      const normSz = sz.toUpperCase().trim();
+                      const currentSpec = editMeasurementSpecs[normSz] || editMeasurementSpecs[sz] || getFallbackSpecsForSize(sz);
+                      
+                      const updateSpec = (field: 'bustoMin' | 'bustoMax' | 'cinturaMin' | 'cinturaMax' | 'quadrilMin' | 'quadrilMax', value: number) => {
+                        setEditMeasurementSpecs(prev => ({
+                          ...prev,
+                          [sz]: {
+                            ...(prev[sz] || getFallbackSpecsForSize(sz)),
+                            [field]: value
+                          }
+                        }));
+                      };
+
+                      return (
+                        <div key={sz} className="p-2 bg-white rounded-lg border border-slate-150 space-y-1.5">
+                          <div className="flex justify-between items-center text-[10px] font-extrabold text-slate-700 bg-slate-100/60 px-1.5 py-0.5 rounded">
+                            <span>Tamanho {sz}</span>
+                            <span className="text-[8px] text-pink-600">Recomendado padrão ativo</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[9px]">
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Busto (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.bustoMin}
+                                  onChange={(e) => updateSpec('bustoMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.bustoMax}
+                                  onChange={(e) => updateSpec('bustoMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Cintura (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.cinturaMin}
+                                  onChange={(e) => updateSpec('cinturaMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.cinturaMax}
+                                  onChange={(e) => updateSpec('cinturaMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-slate-400 uppercase font-bold text-[7.5px] mb-0.5">Quadril (cm)</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={currentSpec.quadrilMin}
+                                  onChange={(e) => updateSpec('quadrilMin', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Mín"
+                                />
+                                <span className="text-slate-350">-</span>
+                                <input
+                                  type="number"
+                                  value={currentSpec.quadrilMax}
+                                  onChange={(e) => updateSpec('quadrilMax', Number(e.target.value))}
+                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] text-center font-semibold text-slate-700 focus:outline-hidden"
+                                  placeholder="Máx"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}

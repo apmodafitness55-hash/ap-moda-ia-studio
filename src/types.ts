@@ -42,6 +42,7 @@ export interface Product {
   sizeColors?: Record<string, string[]>;
   colorStocks?: Record<string, number>;
   sizeColorStocks?: Record<string, Record<string, number>>;
+  measurementSpecs?: Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }>;
 }
 
 export interface SaleItem {
@@ -98,6 +99,18 @@ export interface Client {
   altura?: number;
   peso?: number;
 }
+
+export type DeliveryCity = 'Natal' | 'Parnamirim' | 'São José de Mipibu' | 'Assu' | 'Ipanguaçu' | 'Itajá';
+
+export const DELIVERY_CITIES: DeliveryCity[] = [
+  'Natal',
+  'Parnamirim',
+  'São José de Mipibu',
+  'Assu',
+  'Ipanguaçu',
+  'Itajá'
+];
+
 
 export interface Transaction {
   id: string;

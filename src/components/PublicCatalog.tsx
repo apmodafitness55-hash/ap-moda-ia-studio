@@ -371,12 +371,37 @@ export default function PublicCatalog({
   const [isFittingRoomOpen, setIsFittingRoomOpen] = useState(false);
   const [fitHeight, setFitHeight] = useState<string>('');
   const [fitWeight, setFitWeight] = useState<string>('');
+  const [fitAge, setFitAge] = useState<string>('');
   const [fitPreference, setFitPreference] = useState<'justo' | 'normal' | 'largo'>('normal');
-  const [fitRecommendation, setFitRecommendation] = useState<'P' | 'M' | 'G' | 'GG' | null>(null);
+  const [fitRecommendation, setFitRecommendation] = useState<string | null>(null);
 
   const [productQty, setProductQty] = useState(1);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
+  // Auto-adjust quantity based on selected variation stock
+  useEffect(() => {
+    if (!selectedProduct) return;
+    
+    let available = selectedProduct.stock;
+    if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
+      available = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
+    } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
+      available = selectedProduct.colorStocks[selectedColor];
+    }
+    
+    if (available <= 0) {
+      if (productQty !== 0) {
+        setProductQty(0);
+      }
+    } else {
+      if (productQty <= 0) {
+        setProductQty(1);
+      } else if (productQty > available) {
+        setProductQty(available);
+      }
+    }
+  }, [selectedProduct?.id, selectedSize, selectedColor, productQty]);
+
   // Mock alternative angles / views inside product details
   const [detailImageIdx, setDetailImageIdx] = useState(0);
 
@@ -596,51 +621,110 @@ export default function PublicCatalog({
     }, 1000);
   };
 
-  // Provador Virtual: Cálculo matemático baseado no IMC, Altura e Preferência de Caimento
-  const calculateRecommendedSize = (heightCm: number, weightKg: number, fit: 'justo' | 'normal' | 'largo'): 'P' | 'M' | 'G' | 'GG' => {
-    const bmi = weightKg / ((heightCm / 100) ** 2);
-    let baseSize: 'P' | 'M' | 'G' | 'GG' = 'M';
+  // Provador Virtual: Cálculo matemático baseado no IMC, Altura, Peso, Idade, Preferência de Caimento e Tabela de Medidas
+  const calculateRecommendedSize = (
+    heightCm: number, 
+    weightKg: number, 
+    ageYears: number,
+    fit: 'justo' | 'normal' | 'largo'
+  ): string => {
+    if (!heightCm || !weightKg) return 'M';
+    
+    // 1. Estimar medidas corporais aproximadas com base no IMC, altura, peso e idade
+    // Fórmulas antropométricas simplificadas para biotipo fitness feminino/unissex
+    let estimatedBusto = (weightKg * 1.25) + (heightCm * 0.08) - 22;
+    let estimatedCintura = (weightKg * 1.05) - (heightCm * 0.12) + 12;
+    let estimatedQuadril = (weightKg * 1.38) + (heightCm * 0.05) - 20;
 
-    if (bmi < 20.5) {
-      baseSize = 'P';
-    } else if (bmi >= 20.5 && bmi < 24.0) {
-      baseSize = 'M';
-    } else if (bmi >= 24.0 && bmi < 27.5) {
-      baseSize = 'G';
-    } else {
-      baseSize = 'GG';
+    // Correção por idade (mudanças naturais de distribuição de massa muscular/gordura)
+    if (ageYears > 35) {
+      estimatedCintura += 1.5;
+      estimatedBusto += 1.0;
     }
 
-    // Ajuste fino para fôrma fitness considerando limites de altura/peso que forçam estiramento vertical
-    if (baseSize === 'P' && (weightKg > 55 || heightCm > 168)) {
-      baseSize = 'M';
-    }
-    if (baseSize === 'M' && (weightKg > 66 || heightCm > 174)) {
-      baseSize = 'G';
-    }
-    if (baseSize === 'G' && (weightKg > 78 || heightCm > 180)) {
-      baseSize = 'GG';
-    }
-
-    // Ajuste de preferência de caimento
-    const sizes: ('P' | 'M' | 'G' | 'GG')[] = ['P', 'M', 'G', 'GG'];
-    let sizeIdx = sizes.indexOf(baseSize);
-
+    // Ajuste baseado na preferência de caimento do cliente
     if (fit === 'justo') {
-      sizeIdx = Math.max(0, sizeIdx - 1);
+      estimatedBusto -= 2.5;
+      estimatedCintura -= 2.5;
+      estimatedQuadril -= 2.5;
     } else if (fit === 'largo') {
-      sizeIdx = Math.min(sizes.length - 1, sizeIdx + 1);
+      estimatedBusto += 2.5;
+      estimatedCintura += 2.5;
+      estimatedQuadril += 2.5;
     }
 
-    return sizes[sizeIdx];
+    // 2. Tabela padrão de fábrica (fallback inteligente se o lojista não preencheu dados customizados)
+    const fallbackSpecs: Record<string, { bustoMin: number; bustoMax: number; cinturaMin: number; cinturaMax: number; quadrilMin: number; quadrilMax: number }> = {
+      P: { bustoMin: 80, bustoMax: 88, cinturaMin: 60, cinturaMax: 68, quadrilMin: 88, quadrilMax: 96 },
+      M: { bustoMin: 89, bustoMax: 96, cinturaMin: 69, cinturaMax: 76, quadrilMin: 97, quadrilMax: 104 },
+      G: { bustoMin: 97, bustoMax: 104, cinturaMin: 77, cinturaMax: 84, quadrilMin: 105, quadrilMax: 112 },
+      GG: { bustoMin: 105, bustoMax: 112, cinturaMin: 85, cinturaMax: 92, quadrilMin: 113, quadrilMax: 120 }
+    };
+
+    const getSpecs = (sz: string) => {
+      const normSz = sz.toUpperCase().trim();
+      if (selectedProduct.measurementSpecs && selectedProduct.measurementSpecs[sz]) {
+        return selectedProduct.measurementSpecs[sz];
+      }
+      if (selectedProduct.measurementSpecs && selectedProduct.measurementSpecs[normSz]) {
+        return selectedProduct.measurementSpecs[normSz];
+      }
+      if (fallbackSpecs[normSz]) {
+        return fallbackSpecs[normSz];
+      }
+      // Fallback genérico para tamanhos incomuns ou não mapeados
+      return { bustoMin: 90, bustoMax: 98, cinturaMin: 70, cinturaMax: 78, quadrilMin: 98, quadrilMax: 106 };
+    };
+
+    const sizes = selectedProduct.sizes && selectedProduct.sizes.length > 0 ? selectedProduct.sizes : ['P', 'M', 'G', 'GG'];
+    
+    let bestSize = sizes[0] || 'M';
+    let bestScore = -999999;
+
+    sizes.forEach(sz => {
+      const spec = getSpecs(sz);
+      let score = 0;
+
+      // 1. Match de Busto (Importante para tops e croppeds)
+      if (estimatedBusto >= spec.bustoMin && estimatedBusto <= spec.bustoMax) {
+        score += 10;
+      } else {
+        const dist = Math.min(Math.abs(estimatedBusto - spec.bustoMin), Math.abs(estimatedBusto - spec.bustoMax));
+        score -= dist * 2;
+      }
+
+      // 2. Match de Cintura
+      if (estimatedCintura >= spec.cinturaMin && estimatedCintura <= spec.cinturaMax) {
+        score += 10;
+      } else {
+        const dist = Math.min(Math.abs(estimatedCintura - spec.cinturaMin), Math.abs(estimatedCintura - spec.cinturaMax));
+        score -= dist * 2;
+      }
+
+      // 3. Match de Quadril (Crítico para leggings, shorts e calças fitness)
+      if (estimatedQuadril >= spec.quadrilMin && estimatedQuadril <= spec.quadrilMax) {
+        score += 15;
+      } else {
+        const dist = Math.min(Math.abs(estimatedQuadril - spec.quadrilMin), Math.abs(estimatedQuadril - spec.quadrilMax));
+        score -= dist * 3.5; // maior penalização por erro no quadril em moda fitness
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestSize = sz;
+      }
+    });
+
+    return bestSize;
   };
 
-  const handleApplyRecommendedSize = (size: 'P' | 'M' | 'G' | 'GG') => {
+  const handleApplyRecommendedSize = (size: string) => {
     setSelectedSize(size);
     setIsFittingRoomOpen(false);
     // Reset recommend states
     setFitHeight('');
     setFitWeight('');
+    setFitAge('');
     setFitPreference('normal');
     setFitRecommendation(null);
     alert(`Tamanho ${size} selecionado com base nas suas medidas do Provador! ✨`);
@@ -1840,8 +1924,20 @@ export default function PublicCatalog({
       </main>
 
       {/* 7. Beautiful Product Detail Overlay Popup with Interactive Matrix Stepper */}
-      {selectedProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-6 font-sans">
+      {selectedProduct && (() => {
+        const availableStock = (() => {
+          let available = selectedProduct.stock;
+          if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
+            available = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
+          } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
+            available = selectedProduct.colorStocks[selectedColor];
+          }
+          return available;
+        })();
+        const isEsgotado = availableStock <= 0;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-6 font-sans">
           <div className="bg-white rounded-[32px] max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden text-slate-800 flex flex-col md:flex-row h-full max-h-[92vh] md:max-h-[620px] animate-in fade-in zoom-in-95 duration-200 relative">
             
             {/* Header top row simulated in modal screen */}
@@ -2038,7 +2134,7 @@ export default function PublicCatalog({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-1.5 text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">
                       <div className="flex items-center gap-1.5">
-                        <Palette size={11} className="text-pink-600" />
+                        <Maximize2 size={11} className="text-pink-600" />
                         <span>1. Escolha o Tamanho:</span>
                       </div>
                       <button
@@ -2050,10 +2146,10 @@ export default function PublicCatalog({
                           setFitRecommendation(null);
                           setIsFittingRoomOpen(true);
                         }}
-                        className="text-pink-600 hover:text-pink-700 transition flex items-center gap-1 text-[10px] lowercase first-letter:uppercase font-extrabold bg-pink-50 hover:bg-pink-100 px-2 py-0.5 rounded-full cursor-pointer select-none active:scale-95"
+                        className="text-pink-600 hover:text-pink-700 hover:bg-pink-100/60 transition flex items-center gap-1.5 text-[10px] font-extrabold bg-pink-50 px-2.5 py-1 rounded-full cursor-pointer select-none active:scale-95 border border-pink-100/50"
                       >
                         <Ruler size={11} className="text-pink-600 animate-pulse" />
-                        <span>Descubra seu tamanho 📐</span>
+                        <span>Provador Virtual 📏</span>
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -2126,45 +2222,36 @@ export default function PublicCatalog({
                 {/* Active Choice Overview Feedback */}
                 <div className="bg-pink-50/40 p-2.5 rounded-xl border border-pink-100/40 text-[11px] text-pink-955 font-bold flex justify-between items-center">
                   <span>Selecionado: {selectedColor} — Tamanho {selectedSize}</span>
-                  {(() => {
-                    let available = selectedProduct.stock;
-                    if (selectedProduct.sizeColorStocks && selectedProduct.sizeColorStocks[selectedSize] && selectedProduct.sizeColorStocks[selectedSize][selectedColor] !== undefined) {
-                      available = selectedProduct.sizeColorStocks[selectedSize][selectedColor];
-                    } else if (selectedProduct.colorStocks && selectedProduct.colorStocks[selectedColor] !== undefined) {
-                      available = selectedProduct.colorStocks[selectedColor];
-                    }
-
-                    if (available > 0) {
-                      return (
-                        <span className="text-[10px] text-emerald-600 font-bold">
-                          {available} un. disponíveis! 🔥
-                        </span>
-                      );
-                    } else {
-                      return (
-                        <span className="text-[10px] text-rose-500 font-bold animate-pulse">
-                          Esgotado nesta variação ⚠️
-                        </span>
-                      );
-                    }
-                  })()}
+                  {availableStock > 0 ? (
+                    <span className="text-[10px] text-emerald-600 font-bold">
+                      {availableStock} un. disponíveis! 🔥
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-rose-500 font-bold animate-pulse">
+                      Esgotado nesta variação ⚠️
+                    </span>
+                  )}
                 </div>
 
                 {/* Counter units selector */}
                 <div className="flex items-center justify-between border-t border-slate-50 pt-3">
                   <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">Quantidade Desejada</span>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-slate-100 rounded-xl py-1 px-1.5 border border-slate-150">
+                    <div className={`flex items-center rounded-xl py-1 px-1.5 border ${isEsgotado ? 'bg-slate-100 border-slate-200 opacity-60' : 'bg-slate-100 border-slate-150'}`}>
                       <button 
-                        onClick={() => setProductQty(Math.max(1, productQty - 1))}
-                        className="p-1 hover:bg-white rounded-md transition text-slate-650 cursor-pointer"
+                        type="button"
+                        disabled={isEsgotado}
+                        onClick={() => !isEsgotado && setProductQty(Math.max(1, productQty - 1))}
+                        className={`p-1 rounded-md transition text-slate-650 ${isEsgotado ? 'cursor-not-allowed opacity-40' : 'hover:bg-white cursor-pointer'}`}
                       >
                         <Minus size={11} />
                       </button>
-                      <span className="w-8 text-center font-bold text-xs leading-none font-mono">{productQty}</span>
+                      <span className="w-8 text-center font-bold text-xs leading-none font-mono text-slate-800">{productQty}</span>
                       <button 
-                        onClick={() => setProductQty(Math.min(selectedProduct.stock, productQty + 1))}
-                        className="p-1 hover:bg-white rounded-md transition text-slate-655 cursor-pointer"
+                        type="button"
+                        disabled={isEsgotado}
+                        onClick={() => !isEsgotado && setProductQty(Math.min(availableStock, productQty + 1))}
+                        className={`p-1 rounded-md transition text-slate-655 ${isEsgotado ? 'cursor-not-allowed opacity-40' : 'hover:bg-white cursor-pointer'}`}
                       >
                         <Plus size={11} />
                       </button>
@@ -2258,11 +2345,15 @@ export default function PublicCatalog({
                         
                         <button
                           type="button"
+                          disabled={isEsgotado}
                           onClick={() => handleAddComboToCart(compProduct)}
-                          className="w-full py-2 bg-slate-900 hover:bg-pink-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-97 cursor-pointer border-none"
+                          className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border-none
+                            ${isEsgotado 
+                              ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none hover:bg-slate-200' 
+                              : 'bg-slate-900 hover:bg-pink-600 text-white shadow-sm active:scale-97 cursor-pointer'}`}
                         >
                           <ShoppingBag size={12} />
-                          <span>Adicionar Look Completo (5% OFF)</span>
+                          <span>{isEsgotado ? 'Combo Indisponível (Peça Principal Esgotada)' : 'Adicionar Look Completo (5% OFF)'}</span>
                         </button>
                       </div>
                     </div>
@@ -2273,11 +2364,15 @@ export default function PublicCatalog({
                 <div className="pt-2">
                   <button
                     type="button"
+                    disabled={isEsgotado}
                     onClick={handleAddToCart}
-                    className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-sans font-extrabold rounded-2xl text-[12px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 cursor-pointer active:scale-97"
+                    className={`w-full py-3 font-sans font-extrabold rounded-2xl text-[12px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5
+                      ${isEsgotado 
+                        ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none hover:bg-slate-200 hover:text-slate-400' 
+                        : 'bg-pink-600 hover:bg-pink-700 text-white shadow-md shadow-pink-500/20 cursor-pointer active:scale-97'}`}
                   >
                     <ShoppingBag size={15} />
-                    <span>Adicionar à Sacola</span>
+                    <span>{isEsgotado ? 'PRODUTO INDISPONÍVEL' : 'Adicionar à Sacola'}</span>
                   </button>
                 </div>
 
@@ -2503,11 +2598,15 @@ export default function PublicCatalog({
                 </button>
                 <button
                   type="button"
+                  disabled={isEsgotado}
                   onClick={handleAddToCart}
-                  className="flex-grow py-3 bg-slate-900 border-none hover:bg-pink-600 text-white font-sans font-extrabold rounded-2xl text-[11px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/10 cursor-pointer active:scale-97"
+                  className={`flex-grow py-3 font-sans font-extrabold rounded-2xl text-[11px] tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 border-none
+                    ${isEsgotado 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none hover:bg-slate-200 hover:text-slate-400' 
+                      : 'bg-slate-900 hover:bg-pink-600 text-white shadow-md shadow-pink-500/10 cursor-pointer active:scale-97'}`}
                 >
                   <ShoppingBag size={14} />
-                  <span>Adicionar à Sacola</span>
+                  <span>{isEsgotado ? 'PRODUTO INDISPONÍVEL' : 'Adicionar à Sacola'}</span>
                 </button>
               </div>
 
@@ -2515,7 +2614,8 @@ export default function PublicCatalog({
 
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 8. Junte-se a nós / Obtenha Descontos Exclusivos Newsletter Footer Card */}
       <section id="newsletter-section" className="max-w-4xl mx-auto px-4 md:px-8 mt-12 mb-6">
@@ -2652,7 +2752,7 @@ export default function PublicCatalog({
                     value={fitHeight || "165"}
                     onChange={(e) => {
                       setFitHeight(e.target.value);
-                      const rec = calculateRecommendedSize(Number(e.target.value), Number(fitWeight || 60), fitPreference);
+                      const rec = calculateRecommendedSize(Number(e.target.value), Number(fitWeight || 60), Number(fitAge || 30), fitPreference);
                       setFitRecommendation(rec);
                     }}
                     className="flex-1 accent-pink-600 h-1 bg-slate-100 rounded-lg cursor-pointer"
@@ -2665,7 +2765,7 @@ export default function PublicCatalog({
                       const val = e.target.value;
                       setFitHeight(val);
                       if (val && Number(val) >= 100) {
-                        const rec = calculateRecommendedSize(Number(val), Number(fitWeight || 60), fitPreference);
+                        const rec = calculateRecommendedSize(Number(val), Number(fitWeight || 60), Number(fitAge || 30), fitPreference);
                         setFitRecommendation(rec);
                       }
                     }}
@@ -2688,7 +2788,7 @@ export default function PublicCatalog({
                     value={fitWeight || "60"}
                     onChange={(e) => {
                       setFitWeight(e.target.value);
-                      const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(e.target.value), fitPreference);
+                      const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(e.target.value), Number(fitAge || 30), fitPreference);
                       setFitRecommendation(rec);
                     }}
                     className="flex-1 accent-pink-600 h-1 bg-slate-100 rounded-lg cursor-pointer"
@@ -2701,7 +2801,43 @@ export default function PublicCatalog({
                       const val = e.target.value;
                       setFitWeight(val);
                       if (val && Number(val) >= 20) {
-                        const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(val), fitPreference);
+                        const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(val), Number(fitAge || 30), fitPreference);
+                        setFitRecommendation(rec);
+                      }
+                    }}
+                    className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center text-slate-800 focus:outline-hidden focus:border-pink-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Idade Input Slider combo */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
+                  <span className="flex items-center gap-1">🎂 Idade</span>
+                  <span className="text-pink-600 font-extrabold font-mono">{fitAge ? `${fitAge} anos` : 'Selecione'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="range"
+                    min="14"
+                    max="90"
+                    value={fitAge || "30"}
+                    onChange={(e) => {
+                      setFitAge(e.target.value);
+                      const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(fitWeight || 60), Number(e.target.value), fitPreference);
+                      setFitRecommendation(rec);
+                    }}
+                    className="flex-1 accent-pink-600 h-1 bg-slate-100 rounded-lg cursor-pointer"
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Ex: 30"
+                    value={fitAge}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFitAge(val);
+                      if (val && Number(val) >= 1) {
+                        const rec = calculateRecommendedSize(Number(fitHeight || 165), Number(fitWeight || 60), Number(val), fitPreference);
                         setFitRecommendation(rec);
                       }
                     }}
@@ -2716,7 +2852,7 @@ export default function PublicCatalog({
                 <div className="grid grid-cols-3 gap-2">
                   {(['justo', 'normal', 'largo'] as const).map((pref) => {
                     const isSel = fitPreference === pref;
-                    const labels = { justo: 'Justinho 🏃‍♀️', normal: 'Normal 👍', largo: 'Mais Solto 👕' };
+                    const labels = { justo: 'Justo 🏃‍♀️', normal: 'Normal 👍', largo: 'Solto 👕' };
                     return (
                       <button
                         key={pref}
@@ -2724,7 +2860,7 @@ export default function PublicCatalog({
                         onClick={() => {
                           setFitPreference(pref);
                           if (fitHeight && fitWeight) {
-                            const rec = calculateRecommendedSize(Number(fitHeight), Number(fitWeight), pref);
+                            const rec = calculateRecommendedSize(Number(fitHeight), Number(fitWeight), Number(fitAge || 30), pref);
                             setFitRecommendation(rec);
                           }
                         }}
@@ -2751,9 +2887,29 @@ export default function PublicCatalog({
                 </span>
                 
                 {/* Custom feedback text based on calculation */}
-                <p className="text-[10px] text-slate-600 font-semibold leading-relaxed max-w-xs mx-auto">
-                  Este tamanho possui elasticidade ideal (tecido Suplex Power de alta densidade 310g) para se ajustar perfeitamente ao seu corpo com o caimento {fitPreference === 'justo' ? 'bem firme e compressivo' : fitPreference === 'largo' ? 'mais soltinho e confortável' : 'adequado e elegante'}.
+                <p className="text-[11px] text-slate-700 font-bold leading-relaxed max-w-xs mx-auto">
+                  Recomendamos o tamanho <span className="text-pink-600">{fitRecommendation || 'M'}</span> para você baseado em suas informações.
                 </p>
+
+                {(() => {
+                  const h = Number(fitHeight || 165);
+                  const w = Number(fitWeight || 60);
+                  const a = Number(fitAge || 30);
+                  let estBusto = (w * 1.25) + (h * 0.08) - 22;
+                  let estCintura = (w * 1.05) - (h * 0.12) + 12;
+                  let estQuadril = (w * 1.38) + (h * 0.05) - 20;
+                  if (a > 35) { estCintura += 1.5; estBusto += 1.0; }
+                  if (fitPreference === 'justo') { estBusto -= 2.5; estCintura -= 2.5; estQuadril -= 2.5; }
+                  else if (fitPreference === 'largo') { estBusto += 2.5; estCintura += 2.5; estQuadril += 2.5; }
+
+                  return (
+                    <div className="text-[9px] text-slate-450 font-bold bg-white/70 py-1.5 px-2 rounded-lg border border-slate-100/50 flex justify-center gap-3">
+                      <span>Busto: ~{Math.round(estBusto)} cm</span>
+                      <span>Cintura: ~{Math.round(estCintura)} cm</span>
+                      <span>Quadril: ~{Math.round(estQuadril)} cm</span>
+                    </div>
+                  );
+                })()}
 
                 <button
                   type="button"
@@ -2766,7 +2922,7 @@ export default function PublicCatalog({
               </div>
             ) : (
               <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-center text-slate-450 text-[10px] font-bold">
-                💡 Insira sua altura e peso acima para receber a recomendação.
+                💡 Insira sua altura, peso e idade acima para receber a recomendação.
               </div>
             )}
 
